@@ -26,12 +26,12 @@ line_drawing = { version = "1", optional = true }
 seldom_fn_plugin = "0.1"
 seldom_interop = { version = "0.1", optional = true }
 seldom_pixel_macros = { version = "0.1.0", path = "macros" }
-seldom_state = { path = "../seldom_state", optional = true }
+seldom_state = { version = "0.2", optional = true }
 
 [dev-dependencies]
 bevy = { version = "0.8", features = [ "png" ] }
 rand = "0.8"
-seldom_state = { path = "../seldom_state" }
+seldom_state = "0.2.1"
 
 [[example]]
 name = "animated_tilemap"
