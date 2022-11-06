@@ -17,7 +17,11 @@ use crate::{
 };
 
 pub(crate) fn animation_plugin(app: &mut App) {
-    app.add_system(insert_animation_time)
+    app.add_system_to_stage(PxStage::PostUpdate, remove_animation_time)
+        .add_system_to_stage(
+            PxStage::PostUpdate,
+            insert_animation_time.after(remove_animation_time),
+        )
         .add_system_to_stage(
             PxStage::Last,
             finish_animations::<PxSpriteData>
@@ -172,13 +176,22 @@ pub(crate) trait AnimationAsset: PxAssetData {
 
 fn insert_animation_time(
     mut commands: Commands,
-    filters: Query<Entity, Added<PxAnimationDuration>>,
+    animations: Query<Entity, Added<PxAnimationDuration>>,
     time: Res<Time>,
 ) {
-    for filter in &filters {
-        commands.entity(filter).insert(PxAnimationStart(
+    for animation in &animations {
+        commands.entity(animation).insert(PxAnimationStart(
             time.last_update().unwrap_or_else(|| time.startup()),
         ));
+    }
+}
+
+fn remove_animation_time(
+    mut commands: Commands,
+    animations: RemovedComponents<PxAnimationDuration>,
+) {
+    for animation in animations.iter() {
+        commands.entity(animation).remove::<PxAnimationStart>();
     }
 }
 
