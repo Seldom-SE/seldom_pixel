@@ -7,26 +7,28 @@ use seldom_pixel::prelude::*;
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(WindowDescriptor {
-            width: 512.,
-            height: 512.,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                width: 512.,
+                height: 512.,
+                ..default()
+            },
             ..default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::splat(32),
             "palette/palette_1.png".into(),
         ))
+        .insert_resource(ClearColor(Color::BLACK))
         .add_startup_system(init)
         .run();
 }
 
 fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     // Spawn a particle emitter
-    commands.spawn_bundle(PxEmitterBundle::<Layer> {
+    commands.spawn(PxEmitterBundle::<Layer> {
         // Any `IntoIterator<Item = Handle<PxSprite>>` works here
         sprites: [
             sprites.load_animated("sprite/snow_1.png", 2),
@@ -50,7 +52,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
         // after all of the other components are added, so you can use this to override components.
         on_spawn: (|particle: &mut EntityCommands| {
             // Let's make each particle animated
-            particle.insert_bundle(PxAnimationBundle {
+            particle.insert(PxAnimationBundle {
                 on_finish: PxAnimationFinishBehavior::Loop,
                 ..default()
             });

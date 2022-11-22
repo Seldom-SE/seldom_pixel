@@ -1,29 +1,27 @@
 // In this game, you can press space to cast a spell
 // `seldom_state` is used to handle the animations
 
-use bevy::{
-    ecs::system::{lifetimeless::SRes, StaticSystemParam},
-    prelude::*,
-    reflect::FromReflect,
-};
+use bevy::prelude::*;
 use seldom_pixel::prelude::*;
 use seldom_state::prelude::*;
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(WindowDescriptor {
-            width: 512.,
-            height: 512.,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                width: 512.,
+                height: 512.,
+                ..default()
+            },
             ..default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .add_plugin(StateMachinePlugin)
         .add_plugin(TriggerPlugin::<CastPressed>::default())
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::splat(16),
             "palette/palette_1.png".into(),
         ))
+        .insert_resource(ClearColor(Color::BLACK))
         .add_startup_system(init)
         .run();
 }
@@ -40,10 +38,10 @@ struct Cast;
 struct CastPressed;
 
 impl Trigger for CastPressed {
-    type Param = SRes<Input<KeyCode>>;
+    type Param<'w, 's> = Res<'w, Input<KeyCode>>;
 
-    fn trigger(&self, _: Entity, param: &StaticSystemParam<Self::Param>) -> bool {
-        param.just_pressed(KeyCode::Space)
+    fn trigger(&self, _: Entity, keys: &Self::Param<'_, '_>) -> bool {
+        keys.just_pressed(KeyCode::Space)
     }
 }
 
@@ -55,32 +53,31 @@ struct CastBundle {
 }
 
 fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     let idle = sprites.load("sprite/mage.png");
 
     // Spawn a sprite
-    commands
-        .spawn_bundle(PxSpriteBundle::<Layer> {
+    commands.spawn((
+        PxSpriteBundle::<Layer> {
             sprite: idle.clone(),
             position: IVec2::splat(8).into(),
             ..default()
-        })
-        .insert(
-            StateMachine::new((Idle,))
-                .trans::<(Idle,)>(CastPressed, (Cast,))
-                .insert_on_enter::<(Cast,)>(CastBundle {
-                    sprite: sprites.load_animated("sprite/mage_cast.png", 4),
-                    animation: PxAnimationBundle {
-                        duration: PxAnimationDuration::millis_per_animation(2000),
-                        on_finish: PxAnimationFinishBehavior::Done,
-                        ..default()
-                    },
-                })
-                .remove_on_exit::<(Cast,), PxAnimationBundle>()
-                .trans::<(Cast,)>(DoneTrigger::success(), (Idle,))
-                .insert_on_enter::<(Idle,)>((idle,)),
-        );
+        },
+        StateMachine::new((Idle,))
+            .trans::<(Idle,)>(CastPressed, (Cast,))
+            .insert_on_enter::<(Cast,)>(CastBundle {
+                sprite: sprites.load_animated("sprite/mage_cast.png", 4),
+                animation: PxAnimationBundle {
+                    duration: PxAnimationDuration::millis_per_animation(2000),
+                    on_finish: PxAnimationFinishBehavior::Done,
+                    ..default()
+                },
+            })
+            .remove_on_exit::<(Cast,), PxAnimationBundle>()
+            .trans::<(Cast,)>(DoneTrigger::Success, (Idle,))
+            .insert_on_enter::<(Idle,)>((idle,)),
+    ));
 }
 
 #[px_layer]

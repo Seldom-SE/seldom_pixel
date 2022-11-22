@@ -27,7 +27,7 @@ pub enum PaletteState {
     Loaded,
 }
 
-#[derive(Deref, DerefMut)]
+#[derive(Deref, DerefMut, Resource)]
 struct LoadingPalette(Handle<Image>);
 
 /// Resource representing the game's palette. The palette is loaded from an image containing pixels
@@ -36,7 +36,7 @@ struct LoadingPalette(Handle<Image>);
 /// to a new palette to change the game's palette. The replacement palette's pixels
 /// must be laid out the same as the original. You cannot change the palette that is used
 /// to load assets.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Resource)]
 pub struct Palette {
     pub(crate) size: UVec2,
     pub(crate) colors: Vec<[u8; 3]>,
@@ -44,7 +44,7 @@ pub struct Palette {
 }
 
 /// Internal resource representing the palette used to load assets.
-#[derive(Debug)]
+#[derive(Debug, Resource)]
 pub struct AssetPalette(pub(crate) Palette);
 
 impl Palette {

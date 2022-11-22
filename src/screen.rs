@@ -69,7 +69,7 @@ pub enum ScreenSystem {
     DrawScreen,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub(crate) struct Screen {
     pub(crate) image: Handle<Image>,
     pub(crate) size: UVec2,
@@ -145,8 +145,8 @@ fn init_screen(
 
         let window = windows.get_primary().unwrap();
 
-        commands
-            .spawn_bundle(MaterialMesh2dBundle {
+        commands.spawn((
+            MaterialMesh2dBundle {
                 mesh: meshes.add(Quad::default().into()).into(),
                 material: screen_materials.add(ScreenMaterial {
                     image,
@@ -156,9 +156,10 @@ fn init_screen(
                     screen_scale(size, Vec2::new(window.width(), window.height())).extend(1.),
                 ),
                 ..default()
-            })
-            .insert(ScreenMarker)
-            .insert(Name::new("Screen"));
+            },
+            ScreenMarker,
+            Name::new("Screen"),
+        ));
     }
 }
 
@@ -202,7 +203,11 @@ fn draw_screen<L: PxLayer>(
         )>,
         Option<&Handle<PxFilter>>,
     )>,
-    #[cfg(feature = "map")] tiles: Query<(&TileTexture, &Visibility, Option<&Handle<PxFilter>>)>,
+    #[cfg(feature = "map")] tiles: Query<(
+        &TileTextureIndex,
+        &Visibility,
+        Option<&Handle<PxFilter>>,
+    )>,
     sprites: Query<(
         &Handle<PxSprite>,
         &PxPosition,
@@ -475,7 +480,7 @@ fn draw_screen<L: PxLayer>(
                     .enumerate()
                     .filter_map(|(i, tile)| tile.map(|tile| (i, tile)))
                 {
-                    let (TileTexture(tile), visibility, tile_filter) = tiles
+                    let (TileTextureIndex(tile), visibility, tile_filter) = tiles
                         .get(tile)
                         .expect("entity in map storage is not a valid tile");
 

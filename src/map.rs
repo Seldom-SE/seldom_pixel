@@ -53,7 +53,7 @@ impl PxAssetData for PxTilesetData {
                 while tile.len() > tile_area as usize
                     && tile[tile.len() - tile_area as usize..tile.len()]
                         .iter()
-                        .all(|pixel| *pixel == None)
+                        .all(|pixel| pixel.is_none())
                 {
                     tile.truncate(tile.len() - tile_area as usize);
                 }
@@ -123,7 +123,7 @@ pub struct PxMapBundle<L: PxLayer> {
 #[derive(Bundle, Debug, Default)]
 pub struct PxTileBundle {
     /// A [`TileTexture`] component
-    pub texture: TileTexture,
+    pub texture: TileTextureIndex,
     /// A [`Visibility`] component
     pub visibility: Visibility,
 }

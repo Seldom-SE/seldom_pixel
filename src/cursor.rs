@@ -42,7 +42,7 @@ pub enum CursorSystem {
 }
 
 /// Resource that defines whether to use an in-game cursor
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Resource)]
 pub enum PxCursor {
     /// Use the operating system's cursor
     #[default]
@@ -62,7 +62,7 @@ pub enum PxCursor {
 /// Resource marking the cursor's position. Measured in pixels from the bottom-left of the screen.
 /// Contains [`None`] if the cursor is off-screen. The cursor's world position
 /// is the contained value plus [`PxCamera`]'s contained value.
-#[derive(Debug, Default, Deref, DerefMut)]
+#[derive(Debug, Default, Deref, DerefMut, Resource)]
 pub struct PxCursorPosition(pub Option<UVec2>);
 
 fn update_cursor_position(

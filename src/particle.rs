@@ -234,25 +234,24 @@ fn simulate_emitters<L: PxLayer>(
             .as_vec2()
                 + **velocity * (current_time - simulated_time).as_secs_f32();
 
-            on_spawn(
-                commands
-                    .spawn_bundle(PxSpriteBundle {
-                        sprite: rng.sample(&**sprites).unwrap().clone(),
-                        position: IVec2::new(position.x.round() as i32, position.y.round() as i32)
-                            .into(),
-                        anchor: *anchor,
-                        layer: layer.clone(),
-                        canvas: *canvas,
-                        ..default()
-                    })
-                    .insert_bundle(PxParticleBundle {
-                        position: position.into(),
-                        velocity: *velocity,
-                        start: simulated_time.into(),
-                        lifetime: *lifetime,
-                    })
-                    .insert(Name::new("Particle")),
-            );
+            on_spawn(&mut commands.spawn((
+                PxSpriteBundle {
+                    sprite: rng.sample(sprites).unwrap().clone(),
+                    position:
+                        IVec2::new(position.x.round() as i32, position.y.round() as i32).into(),
+                    anchor: *anchor,
+                    layer: layer.clone(),
+                    canvas: *canvas,
+                    ..default()
+                },
+                PxParticleBundle {
+                    position: position.into(),
+                    velocity: *velocity,
+                    start: simulated_time.into(),
+                    lifetime: *lifetime,
+                },
+                Name::new("Particle"),
+            )));
 
             simulated_time -= (frequency.max - frequency.min).mul_f32(rng.f32()) + frequency.min;
         }
@@ -318,24 +317,23 @@ fn update_emitters<L: PxLayer>(
             rng.i32(range.min.y..=range.max.y),
         );
 
-        on_spawn(
-            commands
-                .spawn_bundle(PxSpriteBundle {
-                    sprite: rng.sample(&**sprites).unwrap().clone(),
-                    position: position.into(),
-                    anchor: *anchor,
-                    layer: layer.clone(),
-                    canvas: *canvas,
-                    ..default()
-                })
-                .insert_bundle(PxParticleBundle {
-                    position: position.as_vec2().into(),
-                    velocity: *velocity,
-                    start: time.last_update().unwrap_or_else(|| time.startup()).into(),
-                    lifetime: *lifetime,
-                })
-                .insert(Name::new("Particle")),
-        );
+        on_spawn(&mut commands.spawn((
+            PxSpriteBundle {
+                sprite: rng.sample(sprites).unwrap().clone(),
+                position: position.into(),
+                anchor: *anchor,
+                layer: layer.clone(),
+                canvas: *canvas,
+                ..default()
+            },
+            PxParticleBundle {
+                position: position.as_vec2().into(),
+                velocity: *velocity,
+                start: time.last_update().unwrap_or_else(|| time.startup()).into(),
+                lifetime: *lifetime,
+            },
+            Name::new("Particle"),
+        )));
     }
 }
 

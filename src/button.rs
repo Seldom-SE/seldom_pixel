@@ -142,7 +142,7 @@ pub struct PxHover;
 pub struct PxClick;
 
 /// Resource that determines whether buttons are enabled
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, Resource)]
 pub struct PxEnableButtons(pub bool);
 
 impl Default for PxEnableButtons {

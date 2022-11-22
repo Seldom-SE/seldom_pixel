@@ -5,17 +5,19 @@ use seldom_pixel::prelude::*;
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(WindowDescriptor {
-            width: 512.,
-            height: 512.,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                width: 512.,
+                height: 512.,
+                ..default()
+            },
             ..default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::splat(16),
             "palette/palette_1.png".into(),
         ))
+        .insert_resource(ClearColor(Color::BLACK))
         .add_startup_system(init)
         .run();
 }
@@ -26,7 +28,7 @@ fn init(
     mut filters: PxAssets<PxFilter>,
     mut cursor: ResMut<PxCursor>,
 ) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     let idle = filters.load("filter/invert.png");
 
@@ -39,7 +41,7 @@ fn init(
     };
 
     // Sprite to show how the cursor's filter applies
-    commands.spawn_bundle(PxSpriteBundle::<Layer> {
+    commands.spawn(PxSpriteBundle::<Layer> {
         sprite: sprites.load("sprite/mage.png"),
         position: IVec2::new(8, 8).into(),
         ..default()

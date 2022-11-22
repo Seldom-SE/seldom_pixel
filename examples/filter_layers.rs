@@ -5,28 +5,31 @@ use seldom_pixel::prelude::*;
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(WindowDescriptor {
-            width: 512.,
-            height: 512.,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                width: 512.,
+                height: 512.,
+                ..default()
+            },
             ..default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::new(64, 32),
             "palette/palette_1.png".into(),
         ))
+        .insert_resource(ClearColor(Color::BLACK))
         .add_startup_system(init)
         .add_system(change_filter)
         .run();
 }
 
+#[derive(Resource)]
 struct GameAssets {
     invert: Handle<PxFilter>,
 }
 
 fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: PxAssets<PxFilter>) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     commands.insert_resource(GameAssets {
         invert: filters.load("filter/invert.png"),
@@ -35,27 +38,27 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: Px
     let mage = sprites.load("sprite/mage.png");
 
     // Spawn some sprites on different layers
-    commands.spawn_bundle(PxSpriteBundle::<Layer> {
+    commands.spawn(PxSpriteBundle::<Layer> {
         sprite: mage.clone(),
         position: IVec2::new(8, 16).into(),
         ..default()
     });
 
-    commands.spawn_bundle(PxSpriteBundle::<Layer> {
+    commands.spawn(PxSpriteBundle::<Layer> {
         sprite: mage.clone(),
         position: IVec2::new(24, 16).into(),
         layer: Layer::Middle(-1),
         ..default()
     });
 
-    commands.spawn_bundle(PxSpriteBundle::<Layer> {
+    commands.spawn(PxSpriteBundle::<Layer> {
         sprite: mage.clone(),
         position: IVec2::new(40, 16).into(),
         layer: Layer::Middle(1),
         ..default()
     });
 
-    commands.spawn_bundle(PxSpriteBundle::<Layer> {
+    commands.spawn(PxSpriteBundle::<Layer> {
         sprite: mage,
         position: IVec2::new(56, 16).into(),
         layer: Layer::Front,
@@ -86,7 +89,7 @@ fn change_filter(
             commands.entity(filter).despawn();
         }
 
-        commands.spawn_bundle(PxFilterBundle {
+        commands.spawn(PxFilterBundle {
             filter: assets.invert.clone(),
             layers: match **current_filter {
                 // Filters the Middle(-1) layer specifically

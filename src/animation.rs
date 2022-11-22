@@ -1,6 +1,8 @@
 //! Animation
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use bevy::utils::Instant;
 
 #[cfg(feature = "map")]
 use crate::map::PxTilesetData;
@@ -262,7 +264,7 @@ pub(crate) fn animate(
     };
 
     move |pos| {
-        (frame + (0b1000000000000000 >> (pos.x % 4 + pos.y % 4 * 4) & dithering != 0) as usize)
+        (frame + (0b1000_0000_0000_0000 >> (pos.x % 4 + pos.y % 4 * 4) & dithering != 0) as usize)
             % frame_count
     }
 }
@@ -406,7 +408,7 @@ fn finish_animations<A: AnimationAsset>(
                     }
                     #[cfg(feature = "state")]
                     PxAnimationFinishBehavior::Done => {
-                        commands.entity(entity).insert(Done::success());
+                        commands.entity(entity).insert(Done::Success);
                     }
                     PxAnimationFinishBehavior::Loop => (),
                 }

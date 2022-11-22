@@ -6,25 +6,28 @@ use seldom_pixel::{palette::Palette, prelude::*};
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(WindowDescriptor {
-            width: 512.,
-            height: 512.,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                width: 512.,
+                height: 512.,
+                ..default()
+            },
             ..default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::splat(64),
             // This is the palette that assets will be loaded with
             // It is also the palette that assets will be displayed with, until changed
             "palette/palette_1.png".into(),
         ))
+        .insert_resource(ClearColor(Color::BLACK))
         .add_startup_system(init)
         .add_system(spawn_mage)
         .add_system(change_palette)
         .run();
 }
 
+#[derive(Resource)]
 struct GameAssets {
     // Palettes are created from normal images
     palette_1: Handle<Image>,
@@ -32,7 +35,7 @@ struct GameAssets {
 }
 
 fn init(mut commands: Commands, assets: Res<AssetServer>) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     commands.insert_resource(GameAssets {
         palette_1: assets.load("palette/palette_1.png"),
@@ -43,7 +46,7 @@ fn init(mut commands: Commands, assets: Res<AssetServer>) {
 fn spawn_mage(mut commands: Commands, mut sprites: PxAssets<PxSprite>, keys: Res<Input<KeyCode>>) {
     if keys.just_pressed(KeyCode::Space) {
         let mut rng = thread_rng();
-        commands.spawn_bundle(PxSpriteBundle::<Layer> {
+        commands.spawn(PxSpriteBundle::<Layer> {
             // Usually, this sprite would be added in `init` to avoid duplicating data,
             // but it's here instead to show that loading assets is independent
             // of the current palette

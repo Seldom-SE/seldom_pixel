@@ -1,6 +1,6 @@
 [package]
 name = "seldom_pixel"
-version = "0.1.1"
+version = "0.2-dev"
 edition = "2021"
 categories = [ "game-development" ]
 description = "Bevy plugin for limited color palette pixel art games"
@@ -18,20 +18,20 @@ particle = [ "dep:bevy_turborand" ]
 state = [ "dep:seldom_state" ]
 
 [dependencies]
-bevy = { version = "0.8", default-features = false, features = [ "bevy_asset", "render" ] }
-bevy_ecs_tilemap = { version = "0.7", default-features = false, optional = true }
-bevy_turborand = { version = "0.3", optional = true }
-iyes_loopless = "0.8"
+bevy = { version = "0.9", default-features = false, features = [ "bevy_asset", "render" ] }
+bevy_ecs_tilemap = { git = "https://github.com/StarArawn/bevy_ecs_tilemap", rev = "f01e814", default-features = false, optional = true }
+bevy_turborand = { version = "0.4", optional = true }
+iyes_loopless = "0.9"
 line_drawing = { version = "1", optional = true }
-seldom_fn_plugin = "0.1"
-seldom_interop = { version = "0.1", optional = true }
+seldom_fn_plugin = "0.2"
+seldom_interop = { version = "0.2", optional = true }
 seldom_pixel_macros = { version = "0.1.0", path = "macros" }
-seldom_state = { version = "0.2", optional = true }
+seldom_state = { version = "0.3", optional = true }
 
 [dev-dependencies]
-bevy = { version = "0.8", features = [ "png" ] }
+bevy = { version = "0.9", features = [ "png" ] }
 rand = "0.8"
-seldom_state = "0.2.1"
+seldom_state = "0.3"
 
 [[example]]
 name = "animated_tilemap"

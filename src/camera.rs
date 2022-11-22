@@ -5,7 +5,7 @@ pub(crate) fn camera_plugin(app: &mut App) {
 }
 
 /// Resource that represents the camera's position
-#[derive(Clone, Copy, Debug, Default, Deref, DerefMut)]
+#[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Resource)]
 pub struct PxCamera(pub IVec2);
 
 /// Determines whether the entity is locked to the camera

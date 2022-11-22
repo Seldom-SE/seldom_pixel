@@ -7,17 +7,19 @@ use seldom_pixel::prelude::*;
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(WindowDescriptor {
-            width: 512.,
-            height: 512.,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                width: 512.,
+                height: 512.,
+                ..default()
+            },
             ..default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::splat(64),
             "palette/palette_1.png".into(),
         ))
+        .insert_resource(ClearColor(Color::BLACK))
         .add_startup_system(init)
         .add_system(move_mage)
         .add_system(move_camera)
@@ -26,25 +28,23 @@ fn main() {
 }
 
 fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     // `PxSubPosition` contains a `Vec2`. This is used
     // to represent the camera's sub-pixel position, which is rounded and applied
     // to the camera's pixel position.
-    commands
-        .spawn()
-        .insert(PxSubPosition::default())
-        .insert(CameraPos);
+    commands.spawn((PxSubPosition::default(), CameraPos));
 
     // By default, the mage is on the world canvas, which means you see it in different positions
     // based on where the camera is
-    commands
-        .spawn_bundle(PxSpriteBundle::<Layer> {
+    commands.spawn((
+        PxSpriteBundle::<Layer> {
             sprite: sprites.load("sprite/mage.png"),
             position: IVec2::splat(32).into(),
             ..default()
-        })
-        .insert(Mage);
+        },
+        Mage,
+    ));
 }
 
 #[derive(Component)]

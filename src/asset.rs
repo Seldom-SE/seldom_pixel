@@ -133,7 +133,7 @@ struct LoadingAsset<D: PxAssetData> {
 }
 
 /// List of assets that are currently loading
-#[derive(Debug)]
+#[derive(Debug, Resource)]
 pub struct LoadingAssets<D: PxAssetData>(Vec<LoadingAsset<D>>);
 
 impl<D: PxAssetData> Default for LoadingAssets<D> {
