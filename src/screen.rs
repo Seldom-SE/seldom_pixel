@@ -20,7 +20,6 @@ use crate::{
     asset::{get_asset, PxAsset},
     filter::{draw_filter, PxFilterData},
     image::{PxImage, PxImageSliceMut},
-    math::IRect,
     palette::{Palette, PaletteState},
     position::PxLayer,
     prelude::*,
@@ -227,8 +226,10 @@ fn draw_screen<L: PxLayer>(
     texts: Query<(
         &PxText,
         &Handle<PxTypeface>,
+        &PxRect,
         &PxAnchor,
         &L,
+        &PxCanvas,
         &Visibility,
         Option<(
             &PxAnimationDirection,
@@ -338,20 +339,20 @@ fn draw_screen<L: PxLayer>(
         }
     }
 
-    for (text, typeface, alignment, layer, visibility, animation, filter) in &texts {
+    for (text, typeface, rect, alignment, layer, canvas, visibility, animation, filter) in &texts {
         if !visibility.is_visible {
             continue;
         }
 
         if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
-            texts.push((text, typeface, alignment, animation, filter));
+            texts.push((text, typeface, rect, alignment, canvas, animation, filter));
         } else {
             layer_contents.insert(
                 layer.clone(),
                 (
                     default(),
                     default(),
-                    vec![(text, typeface, alignment, animation, filter)],
+                    vec![(text, typeface, rect, alignment, canvas, animation, filter)],
                     default(),
                     default(),
                     default(),
@@ -527,11 +528,11 @@ fn draw_screen<L: PxLayer>(
             }
         }
 
-        for (text, typeface, alignment, animation, filter) in texts {
+        for (text, typeface, rect, alignment, canvas, animation, filter) in texts {
             if let Some(PxAsset::Loaded { asset: typeface }) = typefaces.get(typeface) {
-                let rect = IRect {
-                    min: default(),
-                    max: screen.size.as_ivec2(),
+                let rect = match canvas {
+                    PxCanvas::World => **rect - **camera,
+                    PxCanvas::Camera => **rect,
                 };
                 let rect_size = rect.size();
                 let line_count = (rect_size.y + 1) / (typeface.height + 1);
@@ -589,7 +590,9 @@ fn draw_screen<L: PxLayer>(
                             line = default();
                         }
 
-                        lines.push((word_width - 1, word));
+                        if word_width > 0 {
+                            lines.push((word_width - 1, word));
+                        }
                         word_width = character_width + 1;
                         word = vec![character];
                         separator_width = 0;
@@ -611,9 +614,11 @@ fn draw_screen<L: PxLayer>(
                     }
                 }
 
-                if line_width + separator_width + word_width > rect_size.x - 1 {
+                if line_width + separator_width + word_width + 1 > rect_size.x {
                     lines.push((line_width, line));
-                    lines.push((word_width - 1, word));
+                    if word_width > 0 {
+                        lines.push((word_width - 1, word));
+                    }
                 } else if !word.is_empty() {
                     line_width += separator_width + word_width - 1;
                     line.append(&mut separator);
@@ -628,7 +633,8 @@ fn draw_screen<L: PxLayer>(
                 }
 
                 let mut text_image = PxImage::empty(rect_size);
-                let lines_height = lines.len() as u32 * typeface.height + lines.len() as u32 - 1;
+                let lines_height =
+                    (lines.len() as u32 * typeface.height + lines.len() as u32).max(1) - 1;
                 let mut line_y = alignment.y_pos(rect_size.y - lines_height)
                     + lines.len() as u32 * (typeface.height + 1);
 

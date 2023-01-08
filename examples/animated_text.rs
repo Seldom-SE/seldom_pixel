@@ -14,7 +14,7 @@ fn main() {
             ..default()
         }))
         .add_plugin(PxPlugin::<Layer>::new(
-            UVec2::new(64, 64),
+            UVec2::splat(64),
             "palette/palette_1.png".into(),
         ))
         .insert_resource(ClearColor(Color::BLACK))
@@ -46,6 +46,7 @@ fn init(mut commands: Commands, mut typefaces: PxAssets<PxTypeface>) {
         PxTextBundle::<Layer> {
             text: "LOOPED ANIMATION ⭐🙂⭐".into(),
             typeface: typeface.clone(),
+            rect: IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
             alignment: PxAnchor::TopCenter,
             ..default()
         },
@@ -61,6 +62,7 @@ fn init(mut commands: Commands, mut typefaces: PxAssets<PxTypeface>) {
         PxTextBundle::<Layer> {
             text: "DITHERED ANIMATION 🙂⭐🙂".into(),
             typeface,
+            rect: IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
             alignment: PxAnchor::BottomCenter,
             ..default()
         },

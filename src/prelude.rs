@@ -37,6 +37,7 @@ pub use crate::{
     px_plugin,
     sprite::{PxSprite, PxSpriteBundle},
     text::{PxCharacterConfig, PxSeparatorConfig, PxText, PxTextBundle, PxTypeface},
+    ui::PxRect,
     PxPlugin,
 };
 pub use seldom_pixel_macros::px_layer;

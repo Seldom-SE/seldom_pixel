@@ -154,10 +154,14 @@ pub struct PxTextBundle<L: PxLayer> {
     pub text: PxText,
     /// A [`Handle<PxTypeface>`] component
     pub typeface: Handle<PxTypeface>,
+    /// A [`PxRect`] component
+    pub rect: PxRect,
     /// A [`PxAnchor`] component
     pub alignment: PxAnchor,
     /// A layer component
     pub layer: L,
+    /// A [`PxCanvas`] component
+    pub canvas: PxCanvas,
     /// A [`Visibility`] component
     pub visibility: Visibility,
 }

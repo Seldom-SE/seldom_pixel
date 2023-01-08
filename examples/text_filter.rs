@@ -14,7 +14,7 @@ fn main() {
             ..default()
         }))
         .add_plugin(PxPlugin::<Layer>::new(
-            UVec2::new(64, 64),
+            UVec2::splat(64),
             "palette/palette_1.png".into(),
         ))
         .insert_resource(ClearColor(Color::BLACK))
@@ -39,6 +39,7 @@ fn init(
                 // Equivalent to, for example, `vec![PxSeparatorConfig { character: ' ', width: 4 }]`
                 [(' ', 4)],
             ),
+            rect: IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
             ..default()
         },
         filters.load("filter/dim.png"),

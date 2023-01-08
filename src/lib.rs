@@ -30,6 +30,7 @@ pub mod screen;
 pub mod sprite;
 pub mod stage;
 mod text;
+mod ui;
 
 use std::{marker::PhantomData, path::PathBuf};
 
