@@ -2,21 +2,22 @@
 // `seldom_state` is used to handle the animations
 
 use bevy::prelude::*;
+use leafwing_input_manager::prelude::*;
 use seldom_pixel::prelude::*;
 use seldom_state::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
-                width: 512.,
-                height: 512.,
+            primary_window: Some(Window {
+                resolution: Vec2::splat(512.).into(),
                 ..default()
-            },
+            }),
             ..default()
         }))
+        .add_plugin(InputManagerPlugin::<Action>::default())
         .add_plugin(StateMachinePlugin)
-        .add_plugin(TriggerPlugin::<CastPressed>::default())
+        .add_plugin(InputTriggerPlugin::<Action>::default())
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::splat(16),
             "palette/palette_1.png".into(),
@@ -33,17 +34,6 @@ struct Idle;
 #[derive(Clone, Component, Reflect)]
 #[component(storage = "SparseSet")]
 struct Cast;
-
-#[derive(FromReflect, Reflect)]
-struct CastPressed;
-
-impl Trigger for CastPressed {
-    type Param<'w, 's> = Res<'w, Input<KeyCode>>;
-
-    fn trigger(&self, _: Entity, keys: &Self::Param<'_, '_>) -> bool {
-        keys.just_pressed(KeyCode::Space)
-    }
-}
 
 #[derive(Bundle, Clone)]
 struct CastBundle {
@@ -64,9 +54,15 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
             position: IVec2::splat(8).into(),
             ..default()
         },
-        StateMachine::new((Idle,))
-            .trans::<(Idle,)>(CastPressed, (Cast,))
-            .insert_on_enter::<(Cast,)>(CastBundle {
+        InputManagerBundle {
+            input_map: InputMap::default()
+                .insert(KeyCode::Space, Action::Cast)
+                .build(),
+            ..default()
+        },
+        StateMachine::new(Idle)
+            .trans::<Idle>(JustPressedTrigger(Action::Cast), Cast)
+            .insert_on_enter::<Cast>(CastBundle {
                 sprite: sprites.load_animated("sprite/mage_cast.png", 4),
                 animation: PxAnimationBundle {
                     duration: PxAnimationDuration::millis_per_animation(2000),
@@ -74,10 +70,15 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
                     ..default()
                 },
             })
-            .remove_on_exit::<(Cast,), PxAnimationBundle>()
-            .trans::<(Cast,)>(DoneTrigger::Success, (Idle,))
-            .insert_on_enter::<(Idle,)>((idle,)),
+            .remove_on_exit::<Cast, PxAnimationBundle>()
+            .trans::<Cast>(DoneTrigger::Success, Idle)
+            .insert_on_enter::<Idle>(idle),
     ));
+}
+
+#[derive(Actionlike, Clone, Reflect)]
+enum Action {
+    Cast,
 }
 
 #[px_layer]

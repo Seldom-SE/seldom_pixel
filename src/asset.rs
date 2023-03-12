@@ -14,20 +14,25 @@ use seldom_fn_plugin::FnPluginExt;
 use crate::map::PxTilesetData;
 use crate::{
     filter::PxFilterData,
-    palette::{AssetPalette, Palette, PaletteState},
+    palette::{AssetPalette, Palette},
     prelude::*,
-    screen::ScreenSystem,
+    set::PxSet,
     sprite::PxSpriteData,
-    stage::PxStage,
     text::{PxCharacterConfig, PxTypefaceConfig, PxTypefaceData},
 };
 
 use self::sealed::{PxAssetDataSealed, PxAssetTraitSealed};
 
 pub(crate) fn asset_plugin(app: &mut App) {
-    app.fn_plugin(px_asset_plugin::<PxSpriteData>)
-        .fn_plugin(px_asset_plugin::<PxTypefaceData>)
-        .fn_plugin(px_asset_plugin::<PxFilterData>);
+    app.configure_set(
+        PxSet::LoadAssets
+            .before(PxSet::Draw)
+            .in_set(PxSet::Loaded)
+            .in_base_set(CoreSet::PostUpdate),
+    )
+    .fn_plugin(px_asset_plugin::<PxSpriteData>)
+    .fn_plugin(px_asset_plugin::<PxTypefaceData>)
+    .fn_plugin(px_asset_plugin::<PxFilterData>);
     #[cfg(feature = "map")]
     app.fn_plugin(px_asset_plugin::<PxTilesetData>);
 }
@@ -35,20 +40,7 @@ pub(crate) fn asset_plugin(app: &mut App) {
 fn px_asset_plugin<D: PxAssetData>(app: &mut App) {
     app.add_asset::<PxAsset<D>>()
         .init_resource::<LoadingAssets<D>>()
-        .add_system_to_stage(
-            PxStage::Last,
-            D::load
-                .run_in_state(PaletteState::Loaded)
-                .label(AssetSystem::Load)
-                .before(ScreenSystem::DrawScreen),
-        );
-}
-
-/// Asset system labels
-#[derive(Debug, SystemLabel)]
-pub enum AssetSystem {
-    /// Generates assets from loaded images
-    Load,
+        .add_system(D::load.in_set(PxSet::LoadAssets));
 }
 
 /// An asset created from an image

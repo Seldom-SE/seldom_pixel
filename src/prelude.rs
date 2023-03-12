@@ -3,7 +3,6 @@
 pub(crate) use bevy::prelude::*;
 #[cfg(feature = "map")]
 pub(crate) use bevy_ecs_tilemap::prelude::*;
-pub(crate) use iyes_loopless::prelude::*;
 #[cfg(feature = "interop")]
 pub(crate) use seldom_interop::prelude::*;
 #[cfg(feature = "state")]

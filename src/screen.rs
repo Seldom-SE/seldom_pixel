@@ -10,7 +10,7 @@ use bevy::{
         TextureUsages,
     },
     sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle},
-    window::WindowResized,
+    window::{PrimaryWindow, WindowResized},
 };
 
 #[cfg(feature = "line")]
@@ -20,10 +20,10 @@ use crate::{
     asset::{get_asset, PxAsset},
     filter::{draw_filter, PxFilterData},
     image::{PxImage, PxImageSliceMut},
-    palette::{Palette, PaletteState},
+    palette::Palette,
     position::PxLayer,
     prelude::*,
-    stage::PxStage,
+    set::PxSet,
 };
 
 const SCREEN_SHADER_HANDLE: HandleUntyped =
@@ -36,36 +36,23 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
             Shader::from_wgsl(include_str!("screen.wgsl")),
         );
         app.add_plugin(Material2dPlugin::<ScreenMaterial>::default())
-            .add_system_to_stage(PxStage::Last, update_screen)
-            .add_enter_system(PaletteState::Loaded, init_screen(size))
-            .add_system_to_stage(
-                PxStage::Last,
-                resize_screen.run_in_state(PaletteState::Loaded),
+            .configure_set(PxSet::Draw.in_base_set(CoreSet::PostUpdate))
+            .add_systems(
+                (apply_system_buffers, draw_screen::<L>)
+                    .chain()
+                    .in_set(PxSet::Draw),
             )
-            .add_system_to_stage(
-                PxStage::Last,
-                clear_screen
-                    .run_in_state(PaletteState::Loaded)
-                    .before(ScreenSystem::DrawScreen),
-            )
-            .add_system_to_stage(
-                PxStage::Last,
-                draw_screen::<L>
-                    .run_in_state(PaletteState::Loaded)
-                    .label(ScreenSystem::DrawScreen),
-            )
-            .add_system_to_stage(
-                PxStage::Last,
-                update_screen_palette.run_in_state(PaletteState::Loaded),
+            .add_systems(
+                (
+                    update_screen,
+                    init_screen(size).run_if(resource_added::<Palette>()),
+                    resize_screen.in_set(PxSet::Loaded),
+                    clear_screen.before(PxSet::Draw).in_set(PxSet::Loaded),
+                    update_screen_palette,
+                )
+                    .in_base_set(CoreSet::PostUpdate),
             );
     }
-}
-
-/// Screen system labels
-#[derive(Debug, SystemLabel)]
-pub enum ScreenSystem {
-    /// Draws entities to the screen
-    DrawScreen,
 }
 
 #[derive(Clone, Resource)]
@@ -105,13 +92,20 @@ fn init_screen(
     size: UVec2,
 ) -> impl Fn(
     Commands,
+    EventWriter<WindowResized>,
+    Query<(Entity, &Window), With<PrimaryWindow>>,
     Res<Palette>,
-    Res<Windows>,
     ResMut<Assets<Image>>,
     ResMut<Assets<Mesh>>,
     ResMut<Assets<ScreenMaterial>>,
 ) {
-    move |mut commands, palette, windows, mut images, mut meshes, mut screen_materials| {
+    move |mut commands,
+          mut window_resized,
+          windows,
+          palette,
+          mut images,
+          mut meshes,
+          mut screen_materials| {
         let mut screen_palette = [default(); 256];
 
         for (i, [r, g, b]) in palette.colors.iter().enumerate() {
@@ -133,6 +127,7 @@ fn init_screen(
                 dimension: TextureDimension::D2,
                 format: TextureFormat::R8Uint,
                 usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+                view_formats: &[TextureFormat::R8Uint],
             },
             ..default()
         });
@@ -142,7 +137,7 @@ fn init_screen(
             size,
         });
 
-        let window = windows.get_primary().unwrap();
+        let (entity, window) = windows.single();
 
         commands.spawn((
             MaterialMesh2dBundle {
@@ -159,6 +154,13 @@ fn init_screen(
             ScreenMarker,
             Name::new("Screen"),
         ));
+
+        // I do not know why, but the screen does not display unless the window has been resized
+        window_resized.send(WindowResized {
+            window: entity,
+            width: window.width(),
+            height: window.height(),
+        });
     }
 }
 
@@ -294,7 +296,7 @@ fn draw_screen<L: PxLayer>(
 
     #[cfg(feature = "map")]
     for (size, storage, tileset, position, layer, canvas, visibility, animation, filter) in &maps {
-        if !visibility.is_visible {
+        if let Visibility::Hidden = visibility {
             continue;
         }
 
@@ -317,7 +319,7 @@ fn draw_screen<L: PxLayer>(
     }
 
     for (sprite, position, anchor, layer, canvas, visibility, animation, filter) in &sprites {
-        if !visibility.is_visible {
+        if let Visibility::Hidden = visibility {
             continue;
         }
 
@@ -340,7 +342,7 @@ fn draw_screen<L: PxLayer>(
     }
 
     for (text, typeface, rect, alignment, layer, canvas, visibility, animation, filter) in &texts {
-        if !visibility.is_visible {
+        if let Visibility::Hidden = visibility {
             continue;
         }
 
@@ -411,7 +413,7 @@ fn draw_screen<L: PxLayer>(
     }
 
     for (filter, layers, visibility, animation) in &filters {
-        if !visibility.is_visible {
+        if let Visibility::Hidden = visibility {
             continue;
         }
 
@@ -485,7 +487,7 @@ fn draw_screen<L: PxLayer>(
                         .get(tile)
                         .expect("entity in map storage is not a valid tile");
 
-                    if !visibility.is_visible {
+                    if let Visibility::Hidden = visibility {
                         continue;
                     }
 
@@ -692,7 +694,7 @@ fn draw_screen<L: PxLayer>(
         // This is where I draw the line! /j
         #[cfg(feature = "line")]
         for (line, filter, canvas, visibility, animation) in clip_lines {
-            if visibility.is_visible {
+            if let Visibility::Visible | Visibility::Inherited = visibility {
                 if let Some(PxAsset::Loaded { asset: filter }) = filter_assets.get(filter) {
                     draw_line(
                         line,
@@ -720,7 +722,7 @@ fn draw_screen<L: PxLayer>(
 
         #[cfg(feature = "line")]
         for (line, filter, canvas, visibility, animation) in over_lines {
-            if visibility.is_visible {
+            if let Visibility::Visible | Visibility::Inherited = visibility {
                 if let Some(PxAsset::Loaded { asset: filter }) = filter_assets.get(filter) {
                     draw_line(
                         line,

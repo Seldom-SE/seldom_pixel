@@ -4,27 +4,21 @@ use std::path::PathBuf;
 
 use bevy::{render::render_resource::TextureFormat, utils::HashMap};
 
-use crate::{prelude::*, stage::PxStage};
+use crate::{prelude::*, set::PxSet};
 
 pub(crate) fn palette_plugin(palette_path: PathBuf) -> impl FnOnce(&mut App) {
     move |app| {
-        app.add_startup_system(load_palette(palette_path))
-            .add_system_to_stage(
-                PxStage::PreUpdate,
-                init_palette.run_in_state(PaletteState::Loading),
-            );
+        app.configure_sets((
+            PxSet::Unloaded.run_if(resource_exists::<LoadingPalette>()),
+            PxSet::Loaded.run_if(resource_exists::<Palette>()),
+        ))
+        .add_startup_system(load_palette(palette_path))
+        .add_system(
+            init_palette
+                .in_set(PxSet::Unloaded)
+                .in_base_set(CoreSet::PreUpdate),
+        );
     }
-}
-
-/// `iyes_loopless` state that represents whether the palette has loaded. Changing the palette
-/// does not affect this state, since the palette does not change asynchronously.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub enum PaletteState {
-    /// The palette is loading
-    #[default]
-    Loading,
-    /// The palette has loaded
-    Loaded,
 }
 
 #[derive(Deref, DerefMut, Resource)]
@@ -105,6 +99,5 @@ fn init_palette(
         commands.insert_resource(palette.clone());
         commands.insert_resource(AssetPalette(palette));
         commands.remove_resource::<LoadingPalette>();
-        commands.insert_resource(NextState(PaletteState::Loaded));
     }
 }

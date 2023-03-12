@@ -8,13 +8,29 @@ use bevy_turborand::{
     DelegatedRng, GlobalRng, RngComponent,
 };
 
-use crate::{math::IRect, position::PxLayer, prelude::*, stage::PxStage};
+use crate::{math::IRect, position::PxLayer, prelude::*, set::PxSet};
 
 pub(crate) fn particle_plugin<L: PxLayer>(app: &mut App) {
-    app.add_system_to_stage(PxStage::PrePostUpdate, simulate_emitters::<L>)
-        .add_system_to_stage(PxStage::PrePostUpdate, insert_emitter_time)
-        .add_system_to_stage(PxStage::PostUpdate, update_emitters::<L>)
-        .add_system_to_stage(PxStage::PostUpdate, despawn_particles);
+    app.configure_set(
+        PxSet::UpdateEmitters
+            .before(PxSet::Draw)
+            .in_base_set(CoreSet::PostUpdate),
+    )
+    .add_systems(
+        (simulate_emitters::<L>, insert_emitter_time)
+            .before(PxSet::UpdateEmitters)
+            .in_base_set(CoreSet::PostUpdate),
+    )
+    .add_systems(
+        (apply_system_buffers, update_emitters::<L>)
+            .chain()
+            .in_set(PxSet::UpdateEmitters),
+    )
+    .add_system(
+        despawn_particles
+            .before(PxSet::Draw)
+            .in_base_set(CoreSet::PostUpdate),
+    );
 }
 
 /// Possible sprites for an emitter's particles

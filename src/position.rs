@@ -2,23 +2,16 @@
 
 use std::fmt::Debug;
 
-use crate::{prelude::*, stage::PxStage};
+use crate::{prelude::*, set::PxSet};
 
 pub(crate) fn position_plugin(app: &mut App) {
-    app.add_system_to_stage(PxStage::PreUpdate, update_sub_positions)
-        .add_system_to_stage(
-            PxStage::PreUpdate,
+    app.configure_set(PxSet::UpdatePosToSubPos.in_base_set(CoreSet::PreUpdate))
+        .add_systems((
+            update_sub_positions.in_base_set(CoreSet::PreUpdate),
             update_position_to_sub
-                .label(PositionSystem::UpdatePositionToSub)
+                .in_set(PxSet::UpdatePosToSubPos)
                 .after(update_sub_positions),
-        );
-}
-
-/// Position system labels
-#[derive(Debug, SystemLabel)]
-pub enum PositionSystem {
-    /// Updates [`PxPosition`]s to follow the entities' [`PxSubPosition`]s
-    UpdatePositionToSub,
+        ));
 }
 
 /// The position of an entity

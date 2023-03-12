@@ -7,66 +7,44 @@ use bevy::utils::Instant;
 #[cfg(feature = "map")]
 use crate::map::PxTilesetData;
 use crate::{
-    asset::{AssetSystem, PxAsset, PxAssetData},
+    asset::{PxAsset, PxAssetData},
     filter::PxFilterData,
     image::{PxImage, PxImageSliceMut},
     pixel::Pixel,
     prelude::*,
-    screen::ScreenSystem,
+    set::PxSet,
     sprite::PxSpriteData,
-    stage::PxStage,
     text::PxTypefaceData,
 };
 
 pub(crate) fn animation_plugin(app: &mut App) {
-    app.add_system_to_stage(PxStage::PostUpdate, remove_animation_time)
-        .add_system_to_stage(
-            PxStage::PostUpdate,
-            insert_animation_time.after(remove_animation_time),
+    app.configure_set(
+        PxSet::FinishAnimations
+            .after(PxSet::LoadAssets)
+            .before(PxSet::Draw)
+            .in_base_set(CoreSet::PostUpdate),
+    )
+    .add_systems(
+        (
+            remove_animation_time,
+            insert_animation_time,
+            apply_system_buffers,
         )
-        .add_system_to_stage(
-            PxStage::Last,
-            finish_animations::<PxSpriteData>
-                .label(AnimationSystem::FinishSpriteAnimations)
-                .after(AssetSystem::Load)
-                .before(ScreenSystem::DrawScreen),
+            .chain()
+            .before(PxSet::FinishAnimations)
+            .in_base_set(CoreSet::PostUpdate),
+    )
+    .add_systems(
+        (
+            finish_animations::<PxSpriteData>,
+            finish_animations::<PxFilterData>,
+            finish_animations::<PxTypefaceData>,
         )
-        .add_system_to_stage(
-            PxStage::Last,
-            finish_animations::<PxFilterData>
-                .label(AnimationSystem::FinishFilterAnimations)
-                .after(AssetSystem::Load)
-                .before(ScreenSystem::DrawScreen),
-        )
-        .add_system_to_stage(
-            PxStage::Last,
-            finish_animations::<PxTypefaceData>
-                .label(AnimationSystem::FinishTypefaceAnimations)
-                .after(AssetSystem::Load)
-                .before(ScreenSystem::DrawScreen),
-        );
-    #[cfg(feature = "map")]
-    app.add_system_to_stage(
-        PxStage::Last,
-        finish_animations::<PxTilesetData>
-            .label(AnimationSystem::FinishTilesetAnimations)
-            .after(AssetSystem::Load)
-            .before(ScreenSystem::DrawScreen),
+            .in_set(PxSet::FinishAnimations),
     );
-}
 
-/// Animation system labels
-#[derive(Debug, SystemLabel)]
-pub enum AnimationSystem {
-    /// Handles sprite animation finish behavior
-    FinishSpriteAnimations,
-    /// Handles filter animation finish behavior
-    FinishFilterAnimations,
-    /// Handles typeface animation finish behavior
-    FinishTypefaceAnimations,
-    /// Handles tileset animation finish behavior
     #[cfg(feature = "map")]
-    FinishTilesetAnimations,
+    app.add_system(finish_animations::<PxTilesetData>.in_set(FinishAnimations));
 }
 
 /// Direction the animation plays
@@ -190,10 +168,11 @@ fn insert_animation_time(
 
 fn remove_animation_time(
     mut commands: Commands,
-    animations: RemovedComponents<PxAnimationDuration>,
+    mut animations: RemovedComponents<PxAnimationDuration>,
 ) {
-    for animation in animations.iter() {
-        commands.entity(animation).remove::<PxAnimationStart>();
+    for animation in &mut animations {
+        let Some(mut animation) = commands.get_entity(animation) else { continue };
+        animation.remove::<PxAnimationStart>();
     }
 }
 

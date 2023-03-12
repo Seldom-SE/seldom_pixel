@@ -27,8 +27,8 @@ mod pixel;
 pub mod position;
 pub mod prelude;
 pub mod screen;
+pub mod set;
 pub mod sprite;
-pub mod stage;
 mod text;
 mod ui;
 
@@ -42,14 +42,13 @@ use bevy_turborand::RngPlugin;
 use button::button_plugin;
 use camera::camera_plugin;
 use cursor::cursor_plugin;
-use palette::{palette_plugin, PaletteState};
+use palette::palette_plugin;
 #[cfg(feature = "particle")]
 use particle::particle_plugin;
 use position::{position_plugin, PxLayer};
 use prelude::*;
 use screen::screen_plugin;
 use seldom_fn_plugin::FnPluginExt;
-use stage::PxStage;
 
 /// Add to your [`App`] to enable `seldom_pixel`. The type parameter is your custom layer type
 /// used for z-ordering. You can make one using [`px_layer`].
@@ -83,24 +82,7 @@ impl<L: PxLayer> PxPlugin<L> {
 /// which is another crate I maintain.
 pub fn px_plugin<L: PxLayer>(screen_size: UVec2, palette_path: PathBuf) -> impl FnOnce(&mut App) {
     move |app| {
-        app.add_loopless_state(PaletteState::default())
-            .add_stage_before(
-                CoreStage::Update,
-                PxStage::PreUpdate,
-                SystemStage::parallel(),
-            )
-            .add_stage_after(
-                CoreStage::Update,
-                PxStage::PostUpdate,
-                SystemStage::parallel(),
-            )
-            .add_stage_before(
-                PxStage::PostUpdate,
-                PxStage::PrePostUpdate,
-                SystemStage::parallel(),
-            )
-            .add_stage_after(PxStage::PostUpdate, PxStage::Last, SystemStage::parallel())
-            .fn_plugin(animation_plugin)
+        app.fn_plugin(animation_plugin)
             .fn_plugin(asset_plugin)
             .fn_plugin(button_plugin)
             .fn_plugin(camera_plugin)

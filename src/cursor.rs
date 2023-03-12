@@ -1,44 +1,33 @@
 //! Cursor
 
+use bevy::window::PrimaryWindow;
+
 use crate::{
     asset::PxAsset,
     filter::PxFilterData,
     image::PxImageSliceMut,
-    palette::PaletteState,
+    palette::Palette,
     prelude::*,
-    screen::{Screen, ScreenMarker, ScreenSystem},
-    stage::PxStage,
+    screen::{Screen, ScreenMarker},
+    set::PxSet,
 };
 
 pub(crate) fn cursor_plugin(app: &mut App) {
     app.init_resource::<PxCursor>()
         .init_resource::<PxCursorPosition>()
-        .add_system_to_stage(
-            PxStage::Last,
-            change_cursor.before(CursorSystem::DrawCursor),
+        .configure_set(PxSet::UpdateCursorPosition.in_base_set(CoreSet::PreUpdate))
+        .configure_set(
+            PxSet::DrawCursor
+                .after(PxSet::Draw)
+                .in_base_set(CoreSet::PostUpdate),
         )
-        .add_system_to_stage(
-            PxStage::PreUpdate,
+        .add_system(
             update_cursor_position
-                .run_in_state(PaletteState::Loaded)
-                .label(CursorSystem::UpdateCursorPosition),
+                .run_if(resource_exists::<Palette>())
+                .in_set(PxSet::UpdateCursorPosition),
         )
-        .add_system_to_stage(
-            PxStage::Last,
-            draw_cursor
-                .run_in_state(PaletteState::Loaded)
-                .label(CursorSystem::DrawCursor)
-                .after(ScreenSystem::DrawScreen),
-        );
-}
-
-/// Cursor system labels
-#[derive(Debug, SystemLabel)]
-pub enum CursorSystem {
-    /// Draws the cursor on the screen
-    DrawCursor,
-    /// Updates [`PxCursorPosition`]
-    UpdateCursorPosition,
+        .add_system(change_cursor.before(PxSet::DrawCursor))
+        .add_system(draw_cursor.in_set(PxSet::DrawCursor));
 }
 
 /// Resource that defines whether to use an in-game cursor
@@ -70,52 +59,51 @@ fn update_cursor_position(
     mut leave_events: EventReader<CursorLeft>,
     screens: Query<&Transform, With<ScreenMarker>>,
     cameras: Query<&Transform, With<Camera2d>>,
+    windows: Query<&Window, With<PrimaryWindow>>,
     screen: Res<Screen>,
-    windows: Res<Windows>,
     mut position: ResMut<PxCursorPosition>,
 ) {
     if leave_events.iter().next().is_some() {
         **position = None;
-    } else if let Some(event) = move_events.iter().last() {
-        if let Ok(camera) = cameras.get_single() {
-            let window = windows.get_primary().unwrap();
-            let margin = (window.width() - window.height()) / 2.;
-
-            let new_position = (camera.compute_matrix()
-                * Vec4::new(
-                    event.position.x - margin.max(0.),
-                    event.position.y + margin.min(0.),
-                    0.,
-                    1.,
-                ))
-            .truncate()
-            .truncate()
-                / screens.single().scale.truncate()
-                * screen.size.as_vec2();
-
-            **position = (new_position.cmpge(Vec2::ZERO).all()
-                && new_position.cmplt(screen.size.as_vec2()).all())
-            .then(|| new_position.as_uvec2());
-        }
+        return;
     }
+
+    let Some(event) = move_events.iter().last() else { return };
+    let Ok(camera) = cameras.get_single() else { return };
+    let window = windows.single();
+    let margin = (window.width() - window.height()) / 2.;
+
+    let new_position = (camera.compute_matrix()
+        * Vec4::new(
+            event.position.x - margin.max(0.),
+            event.position.y + margin.min(0.),
+            0.,
+            1.,
+        ))
+    .truncate()
+    .truncate()
+        / screens.single().scale.truncate()
+        * screen.size.as_vec2();
+
+    **position = (new_position.cmpge(Vec2::ZERO).all()
+        && new_position.cmplt(screen.size.as_vec2()).all())
+    .then(|| new_position.as_uvec2());
 }
 
 fn change_cursor(
+    mut windows: Query<&mut Window, With<PrimaryWindow>>,
     cursor: Res<PxCursor>,
     cursor_pos: Res<PxCursorPosition>,
-    mut windows: ResMut<Windows>,
 ) {
     if !cursor.is_changed() && !cursor_pos.is_changed() {
         return;
     }
 
-    windows.get_primary_mut().unwrap().set_cursor_visibility(
-        cursor_pos.is_none()
-            || match *cursor {
-                PxCursor::Os => true,
-                PxCursor::Filter { .. } => false,
-            },
-    );
+    windows.single_mut().cursor.visible = cursor_pos.is_none()
+        || match *cursor {
+            PxCursor::Os => true,
+            PxCursor::Filter { .. } => false,
+        };
 }
 
 fn draw_cursor(

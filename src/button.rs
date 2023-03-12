@@ -1,22 +1,37 @@
-use crate::{
-    cursor::{CursorSystem, PxCursorPosition},
-    palette::PaletteState,
-    prelude::*,
-    stage::PxStage,
-};
+use crate::{cursor::PxCursorPosition, prelude::*, set::PxSet};
 
 pub(crate) fn button_plugin(app: &mut App) {
     app.init_resource::<PxEnableButtons>()
-        .add_system_to_stage(PxStage::PostUpdate, add_button_sprites)
-        .add_system_to_stage(PxStage::Last, update_button_sprites)
-        .add_system_to_stage(PxStage::PostUpdate, add_button_filters)
-        .add_system_to_stage(PxStage::Last, update_button_filters)
-        .add_system_to_stage(PxStage::Last, disable_buttons)
-        .add_system_to_stage(
-            PxStage::PreUpdate,
+        .configure_sets(
+            (PxSet::AddButtonAssets, PxSet::UpdateButtonAssets)
+                .in_set(PxSet::Loaded)
+                .in_base_set(CoreSet::PostUpdate),
+        )
+        .configure_set(PxSet::AddButtonAssets.run_if(resource_equals(PxEnableButtons(true))))
+        .add_system(
             interact_buttons
-                .run_in_state(PaletteState::Loaded)
-                .after(CursorSystem::UpdateCursorPosition),
+                .run_if(resource_equals(PxEnableButtons(true)))
+                .after(PxSet::UpdateCursorPosition)
+                .in_set(PxSet::Loaded)
+                .in_base_set(CoreSet::PreUpdate),
+        )
+        .add_systems((add_button_sprites, add_button_filters).in_set(PxSet::AddButtonAssets))
+        .add_system(
+            apply_system_buffers
+                .after(PxSet::AddButtonAssets)
+                .before(PxSet::UpdateButtonAssets)
+                .in_base_set(CoreSet::PostUpdate),
+        )
+        .add_systems(
+            (update_button_sprites, update_button_filters)
+                .before(PxSet::Draw)
+                .in_set(PxSet::UpdateButtonAssets),
+        )
+        .add_system(
+            disable_buttons
+                .run_if(resource_changed::<PxEnableButtons>())
+                .run_if(resource_equals(PxEnableButtons(false)))
+                .in_base_set(CoreSet::PostUpdate),
         );
 }
 
@@ -142,7 +157,7 @@ pub struct PxHover;
 pub struct PxClick;
 
 /// Resource that determines whether buttons are enabled
-#[derive(Debug, Deref, DerefMut, Resource)]
+#[derive(Debug, Deref, DerefMut, PartialEq, Resource)]
 pub struct PxEnableButtons(pub bool);
 
 impl Default for PxEnableButtons {
@@ -163,14 +178,9 @@ fn interact_buttons(
         Option<&PxClick>,
     )>,
     cursor_pos: Res<PxCursorPosition>,
-    enable_buttons: Res<PxEnableButtons>,
     mouse: Res<Input<MouseButton>>,
     camera: Res<PxCamera>,
 ) {
-    if !**enable_buttons {
-        return;
-    }
-
     for (button, position, bounds, anchor, canvas, hovered, clicked) in &buttons {
         let mut button = commands.entity(button);
 
@@ -214,12 +224,7 @@ fn disable_buttons(
     mut commands: Commands,
     hovered_buttons: Query<Entity, With<PxHover>>,
     clicked_buttons: Query<Entity, With<PxClick>>,
-    enable_buttons: Res<PxEnableButtons>,
 ) {
-    if !enable_buttons.is_changed() || **enable_buttons {
-        return;
-    }
-
     for button in &hovered_buttons {
         commands.entity(button).remove::<PxHover>();
     }

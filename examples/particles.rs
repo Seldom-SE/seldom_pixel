@@ -8,11 +8,10 @@ use seldom_pixel::prelude::*;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
-                width: 512.,
-                height: 512.,
+            primary_window: Some(Window {
+                resolution: Vec2::splat(512.).into(),
                 ..default()
-            },
+            }),
             ..default()
         }))
         .add_plugin(PxPlugin::<Layer>::new(
