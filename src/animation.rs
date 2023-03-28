@@ -44,7 +44,7 @@ pub(crate) fn animation_plugin(app: &mut App) {
     );
 
     #[cfg(feature = "map")]
-    app.add_system(finish_animations::<PxTilesetData>.in_set(FinishAnimations));
+    app.add_system(finish_animations::<PxTilesetData>.in_set(PxSet::FinishAnimations));
 }
 
 /// Direction the animation plays
