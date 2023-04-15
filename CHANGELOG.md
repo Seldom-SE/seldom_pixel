@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 (2022-04-15)
+
+### Fixed
+
+- Some setups had compile errors, which are fixed
+- Wasm builds run again, except with the `particle` feature
+
 ## 0.2 (2022-03-27)
 
 ### Changed
