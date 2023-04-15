@@ -40,7 +40,7 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
             .add_systems(
                 (apply_system_buffers, draw_screen::<L>)
                     .chain()
-                    .in_set(PxSet::Draw),
+                    .in_set(PxSet::Draw)
                     .in_set(PxSet::Loaded),
             )
             .add_systems(
