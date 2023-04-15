@@ -139,8 +139,8 @@ impl<D: PxAssetData> Default for LoadingAssets<D> {
 pub struct PxAssets<'w, 's, A: PxAssetTrait> {
     _query: Query<'w, 's, ()>,
     asset_server: Res<'w, AssetServer>,
-    assets: ResMut<'w, Assets<PxAsset<A::Data>>>,
-    loading_resource: ResMut<'w, LoadingAssets<A::Data>>,
+    assets: ResMut<'w, Assets<PxAsset<<A as PxAssetTrait>::Data>>>,
+    loading_resource: ResMut<'w, LoadingAssets<<A as PxAssetTrait>::Data>>,
 }
 
 impl<'w, 's, A: PxAssetTrait> PxAssets<'w, 's, A> {
