@@ -27,7 +27,7 @@ pub(crate) fn cursor_plugin(app: &mut App) {
                 .in_set(PxSet::UpdateCursorPosition),
         )
         .add_system(change_cursor.before(PxSet::DrawCursor))
-        .add_system(draw_cursor.in_set(PxSet::DrawCursor));
+        .add_system(draw_cursor.in_set(PxSet::DrawCursor).in_set(PxSet::Loaded));
 }
 
 /// Resource that defines whether to use an in-game cursor
