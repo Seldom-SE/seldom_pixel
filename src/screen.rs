@@ -40,7 +40,8 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
             .add_systems(
                 (apply_system_buffers, draw_screen::<L>)
                     .chain()
-                    .in_set(PxSet::Draw),
+                    .in_set(PxSet::Draw)
+                    .in_set(PxSet::Loaded),
             )
             .add_systems(
                 (
@@ -48,7 +49,7 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
                     init_screen(size).run_if(resource_added::<Palette>()),
                     resize_screen.in_set(PxSet::Loaded),
                     clear_screen.before(PxSet::Draw).in_set(PxSet::Loaded),
-                    update_screen_palette,
+                    update_screen_palette.in_set(PxSet::Loaded),
                 )
                     .in_base_set(CoreSet::PostUpdate),
             );
@@ -138,6 +139,8 @@ fn init_screen(
         });
 
         let (entity, window) = windows.single();
+        let calculated_screen_scale =
+            screen_scale(size, Vec2::new(window.width(), window.height())).extend(1.);
 
         commands.spawn((
             MaterialMesh2dBundle {
@@ -146,9 +149,9 @@ fn init_screen(
                     image,
                     palette: screen_palette,
                 }),
-                transform: Transform::from_scale(
-                    screen_scale(size, Vec2::new(window.width(), window.height())).extend(1.),
-                ),
+                transform: Transform::from_scale(calculated_screen_scale),
+                // Ensure transform matches global_transform to ensure correct rendering for WASM
+                global_transform: GlobalTransform::from_scale(calculated_screen_scale),
                 ..default()
             },
             ScreenMarker,
