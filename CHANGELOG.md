@@ -1,11 +1,17 @@
 # Changelog
 
+## 0.2.2 (2023-04-24)
+
+### Fixed
+
+- In wasm, spawning a particle emitter with pre-simulation too soon after startup caused a panic
+
 ## 0.2.1 (2023-04-15)
 
 ### Fixed
 
-- Some setups had compile errors, which are fixed
-- Wasm builds run again, except with the `particle` feature
+- Some setups had compile errors
+- Wasm builds do not run (not fixed with the `particle` feature)
 
 ## 0.2 (2023-03-27)
 
@@ -19,4 +25,4 @@
 
 ### Fixed
 
-- Animations don't spasm when `PxAnimationBundle` is added, removed, and then added again
+- Animations spasmed when `PxAnimationBundle` is added, removed, and then added again

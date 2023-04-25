@@ -239,20 +239,14 @@ fn simulate_emitters<L: PxLayer>(
         simulation,
     ) in &emitters
     {
-        info!("1");
         if *simulation != PxEmitterSimulation::Simulate {
             continue;
         }
 
-        info!("2");
         let current_time = time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET;
-        info!("3");
-        info!("4");
         let mut simulated_time = current_time;
 
-        info!("5");
         while simulated_time + **lifetime >= current_time {
-            info!("6");
             let position = IVec2::new(
                 rng.i32(range.min.x..=range.max.x),
                 rng.i32(range.min.y..=range.max.y),
@@ -260,7 +254,6 @@ fn simulate_emitters<L: PxLayer>(
             .as_vec2()
                 + **velocity * (current_time - simulated_time).as_secs_f32();
 
-            info!("7");
             on_spawn(&mut commands.spawn((
                 PxSpriteBundle {
                     sprite: rng.sample(sprites).unwrap().clone(),
@@ -280,7 +273,6 @@ fn simulate_emitters<L: PxLayer>(
                 Name::new("Particle"),
             )));
 
-            info!("{simulated_time:?}");
             // In wasm, the beginning of time is the start of the program, so we `checked_sub`
             let Some(new_time) = simulated_time
                 .checked_sub((frequency.max - frequency.min)
