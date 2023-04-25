@@ -1,14 +1,19 @@
 //! Particles and particle emitters
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use bevy::ecs::system::EntityCommands;
+use bevy::{ecs::system::EntityCommands, utils::Instant};
 use bevy_turborand::{
     rng::{Rng, TurboRand},
     DelegatedRng, GlobalRng, RngComponent,
 };
 
 use crate::{math::IRect, position::PxLayer, prelude::*, set::PxSet};
+
+// https://github.com/bevyengine/bevy/issues/8483
+// In wasm, time starts at 0, so it needs an offset to represent an instant before the app started.
+// If a day isn't sufficient for your use case, file an issue!
+const TIME_OFFSET: Duration = Duration::from_secs(60 * 60 * 24);
 
 pub(crate) fn particle_plugin<L: PxLayer>(app: &mut App) {
     app.configure_set(
@@ -234,15 +239,20 @@ fn simulate_emitters<L: PxLayer>(
         simulation,
     ) in &emitters
     {
+        info!("1");
         if *simulation != PxEmitterSimulation::Simulate {
             continue;
         }
 
-        let current_time = time.last_update().unwrap_or_else(|| time.startup());
-        let oldest_relevant_time = current_time - **lifetime;
+        info!("2");
+        let current_time = time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET;
+        info!("3");
+        info!("4");
         let mut simulated_time = current_time;
 
-        while simulated_time >= oldest_relevant_time {
+        info!("5");
+        while simulated_time + **lifetime >= current_time {
+            info!("6");
             let position = IVec2::new(
                 rng.i32(range.min.x..=range.max.x),
                 rng.i32(range.min.y..=range.max.y),
@@ -250,6 +260,7 @@ fn simulate_emitters<L: PxLayer>(
             .as_vec2()
                 + **velocity * (current_time - simulated_time).as_secs_f32();
 
+            info!("7");
             on_spawn(&mut commands.spawn((
                 PxSpriteBundle {
                     sprite: rng.sample(sprites).unwrap().clone(),
@@ -269,7 +280,14 @@ fn simulate_emitters<L: PxLayer>(
                 Name::new("Particle"),
             )));
 
-            simulated_time -= (frequency.max - frequency.min).mul_f32(rng.f32()) + frequency.min;
+            info!("{simulated_time:?}");
+            // In wasm, the beginning of time is the start of the program, so we `checked_sub`
+            let Some(new_time) = simulated_time
+                .checked_sub((frequency.max - frequency.min)
+                .mul_f32(rng.f32()) + frequency.min) else {
+                    break;
+                };
+            simulated_time = new_time;
         }
     }
 }
@@ -284,7 +302,7 @@ fn insert_emitter_time(
         commands
             .entity(emitter)
             .insert(PxEmitterStart(
-                time.last_update().unwrap_or_else(|| time.startup()),
+                time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET,
             ))
             .insert(RngComponent::from(&mut rng));
     }
@@ -321,7 +339,7 @@ fn update_emitters<L: PxLayer>(
         mut rng,
     ) in &mut emitters
     {
-        if time.last_update().unwrap_or_else(|| time.startup()) - **start
+        if time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET - **start
             < frequency.next(rng.get_mut())
         {
             continue;
@@ -345,7 +363,7 @@ fn update_emitters<L: PxLayer>(
             PxParticleBundle {
                 position: position.as_vec2().into(),
                 velocity: *velocity,
-                start: time.last_update().unwrap_or_else(|| time.startup()).into(),
+                start: (time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET).into(),
                 lifetime: *lifetime,
             },
             Name::new("Particle"),
@@ -359,7 +377,9 @@ fn despawn_particles(
     time: Res<Time>,
 ) {
     for (particle, lifetime, start) in &particles {
-        if time.last_update().unwrap_or_else(|| time.startup()) - **start >= **lifetime {
+        if time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET - **start
+            >= **lifetime
+        {
             commands.entity(particle).despawn();
         }
     }
