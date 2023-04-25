@@ -22,7 +22,7 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .add_startup_system(init)
         .add_system(spawn_mage)
-        .add_system(change_palette)
+        .add_system(change_palette.run_if(resource_exists::<Palette>()))
         .run();
 }
 
