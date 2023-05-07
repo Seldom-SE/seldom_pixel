@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3 (2023-05-07)
+
+### Changed
+
+- Updated `seldom_state` to 0.6
+
 ## 0.2.2 (2023-04-24)
 
 ### Fixed

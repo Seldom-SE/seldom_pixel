@@ -17,7 +17,6 @@ fn main() {
         }))
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_plugin(StateMachinePlugin)
-        .add_plugin(InputTriggerPlugin::<Action>::default())
         .add_plugin(PxPlugin::<Layer>::new(
             UVec2::splat(16),
             "palette/palette_1.png".into(),
@@ -27,15 +26,15 @@ fn main() {
         .run();
 }
 
-#[derive(Clone, Component, Reflect)]
+#[derive(Clone, Component)]
 #[component(storage = "SparseSet")]
 struct Idle;
 
-#[derive(Clone, Component, Reflect)]
+#[derive(Clone, Component)]
 #[component(storage = "SparseSet")]
 struct Cast;
 
-#[derive(Bundle, Clone)]
+#[derive(Bundle)]
 struct CastBundle {
     sprite: Handle<PxSprite>,
     #[bundle]
@@ -46,6 +45,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
     commands.spawn(Camera2dBundle::default());
 
     let idle = sprites.load("sprite/mage.png");
+    let cast = sprites.load_animated("sprite/mage_cast.png", 4);
 
     // Spawn a sprite
     commands.spawn((
@@ -60,23 +60,30 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
                 .build(),
             ..default()
         },
-        StateMachine::new(Idle)
+        StateMachine::default()
             .trans::<Idle>(JustPressedTrigger(Action::Cast), Cast)
-            .insert_on_enter::<Cast>(CastBundle {
-                sprite: sprites.load_animated("sprite/mage_cast.png", 4),
-                animation: PxAnimationBundle {
-                    duration: PxAnimationDuration::millis_per_animation(2000),
-                    on_finish: PxAnimationFinishBehavior::Done,
-                    ..default()
-                },
+            .on_enter::<Cast>(move |entity| {
+                entity.insert(CastBundle {
+                    sprite: cast.clone(),
+                    animation: PxAnimationBundle {
+                        duration: PxAnimationDuration::millis_per_animation(2000),
+                        on_finish: PxAnimationFinishBehavior::Done,
+                        ..default()
+                    },
+                });
             })
-            .remove_on_exit::<Cast, PxAnimationBundle>()
+            .on_exit::<Cast>(|entity| {
+                entity.remove::<CastBundle>();
+            })
             .trans::<Cast>(DoneTrigger::Success, Idle)
-            .insert_on_enter::<Idle>(idle),
+            .on_enter::<Idle>(move |entity| {
+                entity.insert(idle.clone());
+            }),
+        Idle,
     ));
 }
 
-#[derive(Actionlike, Clone, Reflect)]
+#[derive(Actionlike, Clone)]
 enum Action {
     Cast,
 }

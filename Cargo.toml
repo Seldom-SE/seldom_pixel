@@ -1,6 +1,6 @@
 [package]
 name = "seldom_pixel"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 categories = [ "game-development" ]
 description = "Bevy plugin for limited color palette pixel art games"
@@ -25,13 +25,13 @@ line_drawing = { version = "1", optional = true }
 seldom_fn_plugin = "0.3"
 seldom_interop = { version = "0.3", optional = true }
 seldom_pixel_macros = { version = "0.1", path = "macros" }
-seldom_state = { version = "0.5", optional = true }
+seldom_state = { version = "0.6", optional = true }
 
 [dev-dependencies]
 bevy = { version = "0.10", features = [ "png" ] }
 leafwing-input-manager = "0.9"
 rand = "0.8"
-seldom_state = { version = "0.5", features = [ "leafwing_input" ] }
+seldom_state = { version = "0.6", features = [ "leafwing_input" ] }
 
 [[example]]
 name = "animated_tilemap"
