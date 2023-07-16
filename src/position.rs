@@ -5,13 +5,15 @@ use std::fmt::Debug;
 use crate::{prelude::*, set::PxSet};
 
 pub(crate) fn position_plugin(app: &mut App) {
-    app.configure_set(PxSet::UpdatePosToSubPos.in_base_set(CoreSet::PreUpdate))
-        .add_systems((
-            update_sub_positions.in_base_set(CoreSet::PreUpdate),
-            update_position_to_sub
-                .in_set(PxSet::UpdatePosToSubPos)
-                .after(update_sub_positions),
-        ));
+    app.configure_set(PreUpdate, PxSet::UpdatePosToSubPos)
+        .add_systems(
+            PreUpdate,
+            (
+                update_sub_positions,
+                update_position_to_sub.in_set(PxSet::UpdatePosToSubPos),
+            )
+                .chain(),
+        );
 }
 
 /// The position of an entity

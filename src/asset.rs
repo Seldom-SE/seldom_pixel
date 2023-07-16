@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use bevy::{
     asset::{Asset, AssetPath},
     ecs::system::SystemParam,
-    reflect::{TypeUuid, Uuid},
+    reflect::{TypePath, TypeUuid, Uuid},
 };
 
 use seldom_fn_plugin::FnPluginExt;
@@ -25,10 +25,8 @@ use self::sealed::{PxAssetDataSealed, PxAssetTraitSealed};
 
 pub(crate) fn asset_plugin(app: &mut App) {
     app.configure_set(
-        PxSet::LoadAssets
-            .before(PxSet::Draw)
-            .in_set(PxSet::Loaded)
-            .in_base_set(CoreSet::PostUpdate),
+        PostUpdate,
+        PxSet::LoadAssets.before(PxSet::Draw).in_set(PxSet::Loaded),
     )
     .fn_plugin(px_asset_plugin::<PxSpriteData>)
     .fn_plugin(px_asset_plugin::<PxTypefaceData>)
@@ -40,11 +38,11 @@ pub(crate) fn asset_plugin(app: &mut App) {
 fn px_asset_plugin<D: PxAssetData>(app: &mut App) {
     app.add_asset::<PxAsset<D>>()
         .init_resource::<LoadingAssets<D>>()
-        .add_system(D::load.in_set(PxSet::LoadAssets));
+        .add_systems(PostUpdate, D::load.in_set(PxSet::LoadAssets));
 }
 
 /// An asset created from an image
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub enum PxAsset<D: PxAssetData> {
     /// Waiting for the source image to load
     Loading {
@@ -76,7 +74,9 @@ where
 }
 
 /// Internal trait implemented for asset data types
-pub trait PxAssetData: 'static + Debug + PxAssetDataSealed + Send + Sized + Sync {
+pub trait PxAssetData:
+    'static + Debug + FromReflect + PxAssetDataSealed + Send + Sized + Sync + TypePath
+{
     /// Uuid used to implement [`TypeUuid`]
     const UUID: [u8; 16];
     /// Additional configuration needed to create this asset

@@ -6,23 +6,30 @@ use seldom_pixel::{palette::Palette, prelude::*};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: Vec2::splat(512.).into(),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: Vec2::splat(512.).into(),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
-        .add_plugin(PxPlugin::<Layer>::new(
-            UVec2::splat(64),
-            // This is the palette that assets will be loaded with
-            // It is also the palette that assets will be displayed with, until changed
-            "palette/palette_1.png".into(),
+            PxPlugin::<Layer>::new(
+                UVec2::splat(64),
+                // This is the palette that assets will be loaded with
+                // It is also the palette that assets will be displayed with, until changed
+                "palette/palette_1.png".into(),
+            ),
         ))
         .insert_resource(ClearColor(Color::BLACK))
-        .add_startup_system(init)
-        .add_system(spawn_mage)
-        .add_system(change_palette.run_if(resource_exists::<Palette>()))
+        .add_systems(Startup, init)
+        .add_systems(
+            Update,
+            (
+                spawn_mage,
+                change_palette.run_if(resource_exists::<Palette>()),
+            ),
+        )
         .run();
 }
 

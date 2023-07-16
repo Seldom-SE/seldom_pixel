@@ -10,7 +10,7 @@ use crate::{
     sprite::PxSpriteData,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub struct PxTilesetData {
     pub(crate) tileset: Vec<PxSpriteData>,
     tile_size: UVec2,

@@ -15,19 +15,20 @@ use crate::{
 pub(crate) fn cursor_plugin(app: &mut App) {
     app.init_resource::<PxCursor>()
         .init_resource::<PxCursorPosition>()
-        .configure_set(PxSet::UpdateCursorPosition.in_base_set(CoreSet::PreUpdate))
-        .configure_set(
-            PxSet::DrawCursor
-                .after(PxSet::Draw)
-                .in_base_set(CoreSet::PostUpdate),
-        )
-        .add_system(
+        .add_systems(
+            PreUpdate,
             update_cursor_position
                 .run_if(resource_exists::<Palette>())
                 .in_set(PxSet::UpdateCursorPosition),
         )
-        .add_system(change_cursor.before(PxSet::DrawCursor))
-        .add_system(draw_cursor.in_set(PxSet::DrawCursor).in_set(PxSet::Loaded));
+        .configure_set(PostUpdate, PxSet::DrawCursor.after(PxSet::Draw))
+        .add_systems(
+            PostUpdate,
+            (
+                change_cursor.before(PxSet::DrawCursor),
+                draw_cursor.in_set(PxSet::DrawCursor).in_set(PxSet::Loaded),
+            ),
+        );
 }
 
 /// Resource that defines whether to use an in-game cursor
@@ -58,8 +59,7 @@ fn update_cursor_position(
     mut move_events: EventReader<CursorMoved>,
     mut leave_events: EventReader<CursorLeft>,
     screens: Query<&Transform, With<ScreenMarker>>,
-    cameras: Query<&Transform, With<Camera2d>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    cameras: Query<(&Camera, &GlobalTransform)>,
     screen: Res<Screen>,
     mut position: ResMut<PxCursorPosition>,
 ) {
@@ -69,21 +69,14 @@ fn update_cursor_position(
     }
 
     let Some(event) = move_events.iter().last() else { return };
-    let Ok(camera) = cameras.get_single() else { return };
-    let window = windows.single();
-    let margin = (window.width() - window.height()) / 2.;
+    let Ok((camera, tf)) = cameras.get_single() else { return };
 
-    let new_position = (camera.compute_matrix()
-        * Vec4::new(
-            event.position.x - margin.max(0.),
-            event.position.y + margin.min(0.),
-            0.,
-            1.,
-        ))
-    .truncate()
-    .truncate()
-        / screens.single().scale.truncate()
-        * screen.size.as_vec2();
+    let Some(new_position) = camera.viewport_to_world_2d(tf, event.position) else {
+        **position = None;
+        return;
+    };
+    let new_position = new_position / screens.single().scale.truncate() * screen.size.as_vec2()
+        + screen.size.as_vec2() / 2.;
 
     **position = (new_position.cmpge(Vec2::ZERO).all()
         && new_position.cmplt(screen.size.as_vec2()).all())

@@ -5,20 +5,19 @@ use seldom_pixel::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: Vec2::splat(512.).into(),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: Vec2::splat(512.).into(),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
-        .add_plugin(PxPlugin::<Layer>::new(
-            UVec2::new(64, 32),
-            "palette/palette_1.png".into(),
+            PxPlugin::<Layer>::new(UVec2::new(64, 32), "palette/palette_1.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
-        .add_startup_system(init)
-        .add_system(change_filter)
+        .add_systems(Startup, init)
+        .add_systems(Update, change_filter)
         .run();
 }
 

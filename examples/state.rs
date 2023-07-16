@@ -8,21 +8,20 @@ use seldom_state::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: Vec2::splat(512.).into(),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: Vec2::splat(512.).into(),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
-        .add_plugin(InputManagerPlugin::<Action>::default())
-        .add_plugin(StateMachinePlugin)
-        .add_plugin(PxPlugin::<Layer>::new(
-            UVec2::splat(16),
-            "palette/palette_1.png".into(),
+            InputManagerPlugin::<Action>::default(),
+            StateMachinePlugin,
+            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
-        .add_startup_system(init)
+        .add_systems(Startup, init)
         .run();
 }
 
@@ -37,7 +36,6 @@ struct Cast;
 #[derive(Bundle)]
 struct CastBundle {
     sprite: Handle<PxSprite>,
-    #[bundle]
     animation: PxAnimationBundle,
 }
 
@@ -83,7 +81,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
     ));
 }
 
-#[derive(Actionlike, Clone)]
+#[derive(Actionlike, Clone, Reflect)]
 enum Action {
     Cast,
 }

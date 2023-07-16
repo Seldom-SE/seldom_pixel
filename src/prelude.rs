@@ -3,6 +3,8 @@
 pub(crate) use bevy::prelude::*;
 #[cfg(feature = "map")]
 pub(crate) use bevy_ecs_tilemap::prelude::*;
+#[cfg(feature = "particle")]
+pub(crate) use bevy_turborand::prelude::*;
 #[cfg(feature = "interop")]
 pub(crate) use seldom_interop::prelude::*;
 #[cfg(feature = "state")]

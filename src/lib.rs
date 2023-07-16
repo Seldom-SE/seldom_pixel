@@ -37,8 +37,6 @@ use std::{marker::PhantomData, path::PathBuf};
 use animation::animation_plugin;
 use asset::asset_plugin;
 
-#[cfg(feature = "particle")]
-use bevy_turborand::RngPlugin;
 use button::button_plugin;
 use camera::camera_plugin;
 use cursor::cursor_plugin;
@@ -91,7 +89,7 @@ pub fn px_plugin<L: PxLayer>(screen_size: UVec2, palette_path: PathBuf) -> impl 
             .fn_plugin(screen_plugin::<L>(screen_size))
             .fn_plugin(cursor_plugin);
         #[cfg(feature = "particle")]
-        app.add_plugin(RngPlugin::default())
+        app.add_plugins(RngPlugin::default())
             .fn_plugin(particle_plugin::<L>);
     }
 }

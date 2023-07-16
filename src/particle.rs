@@ -3,10 +3,6 @@
 use std::time::Duration;
 
 use bevy::{ecs::system::EntityCommands, utils::Instant};
-use bevy_turborand::{
-    rng::{Rng, TurboRand},
-    DelegatedRng, GlobalRng, RngComponent,
-};
 
 use crate::{math::IRect, position::PxLayer, prelude::*, set::PxSet};
 
@@ -16,26 +12,20 @@ use crate::{math::IRect, position::PxLayer, prelude::*, set::PxSet};
 const TIME_OFFSET: Duration = Duration::from_secs(60 * 60 * 24);
 
 pub(crate) fn particle_plugin<L: PxLayer>(app: &mut App) {
-    app.configure_set(
-        PxSet::UpdateEmitters
-            .before(PxSet::Draw)
-            .in_base_set(CoreSet::PostUpdate),
-    )
-    .add_systems(
-        (simulate_emitters::<L>, insert_emitter_time)
-            .before(PxSet::UpdateEmitters)
-            .in_base_set(CoreSet::PostUpdate),
-    )
-    .add_systems(
-        (apply_system_buffers, update_emitters::<L>)
-            .chain()
-            .in_set(PxSet::UpdateEmitters),
-    )
-    .add_system(
-        despawn_particles
-            .before(PxSet::Draw)
-            .in_base_set(CoreSet::PostUpdate),
-    );
+    app.configure_set(PostUpdate, PxSet::UpdateEmitters.before(PxSet::Draw))
+        .add_systems(
+            PostUpdate,
+            (
+                (
+                    (simulate_emitters::<L>, insert_emitter_time),
+                    (apply_deferred, update_emitters::<L>)
+                        .chain()
+                        .in_set(PxSet::UpdateEmitters),
+                )
+                    .chain(),
+                despawn_particles.before(PxSet::Draw),
+            ),
+        );
 }
 
 /// Possible sprites for an emitter's particles

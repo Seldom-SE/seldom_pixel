@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// Internal data for a [`PxFilter`]
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub struct PxFilterData(pub(crate) PxImage<u8>);
 
 impl PxAssetData for PxFilterData {

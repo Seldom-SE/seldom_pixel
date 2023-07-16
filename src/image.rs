@@ -2,7 +2,7 @@ use bevy::render::render_resource::TextureFormat;
 
 use crate::{math::IRect, palette::Palette, pixel::Pixel, prelude::*};
 
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub(crate) struct PxImage<P: Pixel> {
     image: Vec<P>,
     width: usize,

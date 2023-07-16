@@ -2,36 +2,35 @@ use crate::{cursor::PxCursorPosition, prelude::*, set::PxSet};
 
 pub(crate) fn button_plugin(app: &mut App) {
     app.init_resource::<PxEnableButtons>()
-        .configure_sets(
-            (PxSet::AddButtonAssets, PxSet::UpdateButtonAssets)
-                .in_set(PxSet::Loaded)
-                .in_base_set(CoreSet::PostUpdate),
-        )
-        .configure_set(PxSet::AddButtonAssets.run_if(resource_equals(PxEnableButtons(true))))
-        .add_system(
+        .add_systems(
+            PreUpdate,
             interact_buttons
                 .run_if(resource_equals(PxEnableButtons(true)))
                 .after(PxSet::UpdateCursorPosition)
-                .in_set(PxSet::Loaded)
-                .in_base_set(CoreSet::PreUpdate),
+                .in_set(PxSet::Loaded),
         )
-        .add_systems((add_button_sprites, add_button_filters).in_set(PxSet::AddButtonAssets))
-        .add_system(
-            apply_system_buffers
-                .after(PxSet::AddButtonAssets)
-                .before(PxSet::UpdateButtonAssets)
-                .in_base_set(CoreSet::PostUpdate),
+        .configure_sets(
+            PostUpdate,
+            (
+                PxSet::AddButtonAssets.run_if(resource_equals(PxEnableButtons(true))),
+                PxSet::UpdateButtonAssets,
+            )
+                .in_set(PxSet::Loaded),
         )
         .add_systems(
-            (update_button_sprites, update_button_filters)
-                .before(PxSet::Draw)
-                .in_set(PxSet::UpdateButtonAssets),
-        )
-        .add_system(
-            disable_buttons
-                .run_if(resource_changed::<PxEnableButtons>())
-                .run_if(resource_equals(PxEnableButtons(false)))
-                .in_base_set(CoreSet::PostUpdate),
+            PostUpdate,
+            (
+                (add_button_sprites, add_button_filters).in_set(PxSet::AddButtonAssets),
+                apply_deferred
+                    .after(PxSet::AddButtonAssets)
+                    .before(PxSet::UpdateButtonAssets),
+                (update_button_sprites, update_button_filters)
+                    .before(PxSet::Draw)
+                    .in_set(PxSet::UpdateButtonAssets),
+                disable_buttons
+                    .run_if(resource_changed::<PxEnableButtons>())
+                    .run_if(resource_equals(PxEnableButtons(false))),
+            ),
         );
 }
 

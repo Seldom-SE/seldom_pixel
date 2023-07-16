@@ -33,25 +33,31 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
     move |app| {
         app.world.resource_mut::<Assets<Shader>>().set_untracked(
             SCREEN_SHADER_HANDLE,
-            Shader::from_wgsl(include_str!("screen.wgsl")),
+            Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
         );
-        app.add_plugin(Material2dPlugin::<ScreenMaterial>::default())
-            .configure_set(PxSet::Draw.in_base_set(CoreSet::PostUpdate))
+        app.add_plugins(Material2dPlugin::<ScreenMaterial>::default())
+            .configure_set(PostUpdate, PxSet::Draw)
             .add_systems(
-                (apply_system_buffers, draw_screen::<L>)
-                    .chain()
-                    .in_set(PxSet::Draw)
-                    .in_set(PxSet::Loaded),
+                Update,
+                init_screen(size).run_if(resource_added::<Palette>()),
             )
             .add_systems(
+                PostUpdate,
                 (
                     update_screen,
-                    init_screen(size).run_if(resource_added::<Palette>()),
-                    resize_screen.in_set(PxSet::Loaded),
-                    clear_screen.before(PxSet::Draw).in_set(PxSet::Loaded),
-                    update_screen_palette.in_set(PxSet::Loaded),
-                )
-                    .in_base_set(CoreSet::PostUpdate),
+                    (
+                        (
+                            clear_screen,
+                            (apply_deferred, draw_screen::<L>)
+                                .chain()
+                                .in_set(PxSet::Draw),
+                        )
+                            .chain(),
+                        resize_screen,
+                        update_screen_palette,
+                    )
+                        .in_set(PxSet::Loaded),
+                ),
             );
     }
 }
@@ -65,7 +71,7 @@ pub(crate) struct Screen {
 #[derive(Component)]
 pub(crate) struct ScreenMarker;
 
-#[derive(AsBindGroup, Clone, TypeUuid)]
+#[derive(AsBindGroup, Clone, Reflect, TypeUuid)]
 #[uuid = "aee2fc17-8009-487a-84ac-c8bc3826e958"]
 struct ScreenMaterial {
     #[uniform(0)]

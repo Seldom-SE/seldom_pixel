@@ -56,12 +56,12 @@ pub struct PxTypefaceConfig {
     pub(crate) separators: Vec<PxSeparatorConfig>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub(crate) struct PxSeparator {
     pub(crate) width: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub struct PxTypefaceData {
     pub(crate) height: u32,
     pub(crate) characters: HashMap<char, PxSpriteData>,

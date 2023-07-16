@@ -8,16 +8,19 @@ use crate::{prelude::*, set::PxSet};
 
 pub(crate) fn palette_plugin(palette_path: PathBuf) -> impl FnOnce(&mut App) {
     move |app| {
-        app.configure_sets((
-            PxSet::Unloaded.run_if(resource_exists::<LoadingPalette>()),
-            PxSet::Loaded.run_if(resource_exists::<Palette>()),
-        ))
-        .add_startup_system(load_palette(palette_path))
-        .add_system(
-            init_palette
-                .in_set(PxSet::Unloaded)
-                .in_base_set(CoreSet::PreUpdate),
-        );
+        app.add_systems(Startup, load_palette(palette_path))
+            .configure_sets(
+                PreUpdate,
+                (
+                    PxSet::Unloaded.run_if(resource_exists::<LoadingPalette>()),
+                    PxSet::Loaded.run_if(resource_exists::<Palette>()),
+                ),
+            )
+            .add_systems(PreUpdate, init_palette.in_set(PxSet::Unloaded))
+            .configure_set(
+                PostUpdate,
+                PxSet::Loaded.run_if(resource_exists::<Palette>()),
+            );
     }
 }
 

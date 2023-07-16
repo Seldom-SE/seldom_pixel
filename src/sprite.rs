@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// Internal data for [`PxSprite`]
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub struct PxSpriteData {
     pub(crate) data: PxImage<Option<u8>>,
     pub(crate) frame_size: usize,

@@ -19,22 +19,19 @@ use crate::{
 
 pub(crate) fn animation_plugin(app: &mut App) {
     app.configure_set(
+        PostUpdate,
         PxSet::FinishAnimations
             .after(PxSet::LoadAssets)
-            .before(PxSet::Draw)
-            .in_base_set(CoreSet::PostUpdate),
+            .before(PxSet::Draw),
     )
     .add_systems(
-        (
-            remove_animation_time,
-            insert_animation_time,
-            apply_system_buffers,
-        )
+        PostUpdate,
+        (remove_animation_time, insert_animation_time, apply_deferred)
             .chain()
-            .before(PxSet::FinishAnimations)
-            .in_base_set(CoreSet::PostUpdate),
+            .before(PxSet::FinishAnimations),
     )
     .add_systems(
+        PostUpdate,
         (
             finish_animations::<PxSpriteData>,
             finish_animations::<PxFilterData>,
@@ -44,7 +41,10 @@ pub(crate) fn animation_plugin(app: &mut App) {
     );
 
     #[cfg(feature = "map")]
-    app.add_system(finish_animations::<PxTilesetData>.in_set(PxSet::FinishAnimations));
+    app.add_systems(
+        PostUpdate,
+        finish_animations::<PxTilesetData>.in_set(PxSet::FinishAnimations),
+    );
 }
 
 /// Direction the animation plays
