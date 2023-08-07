@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4 (2023-08-06)
+
+### Changed
+
+- Updated `bevy` to 0.11
+
 ## 0.3 (2023-05-07)
 
 ### Changed
