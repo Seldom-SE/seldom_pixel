@@ -26,12 +26,6 @@ pub(crate) fn animation_plugin(app: &mut App) {
     )
     .add_systems(
         PostUpdate,
-        (remove_animation_time, insert_animation_time, apply_deferred)
-            .chain()
-            .before(PxSet::FinishAnimations),
-    )
-    .add_systems(
-        PostUpdate,
         (
             finish_animations::<PxSpriteData>,
             finish_animations::<PxFilterData>,
@@ -111,6 +105,16 @@ pub enum PxAnimationFrameTransition {
     Dither,
 }
 
+/// Time when the animation started
+#[derive(Clone, Component, Copy, Debug, Deref, DerefMut)]
+pub struct PxAnimationStart(pub Instant);
+
+impl Default for PxAnimationStart {
+    fn default() -> Self {
+        Self(Instant::now())
+    }
+}
+
 /// Animates an entity. Works on sprites, filters, text, tilemaps, and lines.
 #[derive(Bundle, Clone, Copy, Debug, Default)]
 pub struct PxAnimationBundle {
@@ -122,10 +126,9 @@ pub struct PxAnimationBundle {
     pub on_finish: PxAnimationFinishBehavior,
     /// A [`PxAnimationFrameTransition`] component
     pub frame_transition: PxAnimationFrameTransition,
+    /// A [`PxAnimationStart`] component
+    pub start: PxAnimationStart,
 }
-
-#[derive(Component, Debug, Deref, DerefMut)]
-pub(crate) struct PxAnimationStart(Instant);
 
 /// Marks an animation that has finished. Automatically added to animations
 /// with [`PxAnimationFinishBehavior::Mark`]
@@ -152,28 +155,6 @@ pub(crate) trait SpatialAnimation: Animation {
 
 pub(crate) trait AnimationAsset: PxAssetData {
     fn max_frame_count(&self) -> usize;
-}
-
-fn insert_animation_time(
-    mut commands: Commands,
-    animations: Query<Entity, Added<PxAnimationDuration>>,
-    time: Res<Time>,
-) {
-    for animation in &animations {
-        commands.entity(animation).insert(PxAnimationStart(
-            time.last_update().unwrap_or_else(|| time.startup()),
-        ));
-    }
-}
-
-fn remove_animation_time(
-    mut commands: Commands,
-    mut animations: RemovedComponents<PxAnimationDuration>,
-) {
-    for animation in &mut animations {
-        let Some(mut animation) = commands.get_entity(animation) else { continue };
-        animation.remove::<PxAnimationStart>();
-    }
 }
 
 static DITHERING: &[u16] = &[
@@ -326,7 +307,7 @@ pub(crate) fn copy_animation_params(
         &PxAnimationDuration,
         &PxAnimationFinishBehavior,
         &PxAnimationFrameTransition,
-        Option<&PxAnimationStart>,
+        &PxAnimationStart,
     )>,
     time: &Time,
 ) -> Option<(
@@ -337,17 +318,13 @@ pub(crate) fn copy_animation_params(
     Duration,
 )> {
     params.map(
-        |(direction, duration, on_finish, frame_transition, start)| {
+        |(&direction, &duration, &on_finish, &frame_transition, &PxAnimationStart(start))| {
             (
-                *direction,
-                *duration,
-                *on_finish,
-                *frame_transition,
-                start
-                    .map(|spawn_time| {
-                        time.last_update().unwrap_or_else(|| time.startup()) - **spawn_time
-                    })
-                    .unwrap_or(Duration::ZERO),
+                direction,
+                duration,
+                on_finish,
+                frame_transition,
+                time.last_update().unwrap_or_else(|| time.startup()) - start,
             )
         },
     )

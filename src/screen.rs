@@ -209,7 +209,7 @@ fn draw_screen<L: PxLayer>(
             &PxAnimationDuration,
             &PxAnimationFinishBehavior,
             &PxAnimationFrameTransition,
-            Option<&PxAnimationStart>,
+            &PxAnimationStart,
         )>,
         Option<&Handle<PxFilter>>,
     )>,
@@ -230,7 +230,7 @@ fn draw_screen<L: PxLayer>(
             &PxAnimationDuration,
             &PxAnimationFinishBehavior,
             &PxAnimationFrameTransition,
-            Option<&PxAnimationStart>,
+            &PxAnimationStart,
         )>,
         Option<&Handle<PxFilter>>,
     )>,
@@ -247,7 +247,7 @@ fn draw_screen<L: PxLayer>(
             &PxAnimationDuration,
             &PxAnimationFinishBehavior,
             &PxAnimationFrameTransition,
-            Option<&PxAnimationStart>,
+            &PxAnimationStart,
         )>,
         Option<&Handle<PxFilter>>,
     )>,
@@ -262,7 +262,7 @@ fn draw_screen<L: PxLayer>(
             &PxAnimationDuration,
             &PxAnimationFinishBehavior,
             &PxAnimationFrameTransition,
-            Option<&PxAnimationStart>,
+            &PxAnimationStart,
         )>,
     )>,
     filters: Query<
@@ -275,7 +275,7 @@ fn draw_screen<L: PxLayer>(
                 &PxAnimationDuration,
                 &PxAnimationFinishBehavior,
                 &PxAnimationFrameTransition,
-                Option<&PxAnimationStart>,
+                &PxAnimationStart,
             )>,
         ),
         Without<PxCanvas>,
@@ -433,7 +433,8 @@ fn draw_screen<L: PxLayer>(
             }
             PxFilterLayers::Select(select_fn) => layer_contents
                 .keys()
-                .filter_map(|layer| select_fn(layer).then(|| (layer.clone(), true)))
+                .filter(|layer| select_fn(layer))
+                .map(|layer| (layer.clone(), true))
                 .collect(),
         }
         .into_iter()
