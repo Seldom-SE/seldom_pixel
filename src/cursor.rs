@@ -68,8 +68,12 @@ fn update_cursor_position(
         return;
     }
 
-    let Some(event) = move_events.iter().last() else { return };
-    let Ok((camera, tf)) = cameras.get_single() else { return };
+    let Some(event) = move_events.iter().last() else {
+        return;
+    };
+    let Ok((camera, tf)) = cameras.get_single() else {
+        return;
+    };
 
     let Some(new_position) = camera.viewport_to_world_2d(tf, event.position) else {
         **position = None;

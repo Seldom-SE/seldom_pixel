@@ -265,10 +265,10 @@ fn simulate_emitters<L: PxLayer>(
 
             // In wasm, the beginning of time is the start of the program, so we `checked_sub`
             let Some(new_time) = simulated_time
-                .checked_sub((frequency.max - frequency.min)
-                .mul_f32(rng.f32()) + frequency.min) else {
-                    break;
-                };
+                .checked_sub((frequency.max - frequency.min).mul_f32(rng.f32()) + frequency.min)
+            else {
+                break;
+            };
             simulated_time = new_time;
         }
     }
