@@ -17,7 +17,7 @@ pub(crate) fn palette_plugin(palette_path: PathBuf) -> impl FnOnce(&mut App) {
                 ),
             )
             .add_systems(PreUpdate, init_palette.in_set(PxSet::Unloaded))
-            .configure_set(
+            .configure_sets(
                 PostUpdate,
                 PxSet::Loaded.run_if(resource_exists::<Palette>()),
             );

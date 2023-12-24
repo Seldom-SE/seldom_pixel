@@ -24,7 +24,7 @@ use crate::{
 use self::sealed::{PxAssetDataSealed, PxAssetTraitSealed};
 
 pub(crate) fn asset_plugin(app: &mut App) {
-    app.configure_set(
+    app.configure_sets(
         PostUpdate,
         PxSet::LoadAssets.before(PxSet::Draw).in_set(PxSet::Loaded),
     )

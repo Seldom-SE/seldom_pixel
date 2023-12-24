@@ -21,7 +21,7 @@ pub(crate) fn cursor_plugin(app: &mut App) {
                 .run_if(resource_exists::<Palette>())
                 .in_set(PxSet::UpdateCursorPosition),
         )
-        .configure_set(PostUpdate, PxSet::DrawCursor.after(PxSet::Draw))
+        .configure_sets(PostUpdate, PxSet::DrawCursor.after(PxSet::Draw))
         .add_systems(
             PostUpdate,
             (
@@ -63,12 +63,12 @@ fn update_cursor_position(
     screen: Res<Screen>,
     mut position: ResMut<PxCursorPosition>,
 ) {
-    if leave_events.iter().next().is_some() {
+    if leave_events.read().next().is_some() {
         **position = None;
         return;
     }
 
-    let Some(event) = move_events.iter().last() else {
+    let Some(event) = move_events.read().last() else {
         return;
     };
     let Ok((camera, tf)) = cameras.get_single() else {

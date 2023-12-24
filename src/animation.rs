@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub(crate) fn animation_plugin(app: &mut App) {
-    app.configure_set(
+    app.configure_sets(
         PostUpdate,
         PxSet::FinishAnimations
             .after(PxSet::LoadAssets)

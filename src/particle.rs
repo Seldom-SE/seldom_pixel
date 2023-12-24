@@ -12,7 +12,7 @@ use crate::{math::IRect, position::PxLayer, prelude::*, set::PxSet};
 const TIME_OFFSET: Duration = Duration::from_secs(60 * 60 * 24);
 
 pub(crate) fn particle_plugin<L: PxLayer>(app: &mut App) {
-    app.configure_set(PostUpdate, PxSet::UpdateEmitters.before(PxSet::Draw))
+    app.configure_sets(PostUpdate, PxSet::UpdateEmitters.before(PxSet::Draw))
         .add_systems(
             PostUpdate,
             (

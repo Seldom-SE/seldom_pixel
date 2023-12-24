@@ -35,7 +35,7 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
             Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
         );
         app.add_plugins(Material2dPlugin::<ScreenMaterial>::default())
-            .configure_set(PostUpdate, PxSet::Draw)
+            .configure_sets(PostUpdate, PxSet::Draw)
             .add_systems(
                 Update,
                 init_screen(size).run_if(resource_added::<Palette>()),
@@ -177,7 +177,7 @@ fn resize_screen(
     mut screens: Query<&mut Transform, With<ScreenMarker>>,
     screen: Res<Screen>,
 ) {
-    if let Some(window_resized) = window_resized.iter().last() {
+    if let Some(window_resized) = window_resized.read().last() {
         let mut transform = screens.single_mut();
 
         transform.scale = screen_scale(
