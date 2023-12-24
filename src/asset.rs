@@ -36,13 +36,13 @@ pub(crate) fn asset_plugin(app: &mut App) {
 }
 
 fn px_asset_plugin<D: PxAssetData>(app: &mut App) {
-    app.add_asset::<PxAsset<D>>()
+    app.init_asset::<PxAsset<D>>()
         .init_resource::<LoadingAssets<D>>()
         .add_systems(PostUpdate, D::load.in_set(PxSet::LoadAssets));
 }
 
 /// An asset created from an image
-#[derive(Debug, Reflect)]
+#[derive(Asset, Debug, Reflect)]
 pub enum PxAsset<D: PxAssetData> {
     /// Waiting for the source image to load
     Loading {

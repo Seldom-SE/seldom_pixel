@@ -2,60 +2,65 @@
 name = "seldom_pixel"
 version = "0.4.0"
 edition = "2021"
-categories = [ "game-development" ]
+categories = ["game-development"]
 description = "Bevy plugin for limited color palette pixel art games"
-exclude = [ "assets/" ]
-keywords = [ "gamedev", "bevy", "graphics", "gui", "2d" ]
+exclude = ["assets/"]
+keywords = ["gamedev", "bevy", "graphics", "gui", "2d"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/Seldom-SE/seldom_pixel"
 
 [features]
-interop = [ "dep:seldom_interop" ]
-line = [ "dep:line_drawing" ]
-map = [ "dep:bevy_ecs_tilemap" ]
-particle = [ "dep:bevy_turborand" ]
-state = [ "dep:seldom_state" ]
+interop = ["dep:seldom_interop"]
+line = ["dep:line_drawing"]
+map = ["dep:bevy_ecs_tilemap"]
+particle = ["dep:bevy_turborand"]
+state = ["dep:seldom_state"]
 
 [dependencies]
-bevy = { version = "0.11", default-features = false, features = [ "bevy_asset", "bevy_core_pipeline", "bevy_render", "bevy_sprite" ] }
+bevy = { version = "0.12", default-features = false, features = [
+    "bevy_asset",
+    "bevy_core_pipeline",
+    "bevy_render",
+    "bevy_sprite",
+] }
 bevy_ecs_tilemap = { version = "0.11", default-features = false, optional = true }
-bevy_turborand = { version = "0.6", optional = true }
+bevy_turborand = { version = "0.7", optional = true }
 line_drawing = { version = "1", optional = true }
-seldom_fn_plugin = "0.4"
-seldom_interop = { version = "0.4", optional = true }
+seldom_fn_plugin = "0.5"
+seldom_interop = { version = "0.5", optional = true }
 seldom_pixel_macros = { version = "0.1", path = "macros" }
-seldom_state = { version = "0.7", optional = true, default-features = false }
+seldom_state = { version = "0.8", optional = true, default-features = false }
 
 [dev-dependencies]
-bevy = { version = "0.11", features = [ "png" ] }
-leafwing-input-manager = "0.10"
+bevy = { version = "0.12", features = ["png"] }
+leafwing-input-manager = "0.11"
 rand = "0.8"
-seldom_state = { version = "0.7", features = [ "leafwing_input" ] }
+seldom_state = { version = "0.8", features = ["leafwing_input"] }
 
 [[example]]
 name = "animated_tilemap"
-required-features = [ "map" ]
+required-features = ["map"]
 
 [[example]]
 name = "line"
-required-features = [ "line" ]
+required-features = ["line"]
 
 [[example]]
 name = "particles"
-required-features = [ "particle" ]
+required-features = ["particle"]
 
 [[example]]
 name = "state"
-required-features = [ "state" ]
+required-features = ["state"]
 
 [[example]]
 name = "tilemap"
-required-features = [ "map" ]
+required-features = ["map"]
 
 [[example]]
 name = "tilemap_filter"
-required-features = [ "map" ]
+required-features = ["map"]
 
 [package.metadata.docs.rs]
 all-features = true

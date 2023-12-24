@@ -309,7 +309,7 @@ pub(crate) fn copy_animation_params(
         &PxAnimationFrameTransition,
         &PxAnimationStart,
     )>,
-    time: &Time,
+    time: &Time<Real>,
 ) -> Option<(
     PxAnimationDirection,
     PxAnimationDuration,
@@ -341,7 +341,7 @@ fn finish_animations<A: AnimationAsset>(
         Option<&PxAnimationFinished>,
     )>,
     assets: Res<Assets<PxAsset<A>>>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
 ) {
     for (entity, animation, duration, on_finish, spawn_time, finished) in &animations {
         if let Some(PxAsset::Loaded { asset: animation }) = assets.get(animation) {

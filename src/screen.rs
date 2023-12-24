@@ -26,12 +26,11 @@ use crate::{
     set::PxSet,
 };
 
-const SCREEN_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 11708045509772077871);
+const SCREEN_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(11708045509772077871);
 
 pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
     move |app| {
-        app.world.resource_mut::<Assets<Shader>>().set_untracked(
+        app.world.resource_mut::<Assets<Shader>>().insert(
             SCREEN_SHADER_HANDLE,
             Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
         );
@@ -71,7 +70,7 @@ pub(crate) struct Screen {
 #[derive(Component)]
 pub(crate) struct ScreenMarker;
 
-#[derive(AsBindGroup, Clone, Reflect, TypeUuid)]
+#[derive(AsBindGroup, Asset, Clone, Reflect, TypeUuid)]
 #[uuid = "aee2fc17-8009-487a-84ac-c8bc3826e958"]
 struct ScreenMaterial {
     #[uniform(0)]
@@ -82,7 +81,7 @@ struct ScreenMaterial {
 
 impl Material2d for ScreenMaterial {
     fn fragment_shader() -> ShaderRef {
-        SCREEN_SHADER_HANDLE.typed().into()
+        SCREEN_SHADER_HANDLE.into()
     }
 }
 
@@ -286,7 +285,7 @@ fn draw_screen<L: PxLayer>(
     filter_assets: Res<Assets<PxFilter>>,
     screen: Res<Screen>,
     camera: Res<PxCamera>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     let image = images.get_mut(&screen.image).unwrap();
@@ -763,9 +762,7 @@ fn update_screen(
     mut asset_events: EventWriter<AssetEvent<ScreenMaterial>>,
 ) {
     for handle in &screen_materials {
-        asset_events.send(AssetEvent::Modified {
-            handle: handle.clone(),
-        });
+        asset_events.send(AssetEvent::Modified { id: handle.id() });
     }
 }
 

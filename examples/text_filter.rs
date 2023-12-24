@@ -37,7 +37,7 @@ fn init(
                 // Equivalent to, for example, `vec![PxSeparatorConfig { character: ' ', width: 4 }]`
                 [(' ', 4)],
             ),
-            rect: IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
+            rect: seldom_pixel::math::IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
             ..default()
         },
         filters.load("filter/dim.png"),
