@@ -44,7 +44,7 @@ fn init(mut commands: Commands, mut typefaces: PxAssets<PxTypeface>) {
         PxTextBundle::<Layer> {
             text: "LOOPED ANIMATION ⭐🙂⭐".into(),
             typeface: typeface.clone(),
-            rect: IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
+            rect: seldom_pixel::math::IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
             alignment: PxAnchor::TopCenter,
             ..default()
         },
@@ -60,7 +60,7 @@ fn init(mut commands: Commands, mut typefaces: PxAssets<PxTypeface>) {
         PxTextBundle::<Layer> {
             text: "DITHERED ANIMATION 🙂⭐🙂".into(),
             typeface,
-            rect: IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
+            rect: seldom_pixel::math::IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
             alignment: PxAnchor::BottomCenter,
             ..default()
         },
