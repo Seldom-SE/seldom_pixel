@@ -32,7 +32,7 @@ fn init(mut commands: Commands, mut typefaces: PxAssets<PxTypeface>) {
             // Equivalent to, for example, `vec![PxSeparatorConfig { character: ' ', width: 4 }]`
             [(' ', 4)],
         ),
-        rect: seldom_pixel::math::IRect::new(IVec2::ZERO, IVec2::splat(64)).into(),
+        rect: IRect::new(0, 0, 64, 64).into(),
         ..default()
     });
 }

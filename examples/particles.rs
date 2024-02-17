@@ -34,7 +34,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
         ]
         .into(),
         // Range where the particles can spawn
-        range: IRect::new((-4, 36).into(), (36, 36).into()).into(),
+        range: IRect::new(-4, 36, 36, 36).into(),
         // Particle lifetime
         lifetime: Duration::from_secs(30).into(),
         // Particle starting velocity

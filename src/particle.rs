@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use bevy::{ecs::system::EntityCommands, utils::Instant};
 
-use crate::{math::IRect, position::PxLayer, prelude::*, set::PxSet};
+use crate::{position::PxLayer, prelude::*, set::PxSet};
 
 // https://github.com/bevyengine/bevy/issues/8483
 // In wasm, time starts at 0, so it needs an offset to represent an instant before the app started.
@@ -213,7 +213,7 @@ fn simulate_emitters<L: PxLayer>(
         ),
         Added<PxEmitterSimulation>,
     >,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
     mut rng: ResMut<GlobalRng>,
 ) {
     for (
@@ -277,7 +277,7 @@ fn simulate_emitters<L: PxLayer>(
 fn insert_emitter_time(
     mut commands: Commands,
     emitters: Query<Entity, Added<PxEmitterFrequency>>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
     mut rng: ResMut<GlobalRng>,
 ) {
     for emitter in &emitters {
@@ -305,7 +305,7 @@ fn update_emitters<L: PxLayer>(
         &mut PxEmitterStart,
         &mut RngComponent,
     )>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
 ) {
     for (
         sprites,
@@ -356,7 +356,7 @@ fn update_emitters<L: PxLayer>(
 fn despawn_particles(
     mut commands: Commands,
     particles: Query<(Entity, &PxParticleLifetime, &PxParticleStart)>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
 ) {
     for (particle, lifetime, start) in &particles {
         if time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET - **start

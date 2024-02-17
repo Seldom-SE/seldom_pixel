@@ -1,6 +1,6 @@
 use bevy::render::render_resource::TextureFormat;
 
-use crate::{math::IRect, palette::Palette, pixel::Pixel, prelude::*};
+use crate::{palette::Palette, pixel::Pixel, prelude::*};
 
 #[derive(Debug, Reflect)]
 pub(crate) struct PxImage<P: Pixel> {
@@ -218,7 +218,7 @@ pub(crate) struct PxImageSliceMut<'a, P: Pixel> {
 }
 
 impl<'a, P: Pixel> PxImageSliceMut<'a, P> {
-    // First `usize` is the index in the slice. Second `usize` is the index in the image.
+    /// First `usize` is the index in the slice. Second `usize` is the index in the image.
     pub(crate) fn for_each_mut(&mut self, f: impl Fn(usize, usize, &mut P)) {
         let row_min = self.slice.min.x.clamp(0, self.width as i32) as usize;
         let row_max = self.slice.max.x.clamp(0, self.width as i32) as usize;
@@ -258,7 +258,7 @@ impl<'a, P: Pixel> PxImageSliceMut<'a, P> {
     }
 
     pub(crate) fn width(&self) -> u32 {
-        self.slice.size().x
+        self.slice.size().x as u32
     }
 
     pub(crate) fn image_width(&self) -> usize {

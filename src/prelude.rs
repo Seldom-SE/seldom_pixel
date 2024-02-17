@@ -33,7 +33,6 @@ pub use crate::{
     camera::{PxCamera, PxCanvas},
     cursor::PxCursor,
     filter::{PxFilter, PxFilterBundle, PxFilterLayers},
-    math::IRect,
     position::{PxAnchor, PxLayer, PxPosition, PxSubPosition, PxVelocity},
     px_plugin,
     sprite::{PxSprite, PxSpriteBundle},

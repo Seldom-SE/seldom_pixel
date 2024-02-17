@@ -20,13 +20,15 @@ use crate::{
     asset::{get_asset, PxAsset},
     filter::{draw_filter, PxFilterData},
     image::{PxImage, PxImageSliceMut},
+    math::RectExt,
     palette::Palette,
     position::PxLayer,
     prelude::*,
     set::PxSet,
 };
 
-const SCREEN_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(11708045509772077871);
+const SCREEN_SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(0x48CE_4F2C_8B78_5954_08A8_461F_62E1_0E84);
 
 pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
     move |app| {
@@ -381,7 +383,8 @@ fn draw_screen<L: PxLayer>(
             }
             PxFilterLayers::Select(select_fn) => layer_contents
                 .keys()
-                .filter_map(|layer| select_fn(layer).then(|| (layer.clone(), true)))
+                .filter(|layer| select_fn(layer))
+                .map(|layer| (layer.clone(), true))
                 .collect(),
         }
         .into_iter()
@@ -542,10 +545,10 @@ fn draw_screen<L: PxLayer>(
         for (text, typeface, rect, alignment, canvas, animation, filter) in texts {
             if let Some(PxAsset::Loaded { asset: typeface }) = typefaces.get(typeface) {
                 let rect = match canvas {
-                    PxCanvas::World => **rect - **camera,
+                    PxCanvas::World => rect.sub_ivec2(**camera),
                     PxCanvas::Camera => **rect,
                 };
-                let rect_size = rect.size();
+                let rect_size = rect.size().as_uvec2();
                 let line_count = (rect_size.y + 1) / (typeface.height + 1);
 
                 let mut lines = Vec::default();

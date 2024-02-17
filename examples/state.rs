@@ -59,7 +59,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
             ..default()
         },
         StateMachine::default()
-            .trans::<Idle>(JustPressedTrigger(Action::Cast), Cast)
+            .trans::<Idle, _>(just_pressed(Action::Cast), Cast)
             .on_enter::<Cast>(move |entity| {
                 entity.insert(CastBundle {
                     sprite: cast.clone(),
@@ -73,7 +73,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
             .on_exit::<Cast>(|entity| {
                 entity.remove::<CastBundle>();
             })
-            .trans::<Cast>(DoneTrigger::Success, Idle)
+            .trans::<Cast, _>(done(None), Idle)
             .on_enter::<Idle>(move |entity| {
                 entity.insert(idle.clone());
             }),
@@ -81,7 +81,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
     ));
 }
 
-#[derive(Actionlike, Clone, Reflect)]
+#[derive(Actionlike, Clone, Eq, Hash, PartialEq, Reflect)]
 enum Action {
     Cast,
 }
