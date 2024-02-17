@@ -67,6 +67,8 @@ to develop and maintain. Anyway, limitations can incite creativity.
 
 ## Future Work
 
+This crate is currently in maintenance mode, so I'm not currently adding new features.
+
 - [ ] Advanced UI, good enough to build a UI library on
 - [ ] More advanced particle system
 - [ ] More shape primitives
@@ -90,6 +92,7 @@ Then add `PxPlugin` to your app. Check out the examples for further usage.
 
 | Bevy | `seldom_state` | `seldom_interop` | `bevy_ecs_tilemap` | `seldom_pixel` |
 | ---- | -------------- | ---------------- | ------------------ | -------------- |
+| 0.12 | 0.9            | 0.5              | 0.12               | 0.5            |
 | 0.11 | 0.7            | 0.4              | 0.11               | 0.4            |
 | 0.10 | 0.6            | 0.3              | 0.10               | 0.3            |
 | 0.10 | 0.5            | 0.3              | 0.10               | 0.2            |

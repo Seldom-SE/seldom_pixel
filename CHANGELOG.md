@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5 (2024-02-16)
+
+### Added
+
+- `RectExt` extension trait for `IRect`, with some helper functions
+
+### Changed
+
+- Updated `bevy` to 0.12
+
+### Removed
+
+- `URect` and `IRect` in favor of `bevy`'s types of the same names
+
 ## 0.4 (2023-08-06)
 
 ### Changed
