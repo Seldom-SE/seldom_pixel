@@ -54,7 +54,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
         },
         InputManagerBundle {
             input_map: InputMap::default()
-                .insert(KeyCode::Space, Action::Cast)
+                .insert(Action::Cast, KeyCode::Space)
                 .build(),
             ..default()
         },
@@ -76,7 +76,8 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
             .trans::<Cast, _>(done(None), Idle)
             .on_enter::<Idle>(move |entity| {
                 entity.insert(idle.clone());
-            }),
+            })
+            .set_trans_logging(true),
         Idle,
     ));
 }

@@ -12,15 +12,12 @@ pub(crate) fn palette_plugin(palette_path: PathBuf) -> impl FnOnce(&mut App) {
             .configure_sets(
                 PreUpdate,
                 (
-                    PxSet::Unloaded.run_if(resource_exists::<LoadingPalette>()),
-                    PxSet::Loaded.run_if(resource_exists::<Palette>()),
+                    PxSet::Unloaded.run_if(resource_exists::<LoadingPalette>),
+                    PxSet::Loaded.run_if(resource_exists::<Palette>),
                 ),
             )
             .add_systems(PreUpdate, init_palette.in_set(PxSet::Unloaded))
-            .configure_sets(
-                PostUpdate,
-                PxSet::Loaded.run_if(resource_exists::<Palette>()),
-            );
+            .configure_sets(PostUpdate, PxSet::Loaded.run_if(resource_exists::<Palette>));
     }
 }
 

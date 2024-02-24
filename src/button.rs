@@ -28,7 +28,7 @@ pub(crate) fn button_plugin(app: &mut App) {
                     .before(PxSet::Draw)
                     .in_set(PxSet::UpdateButtonAssets),
                 disable_buttons
-                    .run_if(resource_changed::<PxEnableButtons>())
+                    .run_if(resource_changed::<PxEnableButtons>)
                     .run_if(resource_equals(PxEnableButtons(false))),
             ),
         );
@@ -177,7 +177,7 @@ fn interact_buttons(
         Option<&PxClick>,
     )>,
     cursor_pos: Res<PxCursorPosition>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     camera: Res<PxCamera>,
 ) {
     for (button, position, bounds, anchor, canvas, hovered, clicked) in &buttons {

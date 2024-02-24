@@ -3,8 +3,6 @@
 use std::collections::BTreeMap;
 
 use bevy::{
-    prelude::shape::Quad,
-    reflect::TypeUuid,
     render::render_resource::{
         AsBindGroup, Extent3d, ShaderRef, TextureDescriptor, TextureDimension, TextureFormat,
         TextureUsages,
@@ -38,10 +36,7 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
         );
         app.add_plugins(Material2dPlugin::<ScreenMaterial>::default())
             .configure_sets(PostUpdate, PxSet::Draw)
-            .add_systems(
-                Update,
-                init_screen(size).run_if(resource_added::<Palette>()),
-            )
+            .add_systems(Update, init_screen(size).run_if(resource_added::<Palette>))
             .add_systems(
                 PostUpdate,
                 (
@@ -72,8 +67,7 @@ pub(crate) struct Screen {
 #[derive(Component)]
 pub(crate) struct ScreenMarker;
 
-#[derive(AsBindGroup, Asset, Clone, Reflect, TypeUuid)]
-#[uuid = "aee2fc17-8009-487a-84ac-c8bc3826e958"]
+#[derive(AsBindGroup, Asset, Clone, Reflect)]
 struct ScreenMaterial {
     #[uniform(0)]
     palette: [Vec3; 256],
@@ -151,7 +145,7 @@ fn init_screen(
 
         commands.spawn((
             MaterialMesh2dBundle {
-                mesh: meshes.add(Quad::default().into()).into(),
+                mesh: meshes.add(Rectangle::default()).into(),
                 material: screen_materials.add(ScreenMaterial {
                     image,
                     palette: screen_palette,

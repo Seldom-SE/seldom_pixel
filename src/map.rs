@@ -18,9 +18,6 @@ pub struct PxTilesetData {
 }
 
 impl PxAssetData for PxTilesetData {
-    const UUID: [u8; 16] = [
-        162, 43, 205, 75, 105, 6, 38, 153, 40, 191, 54, 134, 163, 159, 204, 10,
-    ];
     type Config = UVec2;
 
     fn new(palette: &Palette, image: &Image, tile_size: &Self::Config) -> Self {

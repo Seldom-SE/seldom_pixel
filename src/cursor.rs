@@ -18,7 +18,7 @@ pub(crate) fn cursor_plugin(app: &mut App) {
         .add_systems(
             PreUpdate,
             update_cursor_position
-                .run_if(resource_exists::<Palette>())
+                .run_if(resource_exists::<Palette>)
                 .in_set(PxSet::UpdateCursorPosition),
         )
         .configure_sets(PostUpdate, PxSet::DrawCursor.after(PxSet::Draw))
@@ -108,7 +108,7 @@ fn draw_cursor(
     cursor: Res<PxCursor>,
     cursor_pos: Res<PxCursorPosition>,
     filters: Res<Assets<PxFilter>>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     if let PxCursor::Filter {

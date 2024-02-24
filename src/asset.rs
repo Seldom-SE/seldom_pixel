@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use bevy::{
     asset::{Asset, AssetPath},
     ecs::system::SystemParam,
-    reflect::{TypePath, TypeUuid, Uuid},
+    reflect::TypePath,
 };
 
 use seldom_fn_plugin::FnPluginExt;
@@ -56,10 +56,6 @@ pub enum PxAsset<D: PxAssetData> {
     },
 }
 
-impl<D: PxAssetData> TypeUuid for PxAsset<D> {
-    const TYPE_UUID: Uuid = Uuid::from_bytes(D::UUID);
-}
-
 /// Internal trait implemented for [`PxAsset<impl PxAssetData>`]
 pub trait PxAssetTrait: Asset + PxAssetTraitSealed {
     /// The data associated with this asset
@@ -77,8 +73,6 @@ where
 pub trait PxAssetData:
     'static + Debug + FromReflect + PxAssetDataSealed + Send + Sized + Sync + TypePath
 {
-    /// Uuid used to implement [`TypeUuid`]
-    const UUID: [u8; 16];
     /// Additional configuration needed to create this asset
     type Config: Debug + Send + Sync;
 

@@ -17,9 +17,6 @@ use crate::{
 pub struct PxFilterData(pub(crate) PxImage<u8>);
 
 impl PxAssetData for PxFilterData {
-    const UUID: [u8; 16] = [
-        52, 22, 15, 225, 67, 35, 43, 102, 203, 4, 164, 158, 160, 142, 197, 42,
-    ];
     type Config = ();
 
     fn new(palette: &Palette, image: &Image, _: &Self::Config) -> Self {

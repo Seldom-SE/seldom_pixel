@@ -18,9 +18,6 @@ pub struct PxSpriteData {
 }
 
 impl PxAssetData for PxSpriteData {
-    const UUID: [u8; 16] = [
-        127, 66, 19, 75, 234, 139, 195, 163, 22, 67, 32, 236, 86, 75, 131, 197,
-    ];
     type Config = usize;
 
     fn new(palette: &Palette, image: &Image, frame_count: &Self::Config) -> Self {

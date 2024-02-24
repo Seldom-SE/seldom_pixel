@@ -51,14 +51,14 @@ const CAMERA_SPEED: f32 = 10.;
 // Move the camera based on the arrow keys
 fn move_camera(
     mut camera_poses: Query<&mut PxSubPosition, With<CameraPos>>,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut camera: ResMut<PxCamera>,
 ) {
     let mut camera_pos = camera_poses.single_mut();
     **camera_pos += IVec2::new(
-        keys.pressed(KeyCode::Right) as i32 - keys.pressed(KeyCode::Left) as i32,
-        keys.pressed(KeyCode::Up) as i32 - keys.pressed(KeyCode::Down) as i32,
+        keys.pressed(KeyCode::ArrowRight) as i32 - keys.pressed(KeyCode::ArrowLeft) as i32,
+        keys.pressed(KeyCode::ArrowUp) as i32 - keys.pressed(KeyCode::ArrowDown) as i32,
     )
     .as_vec2()
     .normalize_or_zero()
@@ -82,7 +82,7 @@ fn move_mage(mut mages: Query<&mut PxPosition, With<Mage>>) {
 }
 
 // Switch the canvas when you press space
-fn switch_canvas(mut mages: Query<&mut PxCanvas>, keys: Res<Input<KeyCode>>) {
+fn switch_canvas(mut mages: Query<&mut PxCanvas>, keys: Res<ButtonInput<KeyCode>>) {
     if keys.just_pressed(KeyCode::Space) {
         let mut canvas = mages.single_mut();
 

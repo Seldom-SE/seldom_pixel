@@ -25,7 +25,7 @@ It also features optional integration with:
 * `bevy_ecs_tilemap` (only rectangular maps; `map` feature;
 disable `bevy_ecs_tilemap`'s default features)
 * `seldom_state` (for animation state machines; `state` feature)
-* `seldom_interop` (`interop` feature)
+* `seldom_map_nav` (makes `SubPxPosition` implement TODO; `nav` feature)
 
 See the `examples` directory for examples. If you need help, feel free to ping me
 on [the Bevy Discord server](https://discord.com/invite/bevy) (`@Seldom`)! If any of the docs

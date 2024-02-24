@@ -70,9 +70,6 @@ pub struct PxTypefaceData {
 }
 
 impl PxAssetData for PxTypefaceData {
-    const UUID: [u8; 16] = [
-        194, 228, 197, 206, 24, 81, 138, 107, 124, 28, 122, 229, 209, 129, 191, 6,
-    ];
     type Config = PxTypefaceConfig;
 
     fn new(palette: &Palette, image: &Image, config: &Self::Config) -> Self {

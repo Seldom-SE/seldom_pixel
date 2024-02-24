@@ -8,10 +8,10 @@ struct ScreenMaterial {
     palette: array<vec3<f32>, 256>,
 };
 
-@group(1) @binding(0)
+@group(2) @binding(0)
 var<uniform> uniform_data: ScreenMaterial;
 
-@group(1) @binding(1)
+@group(2) @binding(1)
 var texture: texture_2d<u32>;
 
 @fragment

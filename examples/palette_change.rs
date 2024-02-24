@@ -27,7 +27,7 @@ fn main() {
             Update,
             (
                 spawn_mage,
-                change_palette.run_if(resource_exists::<Palette>()),
+                change_palette.run_if(resource_exists::<Palette>),
             ),
         )
         .run();
@@ -49,7 +49,11 @@ fn init(mut commands: Commands, assets: Res<AssetServer>) {
     });
 }
 
-fn spawn_mage(mut commands: Commands, mut sprites: PxAssets<PxSprite>, keys: Res<Input<KeyCode>>) {
+fn spawn_mage(
+    mut commands: Commands,
+    mut sprites: PxAssets<PxSprite>,
+    keys: Res<ButtonInput<KeyCode>>,
+) {
     if keys.just_pressed(KeyCode::Space) {
         let mut rng = thread_rng();
         commands.spawn(PxSpriteBundle::<Layer> {
@@ -70,7 +74,7 @@ struct CurrentPalette(bool);
 
 fn change_palette(
     mut current_palette: Local<CurrentPalette>,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     assets: Res<GameAssets>,
     images: Res<Assets<Image>>,
     mut palette: ResMut<Palette>,

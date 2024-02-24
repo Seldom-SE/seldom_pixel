@@ -78,7 +78,7 @@ fn change_filter(
     mut current_filter: Local<CurrentFilter>,
     filters: Query<Entity, With<Handle<PxFilter>>>,
     assets: Res<GameAssets>,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
 ) {
     if keys.just_pressed(KeyCode::Space) {
         **current_filter = (**current_filter + 1) % 4;
