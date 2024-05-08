@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6 (2024-05-07)
+
+### Changed
+
+- Updated `bevy` to 0.13
+- Replaced `bevy_ecs_tilemap` with built-in tilemap
+
 ## 0.5 (2024-02-16)
 
 ### Added
