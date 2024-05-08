@@ -10,7 +10,6 @@ use bevy::{
 
 use seldom_fn_plugin::FnPluginExt;
 
-#[cfg(feature = "map")]
 use crate::map::PxTilesetData;
 use crate::{
     filter::PxFilterData,
@@ -30,9 +29,8 @@ pub(crate) fn asset_plugin(app: &mut App) {
     )
     .fn_plugin(px_asset_plugin::<PxSpriteData>)
     .fn_plugin(px_asset_plugin::<PxTypefaceData>)
-    .fn_plugin(px_asset_plugin::<PxFilterData>);
-    #[cfg(feature = "map")]
-    app.fn_plugin(px_asset_plugin::<PxTilesetData>);
+    .fn_plugin(px_asset_plugin::<PxFilterData>)
+    .fn_plugin(px_asset_plugin::<PxTilesetData>);
 }
 
 fn px_asset_plugin<D: PxAssetData>(app: &mut App) {
@@ -172,7 +170,6 @@ impl<'w, 's> PxAssets<'w, 's, PxSprite> {
     }
 }
 
-#[cfg(feature = "map")]
 impl<'w, 's> PxAssets<'w, 's, PxTileset> {
     /// Loads a tileset. Works for animated tilesets.
     pub fn load<'a>(
@@ -241,7 +238,6 @@ pub(crate) fn get_asset<'a, D: PxAssetData>(
 }
 
 mod sealed {
-    #[cfg(feature = "map")]
     use crate::map::PxTilesetData;
     use crate::{filter::PxFilterData, prelude::*, sprite::PxSpriteData, text::PxTypefaceData};
 
@@ -249,7 +245,6 @@ mod sealed {
 
     impl PxAssetTraitSealed for PxSprite {}
 
-    #[cfg(feature = "map")]
     impl PxAssetTraitSealed for PxTileset {}
 
     impl PxAssetTraitSealed for PxTypeface {}
@@ -260,7 +255,6 @@ mod sealed {
 
     impl PxAssetDataSealed for PxSpriteData {}
 
-    #[cfg(feature = "map")]
     impl PxAssetDataSealed for PxTilesetData {}
 
     impl PxAssetDataSealed for PxTypefaceData {}

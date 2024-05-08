@@ -17,7 +17,6 @@ pub mod filter;
 mod image;
 #[cfg(feature = "line")]
 mod line;
-#[cfg(feature = "map")]
 mod map;
 pub mod math;
 pub mod palette;

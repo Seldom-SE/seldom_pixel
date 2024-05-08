@@ -33,6 +33,7 @@ struct LoadingPalette(Handle<Image>);
 #[derive(Clone, Debug, Resource)]
 pub struct Palette {
     pub(crate) size: UVec2,
+    // TODO This could be a `[[u8; 3]; 255]`
     pub(crate) colors: Vec<[u8; 3]>,
     pub(crate) indices: HashMap<[u8; 3], u8>,
 }
@@ -52,6 +53,7 @@ impl Palette {
             .rev()
             .flatten()
             .copied()
+            // TODO Should use chunks here
             .fold(
                 (Vec::default(), [0, 0, 0], 0),
                 |(mut colors, mut color, i), value| {

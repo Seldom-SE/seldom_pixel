@@ -1,7 +1,6 @@
 // In this program, animated tilemaps are spawned
 
 use bevy::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
 use rand::{thread_rng, Rng};
 use seldom_pixel::prelude::*;
 
@@ -25,21 +24,21 @@ fn main() {
 fn init(mut commands: Commands, mut tilesets: PxAssets<PxTileset>) {
     commands.spawn(Camera2dBundle::default());
 
-    let map_size = TilemapSize { x: 2, y: 4 };
-    let mut storage = TileStorage::empty(map_size);
+    let mut map = PxMap::new(UVec2::new(2, 4));
     let mut rng = thread_rng();
 
     for x in 0..2 {
         for y in 0..4 {
-            // Each tile must be added to the `TileStorage`
-            storage.set(
-                &TilePos { x, y },
-                commands
-                    .spawn(PxTileBundle {
-                        texture: TileTextureIndex(rng.gen_range(0..4)),
-                        ..default()
-                    })
-                    .id(),
+            map.set(
+                Some(
+                    commands
+                        .spawn(PxTileBundle {
+                            tile: rng.gen_range(0..4).into(),
+                            ..default()
+                        })
+                        .id(),
+                ),
+                UVec2::new(x, y),
             );
         }
     }
@@ -49,8 +48,7 @@ fn init(mut commands: Commands, mut tilesets: PxAssets<PxTileset>) {
     // Spawn the map
     commands.spawn((
         PxMapBundle::<Layer> {
-            size: map_size,
-            storage: storage.clone(),
+            map: map.clone(),
             tileset: tileset.clone(),
             ..default()
         },
@@ -64,8 +62,7 @@ fn init(mut commands: Commands, mut tilesets: PxAssets<PxTileset>) {
 
     commands.spawn((
         PxMapBundle::<Layer> {
-            size: map_size,
-            storage,
+            map,
             tileset,
             position: IVec2::new(8, 0).into(),
             ..default()

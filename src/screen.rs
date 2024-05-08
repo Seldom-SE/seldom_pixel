@@ -18,6 +18,7 @@ use crate::{
     asset::{get_asset, PxAsset},
     filter::{draw_filter, PxFilterData},
     image::{PxImage, PxImageSliceMut},
+    map::PxTile,
     math::RectExt,
     palette::Palette,
     position::PxLayer,
@@ -191,9 +192,8 @@ fn clear_screen(screen: Res<Screen>, mut images: ResMut<Assets<Image>>) {
 }
 
 fn draw_screen<L: PxLayer>(
-    #[cfg(feature = "map")] maps: Query<(
-        &TilemapSize,
-        &TileStorage,
+    maps: Query<(
+        &PxMap,
         &Handle<PxTileset>,
         &PxPosition,
         &L,
@@ -208,11 +208,7 @@ fn draw_screen<L: PxLayer>(
         )>,
         Option<&Handle<PxFilter>>,
     )>,
-    #[cfg(feature = "map")] tiles: Query<(
-        &TileTextureIndex,
-        &Visibility,
-        Option<&Handle<PxFilter>>,
-    )>,
+    tiles: Query<(&PxTile, &Visibility, Option<&Handle<PxFilter>>)>,
     sprites: Query<(
         &Handle<PxSprite>,
         &PxPosition,
@@ -275,7 +271,7 @@ fn draw_screen<L: PxLayer>(
         ),
         Without<PxCanvas>,
     >,
-    #[cfg(feature = "map")] tilesets: Res<Assets<PxTileset>>,
+    tilesets: Res<Assets<PxTileset>>,
     sprite_assets: Res<Assets<PxSprite>>,
     typefaces: Res<Assets<PxTypeface>>,
     filter_assets: Res<Assets<PxFilter>>,
@@ -286,31 +282,25 @@ fn draw_screen<L: PxLayer>(
 ) {
     let image = images.get_mut(&screen.image).unwrap();
 
-    #[cfg(all(feature = "line", feature = "map"))]
+    #[cfg(feature = "line")]
     let mut layer_contents =
         BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>::default();
-    #[cfg(all(not(feature = "line"), feature = "map"))]
+    #[cfg(not(feature = "line"))]
     let mut layer_contents =
         BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
-    #[cfg(all(feature = "line", not(feature = "map")))]
-    let mut layer_contents =
-        BTreeMap::<_, ((), Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>::default();
-    #[cfg(all(not(feature = "line"), not(feature = "map")))]
-    let mut layer_contents = BTreeMap::<_, ((), Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
 
-    #[cfg(feature = "map")]
-    for (size, storage, tileset, position, layer, canvas, visibility, animation, filter) in &maps {
+    for (map, tileset, position, layer, canvas, visibility, animation, filter) in &maps {
         if let Visibility::Hidden = visibility {
             continue;
         }
 
         if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-            maps.push((size, storage, tileset, position, canvas, animation, filter));
+            maps.push((map, tileset, position, canvas, animation, filter));
         } else {
             layer_contents.insert(
                 layer.clone(),
                 (
-                    vec![(size, storage, tileset, position, canvas, animation, filter)],
+                    vec![(map, tileset, position, canvas, animation, filter)],
                     default(),
                     default(),
                     default(),
@@ -479,43 +469,43 @@ fn draw_screen<L: PxLayer>(
     {
         layer_image.clear();
 
-        #[cfg(feature = "map")]
-        for (size, storage, tileset, position, canvas, animation, map_filter) in maps.into_iter() {
+        for (map, tileset, position, canvas, animation, map_filter) in maps.into_iter() {
             if let Some(PxAsset::Loaded { asset: tileset }) = tilesets.get(tileset) {
                 let map_filter = get_asset(&filter_assets, map_filter);
+                let size = map.size();
 
-                for (i, tile) in storage
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, tile)| tile.map(|tile| (i, tile)))
-                {
-                    let (TileTextureIndex(tile), visibility, tile_filter) = tiles
-                        .get(tile)
-                        .expect("entity in map storage is not a valid tile");
+                for x in 0..size.x {
+                    for y in 0..size.y {
+                        let pos = UVec2::new(x, y);
+                        let Some(tile) = map.get(pos) else {
+                            continue;
+                        };
 
-                    if let Visibility::Hidden = visibility {
-                        continue;
+                        let (&PxTile { texture }, visibility, tile_filter) =
+                            tiles.get(tile).expect("entity in map is not a valid tile");
+
+                        if let Visibility::Hidden = visibility {
+                            continue;
+                        }
+
+                        draw_spatial(
+                            tileset
+                                .tileset
+                                .get(texture as usize)
+                                .unwrap_or_else(|| panic!("tile texture index out of bounds: the len is {}, but the index is {texture}", tileset.tileset.len())),
+                            (),
+                            &mut layer_image,
+                            (**position
+                                + pos.as_ivec2()
+                                    * tileset.tile_size().as_ivec2())
+                            .into(),
+                            PxAnchor::BottomLeft,
+                            *canvas,
+                            copy_animation_params(animation, &time),
+                            [get_asset(&filter_assets, tile_filter), map_filter].into_iter().flatten(),
+                            *camera,
+                        );
                     }
-
-                    draw_spatial(
-                        tileset
-                            .tileset
-                            .get(*tile as usize)
-                            .unwrap_or_else(|| panic!("tile texture index out of bounds: the len is {}, but the index is {tile}", tileset.tileset.len())),
-                        (),
-                        &mut layer_image,
-                        (**position
-                            + IVec2::new((i as u32 % size.x) as i32, (i as u32 / size.x) as i32)
-                                * tileset.tile_size().as_ivec2())
-                        .into(),
-                        PxAnchor::BottomLeft,
-                        *canvas,
-                        copy_animation_params(animation, &time),
-                        [get_asset(&filter_assets, tile_filter), map_filter]
-                            .into_iter()
-                            .flatten(),
-                        *camera,
-                    );
                 }
             }
         }

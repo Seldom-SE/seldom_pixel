@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use bevy::utils::Instant;
 
-#[cfg(feature = "map")]
 use crate::map::PxTilesetData;
 use crate::{
     asset::{PxAsset, PxAssetData},
@@ -34,7 +33,6 @@ pub(crate) fn animation_plugin(app: &mut App) {
             .in_set(PxSet::FinishAnimations),
     );
 
-    #[cfg(feature = "map")]
     app.add_systems(
         PostUpdate,
         finish_animations::<PxTilesetData>.in_set(PxSet::FinishAnimations),

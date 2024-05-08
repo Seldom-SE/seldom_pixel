@@ -1,8 +1,6 @@
 //! Module for convenient imports. Use with `use seldom_pixel::prelude::*;`.
 
 pub(crate) use bevy::prelude::*;
-#[cfg(feature = "map")]
-pub(crate) use bevy_ecs_tilemap::prelude::*;
 #[cfg(feature = "particle")]
 pub(crate) use bevy_turborand::prelude::*;
 #[cfg(feature = "interop")]
@@ -12,8 +10,6 @@ pub(crate) use seldom_state::prelude::*;
 
 #[cfg(feature = "line")]
 pub use crate::line::{PxLine, PxLineBundle};
-#[cfg(feature = "map")]
-pub use crate::map::{PxMapBundle, PxTileBundle, PxTileset};
 #[cfg(feature = "particle")]
 pub use crate::particle::{
     PxEmitterBundle, PxEmitterFn, PxEmitterFrequency, PxEmitterRange, PxEmitterSimulation,
@@ -33,6 +29,7 @@ pub use crate::{
     camera::{PxCamera, PxCanvas},
     cursor::PxCursor,
     filter::{PxFilter, PxFilterBundle, PxFilterLayers},
+    map::{PxMap, PxMapBundle, PxTile, PxTileBundle, PxTileset},
     position::{PxAnchor, PxLayer, PxPosition, PxSubPosition, PxVelocity},
     px_plugin,
     sprite::{PxSprite, PxSpriteBundle},

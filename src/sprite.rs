@@ -13,6 +13,7 @@ use crate::{
 /// Internal data for [`PxSprite`]
 #[derive(Debug, Reflect)]
 pub struct PxSpriteData {
+    // TODO Use 0 for transparency
     pub(crate) data: PxImage<Option<u8>>,
     pub(crate) frame_size: usize,
 }

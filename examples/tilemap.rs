@@ -1,7 +1,6 @@
 // In this program, a tilemap is spawned
 
 use bevy::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
 use rand::{thread_rng, Rng};
 use seldom_pixel::prelude::*;
 
@@ -25,29 +24,28 @@ fn main() {
 fn init(mut commands: Commands, mut tilesets: PxAssets<PxTileset>) {
     commands.spawn(Camera2dBundle::default());
 
-    let map_size = TilemapSize { x: 4, y: 4 };
-    let mut storage = TileStorage::empty(map_size);
+    let mut map = PxMap::new(UVec2::splat(4));
     let mut rng = thread_rng();
 
     for x in 0..4 {
         for y in 0..4 {
-            // Each tile must be added to the `TileStorage`
-            storage.set(
-                &TilePos { x, y },
-                commands
-                    .spawn(PxTileBundle {
-                        texture: TileTextureIndex(rng.gen_range(0..4)),
-                        ..default()
-                    })
-                    .id(),
+            map.set(
+                Some(
+                    commands
+                        .spawn(PxTileBundle {
+                            tile: rng.gen_range(0..4).into(),
+                            ..default()
+                        })
+                        .id(),
+                ),
+                UVec2::new(x, y),
             );
         }
     }
 
     // Spawn the map
     commands.spawn(PxMapBundle::<Layer> {
-        size: map_size,
-        storage,
+        map,
         tileset: tilesets.load("tileset/tileset.png", UVec2::splat(4)),
         ..default()
     });

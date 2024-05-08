@@ -90,6 +90,60 @@ impl PxTilesetData {
     }
 }
 
+/// A tilemap
+#[derive(Component, Clone, Default, Debug)]
+pub struct PxMap {
+    tiles: Vec<Option<Entity>>,
+    width: usize,
+}
+
+impl PxMap {
+    /// Creates a [`PxMap`]
+    pub fn new(size: UVec2) -> Self {
+        Self {
+            tiles: vec![None; (size.x * size.y) as usize],
+            width: size.x as usize,
+        }
+    }
+
+    fn index(&self, at: UVec2) -> Option<usize> {
+        let x = at.x as usize;
+        if x >= self.width {
+            return None;
+        }
+
+        Some(x + at.y as usize * self.width)
+    }
+
+    /// Gets a tile. Returns `None` if there is no tile at the given position or if the position is
+    /// out of bounds.
+    pub fn get(&self, at: UVec2) -> Option<Entity> {
+        self.tiles.get(self.index(at)?).copied()?
+    }
+
+    /// Gets a tile mutably. Returns `Some(&mut None)` if there is no tile at the given position.
+    /// Returns `None` if the position is out of bounds.
+    pub fn get_mut(&mut self, at: UVec2) -> Option<&mut Option<Entity>> {
+        let index = self.index(at);
+        self.tiles.get_mut(index?)
+    }
+
+    /// Sets a tile and returns the previous tile at the position. If there was no tile, returns
+    /// `None`. If the position is out of bounds, returns `None` and there is no effect.
+    pub fn set(&mut self, tile: Option<Entity>, at: UVec2) -> Option<Entity> {
+        let target = self.get_mut(at)?;
+        let old = *target;
+        *target = tile;
+        old
+    }
+
+    /// Gets the size of the map
+    pub fn size(&self) -> UVec2 {
+        let width = self.width as u32;
+        UVec2::new(width, self.tiles.len() as u32 / width)
+    }
+}
+
 /// A tileset for a tilemap. Create a [`Handle<PxTileset>`] with a [`PxAssets<PxTileset>`]
 /// and an image file. The image file contains a column of tiles, ordered from bottom to top.
 /// For animated tilesets, add additional frames to the right of tiles, marking the end
@@ -100,10 +154,8 @@ pub type PxTileset = PxAsset<PxTilesetData>;
 /// Creates a tilemap
 #[derive(Bundle, Debug, Default)]
 pub struct PxMapBundle<L: PxLayer> {
-    /// A [`TilemapSize`] component
-    pub size: TilemapSize,
-    /// A [`TileStorage`] component
-    pub storage: TileStorage,
+    /// A [`PxMap`] component
+    pub map: PxMap,
     /// A [`Handle<PxTileset>`] component
     pub tileset: Handle<PxTileset>,
     /// A [`PxPosition`] component
@@ -116,11 +168,24 @@ pub struct PxMapBundle<L: PxLayer> {
     pub visibility: Visibility,
 }
 
+/// A tile. Must be added to tiles added to [`PxMap`].
+#[derive(Component, Default, Debug)]
+pub struct PxTile {
+    /// The index to the tile texture in the tileset
+    pub texture: u32,
+}
+
+impl From<u32> for PxTile {
+    fn from(value: u32) -> Self {
+        Self { texture: value }
+    }
+}
+
 /// Creates a tile
 #[derive(Bundle, Debug, Default)]
 pub struct PxTileBundle {
-    /// A [`TileTexture`] component
-    pub texture: TileTextureIndex,
+    /// A [`PxTile`] component
+    pub tile: PxTile,
     /// A [`Visibility`] component
     pub visibility: Visibility,
 }
