@@ -5,6 +5,7 @@ use std::time::Duration;
 use bevy::utils::Instant;
 
 use crate::map::PxTilesetData;
+use crate::position::Spatial;
 use crate::{
     asset::{PxAsset, PxAssetData},
     filter::PxFilterData,
@@ -147,10 +148,6 @@ pub(crate) trait Animation {
     );
 }
 
-pub(crate) trait SpatialAnimation: Animation {
-    fn frame_size(&self) -> UVec2;
-}
-
 pub(crate) trait AnimationAsset: PxAssetData {
     fn max_frame_count(&self) -> usize;
 }
@@ -267,9 +264,9 @@ pub(crate) fn draw_animation<'a, A: Animation>(
     }
 }
 
-pub(crate) fn draw_spatial<'a, A: SpatialAnimation>(
+pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
     spatial: &A,
-    param: A::Param,
+    param: <A as Animation>::Param,
     image: &mut PxImage<impl Pixel>,
     position: PxPosition,
     anchor: PxAnchor,

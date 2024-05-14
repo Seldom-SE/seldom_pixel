@@ -28,3 +28,24 @@ impl RectExt for IRect {
         }
     }
 }
+
+#[derive(Copy, Clone)]
+pub enum Diagonal {
+    UpRight,
+    UpLeft,
+    DownLeft,
+    DownRight,
+}
+
+impl Diagonal {
+    pub fn as_uvec2(self) -> UVec2 {
+        use Diagonal::*;
+
+        match self {
+            UpRight => UVec2::ONE,
+            UpLeft => UVec2::new(0, 1),
+            DownLeft => UVec2::ZERO,
+            DownRight => UVec2::new(1, 0),
+        }
+    }
+}

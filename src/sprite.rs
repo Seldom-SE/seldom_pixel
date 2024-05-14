@@ -1,12 +1,12 @@
 //! Sprites
 
 use crate::{
-    animation::{Animation, AnimationAsset, SpatialAnimation},
+    animation::{Animation, AnimationAsset},
     asset::{PxAsset, PxAssetData},
     image::{PxImage, PxImageSliceMut},
     palette::Palette,
     pixel::Pixel,
-    position::PxLayer,
+    position::{PxLayer, Spatial},
     prelude::*,
 };
 
@@ -63,7 +63,7 @@ impl Animation for PxSpriteData {
     }
 }
 
-impl SpatialAnimation for PxSpriteData {
+impl Spatial for PxSpriteData {
     fn frame_size(&self) -> UVec2 {
         UVec2::new(
             self.data.width() as u32,

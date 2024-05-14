@@ -5,7 +5,7 @@ use crate::{
     asset::{PxAsset, PxAssetData},
     image::PxImage,
     palette::Palette,
-    position::PxLayer,
+    position::{PxLayer, Spatial},
     prelude::*,
     sprite::PxSpriteData,
 };
@@ -150,6 +150,13 @@ impl PxMap {
 /// of an animation with a fully transparent tile or the end of the image.
 /// See `assets/tileset/tileset.png` for an example.
 pub type PxTileset = PxAsset<PxTilesetData>;
+
+impl<'a> Spatial for (&'a PxMap, &'a PxTilesetData) {
+    fn frame_size(&self) -> UVec2 {
+        let (map, tileset) = self;
+        map.size() * tileset.tile_size
+    }
+}
 
 /// Creates a tilemap
 #[derive(Bundle, Debug, Default)]

@@ -469,7 +469,7 @@ fn draw_screen<L: PxLayer>(
     {
         layer_image.clear();
 
-        for (map, tileset, position, canvas, animation, map_filter) in maps.into_iter() {
+        for (map, tileset, position, canvas, animation, map_filter) in maps {
             if let Some(PxAsset::Loaded { asset: tileset }) = tilesets.get(tileset) {
                 let map_filter = get_asset(&filter_assets, map_filter);
                 let size = map.size();

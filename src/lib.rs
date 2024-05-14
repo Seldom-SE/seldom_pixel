@@ -3,7 +3,7 @@
 //! locked to the camera), tilemaps, animations (for sprites, filters, tilesets, and text;
 //! supports dithering!), custom layers, particles (with pre-simulation!), palette changing,
 //! typefaces, an in-game cursor, camera, lines, and more to come! Optional integration with
-//! `bevy_ecs_tilemap`, `seldom_state` (for animation state machines), and `seldom_interop`.
+//! `seldom_state` (for animation state machines) and `seldom_map_nav`.
 
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 #![warn(missing_docs)]
@@ -28,6 +28,7 @@ pub mod prelude;
 pub mod screen;
 pub mod set;
 pub mod sprite;
+mod system;
 mod text;
 mod ui;
 
@@ -42,7 +43,7 @@ use cursor::cursor_plugin;
 use palette::palette_plugin;
 #[cfg(feature = "particle")]
 use particle::particle_plugin;
-use position::{position_plugin, PxLayer};
+use position::PxLayer;
 use prelude::*;
 use screen::screen_plugin;
 use seldom_fn_plugin::FnPluginExt;
@@ -84,7 +85,6 @@ pub fn px_plugin<L: PxLayer>(screen_size: UVec2, palette_path: PathBuf) -> impl 
             .fn_plugin(button_plugin)
             .fn_plugin(camera_plugin)
             .fn_plugin(palette_plugin(palette_path))
-            .fn_plugin(position_plugin)
             .fn_plugin(screen_plugin::<L>(screen_size))
             .fn_plugin(cursor_plugin);
         #[cfg(feature = "particle")]

@@ -15,6 +15,20 @@ use crate::{
 #[derive(Component, Debug, Default, Deref, DerefMut)]
 pub struct PxLine(pub Vec<IVec2>);
 
+impl Spatial for PxLine {
+    fn frame_size(&self) -> UVec2 {
+        if self.len() == 0 {
+            return UVec2::ZERO;
+        }
+
+        let (min, max) = self.iter().fold((self[0], self[0]), |(min, max), point| {
+            (min.min(point), max.max(point))
+        });
+
+        (max - min).as_uvec2()
+    }
+}
+
 impl Animation for (&PxLine, &PxFilterData) {
     type Param = IVec2;
 

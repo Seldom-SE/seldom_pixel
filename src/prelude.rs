@@ -3,8 +3,8 @@
 pub(crate) use bevy::prelude::*;
 #[cfg(feature = "particle")]
 pub(crate) use bevy_turborand::prelude::*;
-#[cfg(feature = "interop")]
-pub(crate) use seldom_interop::prelude::*;
+#[cfg(feature = "nav")]
+pub(crate) use seldom_map_nav::*;
 #[cfg(feature = "state")]
 pub(crate) use seldom_state::prelude::*;
 
@@ -30,7 +30,7 @@ pub use crate::{
     cursor::PxCursor,
     filter::{PxFilter, PxFilterBundle, PxFilterLayers},
     map::{PxMap, PxMapBundle, PxTile, PxTileBundle, PxTileset},
-    position::{PxAnchor, PxLayer, PxPosition, PxSubPosition, PxVelocity},
+    position::{PxAnchor, PxLayer, PxPosition},
     px_plugin,
     sprite::{PxSprite, PxSpriteBundle},
     text::{PxCharacterConfig, PxSeparatorConfig, PxText, PxTextBundle, PxTypeface},
