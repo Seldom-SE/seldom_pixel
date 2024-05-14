@@ -3,7 +3,7 @@
 //! locked to the camera), tilemaps, animations (for sprites, filters, tilesets, and text;
 //! supports dithering!), custom layers, particles (with pre-simulation!), palette changing,
 //! typefaces, an in-game cursor, camera, lines, and more to come! Optional integration with
-//! `bevy_ecs_tilemap`, `seldom_state` (for animation state machines), and `seldom_interop`.
+//! `seldom_state` (for animation state machines) and `seldom_map_nav`.
 
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 #![warn(missing_docs)]

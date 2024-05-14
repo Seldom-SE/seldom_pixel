@@ -26,19 +26,6 @@ impl From<IVec2> for PxPosition {
     }
 }
 
-#[cfg(feature = "interop")]
-impl Position2 for PxPosition {
-    type Position = IVec2;
-
-    fn get(&self) -> Self::Position {
-        **self
-    }
-
-    fn set(&mut self, pos: Self::Position) {
-        **self = pos;
-    }
-}
-
 /// Trait implemented for your game's custom layer type. Use the [`px_layer`] attribute
 /// or derive/implement the required traits manually. The layers will be rendered in the order
 /// defined by the [`PartialOrd`] implementation. So, lower values will be in the back
@@ -114,15 +101,13 @@ impl From<Vec2> for PxSubPosition {
     }
 }
 
-#[cfg(feature = "interop")]
+#[cfg(feature = "nav")]
 impl Position2 for PxSubPosition {
-    type Position = Vec2;
-
-    fn get(&self) -> Self::Position {
+    fn get(&self) -> Vec2 {
         **self
     }
 
-    fn set(&mut self, pos: Self::Position) {
+    fn set(&mut self, pos: Vec2) {
         **self = pos;
     }
 }

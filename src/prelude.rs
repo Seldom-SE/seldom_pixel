@@ -3,8 +3,8 @@
 pub(crate) use bevy::prelude::*;
 #[cfg(feature = "particle")]
 pub(crate) use bevy_turborand::prelude::*;
-#[cfg(feature = "interop")]
-pub(crate) use seldom_interop::prelude::*;
+#[cfg(feature = "nav")]
+pub(crate) use seldom_map_nav::prelude::*;
 #[cfg(feature = "state")]
 pub(crate) use seldom_state::prelude::*;
 
