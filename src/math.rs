@@ -29,15 +29,34 @@ impl RectExt for IRect {
     }
 }
 
+/// An orthogonal direction
+#[derive(Debug)]
+pub enum Orthogonal {
+    /// Right
+    Right,
+    /// Up
+    Up,
+    /// Left
+    Left,
+    /// Down
+    Down,
+}
+
+/// A diagonal direction
 #[derive(Copy, Clone)]
 pub enum Diagonal {
+    /// Up-right
     UpRight,
+    /// Up-left
     UpLeft,
+    /// Down-left
     DownLeft,
+    /// Down-right
     DownRight,
 }
 
 impl Diagonal {
+    /// 1 for each positive axis and 0 for each negative axis
     pub fn as_uvec2(self) -> UVec2 {
         use Diagonal::*;
 

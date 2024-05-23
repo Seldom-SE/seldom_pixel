@@ -7,7 +7,7 @@ use crate::{
     filter::PxFilterData,
     image::PxImageSliceMut,
     pixel::Pixel,
-    position::PxLayer,
+    position::{PxLayer, Spatial},
     prelude::*,
 };
 
@@ -21,9 +21,12 @@ impl Spatial for PxLine {
             return UVec2::ZERO;
         }
 
-        let (min, max) = self.iter().fold((self[0], self[0]), |(min, max), point| {
-            (min.min(point), max.max(point))
-        });
+        let (min, max) = self
+            .iter()
+            .copied()
+            .fold((self[0], self[0]), |(min, max), point| {
+                (min.min(point), max.max(point))
+            });
 
         (max - min).as_uvec2()
     }

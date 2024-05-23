@@ -28,7 +28,6 @@ pub mod prelude;
 pub mod screen;
 pub mod set;
 pub mod sprite;
-mod system;
 mod text;
 mod ui;
 
@@ -43,7 +42,7 @@ use cursor::cursor_plugin;
 use palette::palette_plugin;
 #[cfg(feature = "particle")]
 use particle::particle_plugin;
-use position::PxLayer;
+use position::{position_plugin, PxLayer};
 use prelude::*;
 use screen::screen_plugin;
 use seldom_fn_plugin::FnPluginExt;
@@ -85,6 +84,7 @@ pub fn px_plugin<L: PxLayer>(screen_size: UVec2, palette_path: PathBuf) -> impl 
             .fn_plugin(button_plugin)
             .fn_plugin(camera_plugin)
             .fn_plugin(palette_plugin(palette_path))
+            .fn_plugin(position_plugin)
             .fn_plugin(screen_plugin::<L>(screen_size))
             .fn_plugin(cursor_plugin);
         #[cfg(feature = "particle")]
