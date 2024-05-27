@@ -1,12 +1,15 @@
 (
     meta_format_version: "1.0",
     asset: Load(
-        loader: "bevy_render::texture::image_loader::ImageLoader",
+        loader: "seldom_pixel::map::PxTilesetLoader",
         settings: (
-            format: FromExtension,
-            is_srgb: true,
-            sampler: Default,
-            asset_usage: ("MAIN_WORLD | RENDER_WORLD"),
+            tile_size: (4, 4),
+            image_loader_settings: (
+                format: FromExtension,
+                is_srgb: true,
+                sampler: Default,
+                asset_usage: ("MAIN_WORLD | RENDER_WORLD"),
+            ),
         ),
     ),
 )

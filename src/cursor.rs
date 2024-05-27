@@ -96,7 +96,11 @@ fn change_cursor(
         return;
     }
 
-    windows.single_mut().cursor.visible = cursor_pos.is_none()
+    let Ok(mut window) = windows.get_single_mut() else {
+        return;
+    };
+
+    window.cursor.visible = cursor_pos.is_none()
         || match *cursor {
             PxCursor::Os => true,
             PxCursor::Filter { .. } => false,

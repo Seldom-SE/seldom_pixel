@@ -6,7 +6,7 @@
             default_frames: 3,
             characters: "ABCDEFGHIJKLMNOPQRSTUVWXYZ⭐🙂",
             character_frames: {
-                // '⭐': 2,
+                '⭐': 2,
             },
             separator_widths: {
                 ' ': 4,

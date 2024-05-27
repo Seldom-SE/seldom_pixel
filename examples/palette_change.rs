@@ -53,7 +53,7 @@ fn spawn_mage(keys: Res<ButtonInput<KeyCode>>, assets: Res<AssetServer>, mut com
             // Usually, this sprite would be added in `init` to avoid duplicating data,
             // but it's here instead to show that loading assets is independent
             // of the current palette
-            sprite: assets.load("sprite/mage.png"),
+            sprite: assets.load("sprite/mage.px_sprite.png"),
             position: IVec2::new(rng.gen_range(0..56), rng.gen_range(0..48)).into(),
             anchor: PxAnchor::BottomLeft,
             ..default()

@@ -74,8 +74,9 @@ impl AssetLoader for PxTypefaceLoader {
             let palette = asset_palette().await;
             let indices = PxImage::palette_indices_unaligned(palette, &image)?;
             let height = indices.height();
+            let character_count = settings.characters.chars().count();
 
-            let characters = if settings.characters.is_empty() {
+            let characters = if character_count == 0 {
                 HashMap::new()
             } else {
                 settings
@@ -83,7 +84,7 @@ impl AssetLoader for PxTypefaceLoader {
                     .chars()
                     .zip(
                         indices
-                            .split_vert(height / settings.characters.len())
+                            .split_vert(height / character_count)
                             .into_iter()
                             .rev(),
                     )
@@ -132,7 +133,7 @@ impl AssetLoader for PxTypefaceLoader {
                         load_context.path().display()
                     ));
                 } else {
-                    image.texture_descriptor.size.height / settings.characters.len() as u32
+                    image.texture_descriptor.size.height / character_count as u32
                 },
                 characters,
                 separators: settings

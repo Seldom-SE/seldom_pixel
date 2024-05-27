@@ -491,23 +491,27 @@ fn draw_screen<L: PxLayer>(
                         continue;
                     }
 
+                    let Some(tile) = tileset.tileset.get(texture as usize) else {
+                        error!("tile texture index out of bounds: the len is {}, but the index is {texture}", tileset.tileset.len());
+                        continue;
+                    };
+
                     draw_spatial(
-                            tileset
-                                .tileset
-                                .get(texture as usize)
-                                .unwrap_or_else(|| panic!("tile texture index out of bounds: the len is {}, but the index is {texture}", tileset.tileset.len())),
-                            (),
-                            &mut layer_image,
-                            (**position
-                                + pos.as_ivec2()
-                                    * tileset.tile_size().as_ivec2())
-                            .into(),
-                            PxAnchor::BottomLeft,
-                            *canvas,
-                            copy_animation_params(animation, &time),
-                            [tile_filter.and_then(|tile_filter| filter_assets.get(tile_filter)), map_filter].into_iter().flatten(),
-                            *camera,
-                        );
+                        tile,
+                        (),
+                        &mut layer_image,
+                        (**position + pos.as_ivec2() * tileset.tile_size().as_ivec2()).into(),
+                        PxAnchor::BottomLeft,
+                        *canvas,
+                        copy_animation_params(animation, &time),
+                        [
+                            tile_filter.and_then(|tile_filter| filter_assets.get(tile_filter)),
+                            map_filter,
+                        ]
+                        .into_iter()
+                        .flatten(),
+                        *camera,
+                    );
                 }
             }
         }
