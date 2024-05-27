@@ -9,7 +9,6 @@
 #![warn(missing_docs)]
 
 pub mod animation;
-pub mod asset;
 mod button;
 mod camera;
 pub mod cursor;
@@ -34,11 +33,11 @@ mod ui;
 use std::{marker::PhantomData, path::PathBuf};
 
 use animation::animation_plugin;
-use asset::asset_plugin;
-
 use button::button_plugin;
 use camera::camera_plugin;
 use cursor::cursor_plugin;
+use filter::filter_plugin;
+use map::map_plugin;
 use palette::palette_plugin;
 #[cfg(feature = "particle")]
 use particle::particle_plugin;
@@ -46,6 +45,8 @@ use position::{position_plugin, PxLayer};
 use prelude::*;
 use screen::screen_plugin;
 use seldom_fn_plugin::FnPluginExt;
+use sprite::sprite_plugin;
+use text::text_plugin;
 
 /// Add to your [`App`] to enable `seldom_pixel`. The type parameter is your custom layer type
 /// used for z-ordering. You can make one using [`px_layer`].
@@ -80,13 +81,16 @@ impl<L: PxLayer> PxPlugin<L> {
 pub fn px_plugin<L: PxLayer>(screen_size: UVec2, palette_path: PathBuf) -> impl FnOnce(&mut App) {
     move |app| {
         app.fn_plugin(animation_plugin)
-            .fn_plugin(asset_plugin)
             .fn_plugin(button_plugin)
             .fn_plugin(camera_plugin)
+            .fn_plugin(cursor_plugin)
+            .fn_plugin(filter_plugin)
+            .fn_plugin(map_plugin)
             .fn_plugin(palette_plugin(palette_path))
             .fn_plugin(position_plugin)
             .fn_plugin(screen_plugin::<L>(screen_size))
-            .fn_plugin(cursor_plugin);
+            .fn_plugin(sprite_plugin)
+            .fn_plugin(text_plugin);
         #[cfg(feature = "particle")]
         app.add_plugins(RngPlugin::default())
             .fn_plugin(particle_plugin::<L>);

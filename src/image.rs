@@ -1,8 +1,10 @@
+use anyhow::{anyhow, Result};
 use bevy::render::render_resource::TextureFormat;
+use serde::{Deserialize, Serialize};
 
 use crate::{palette::Palette, pixel::Pixel, prelude::*};
 
-#[derive(Debug, Reflect)]
+#[derive(Serialize, Deserialize, Reflect, Debug)]
 pub(crate) struct PxImage<P: Pixel> {
     image: Vec<P>,
     width: usize,
@@ -140,64 +142,59 @@ impl<P: Pixel> PxImage<P> {
 }
 
 impl PxImage<Option<u8>> {
-    pub(crate) fn palette_indices(palette: &Palette, image: &Image) -> Self {
-        Self {
+    pub(crate) fn palette_indices(palette: &Palette, image: &Image) -> Result<Self> {
+        Ok(Self {
             image: image
                 .convert(TextureFormat::Rgba8UnormSrgb)
-                .unwrap()
+                .ok_or_else(|| anyhow!("could not convert image to `Rgba8UnormSrgb`"))?
                 .data
                 .chunks_exact(image.texture_descriptor.size.width as usize * 4)
                 .rev()
                 .flatten()
-                .fold(
-                    (Vec::default(), [0, 0, 0], 0),
-                    |(mut colors, mut color, i), value| {
-                        if i == 3 {
-                            colors.push((*value != 0).then(|| {
-                                *palette
-                                    .indices
-                                    .get(&color)
-                                    .expect("a sprite contained a color that wasn't in the palette")
-                            }));
-                            (colors, [0, 0, 0], 0)
-                        } else {
-                            color[i] = *value;
-                            (colors, color, i + 1)
-                        }
-                    },
-                )
-                .0,
+                .copied()
+                .collect::<Vec<_>>()
+                .chunks_exact(4)
+                .map(|color| {
+                    (color[3] != 0)
+                        .then(|| {
+                            palette
+                                .indices
+                                .get(&[color[0], color[1], color[2]])
+                                .copied()
+                                .ok_or_else(|| {
+                                    anyhow!("a sprite contained a color that wasn't in the palette")
+                                })
+                        })
+                        .transpose()
+                })
+                .collect::<Result<_>>()?,
             width: image.texture_descriptor.size.width as usize,
-        }
+        })
     }
 
-    pub(crate) fn palette_indices_unaligned(palette: &Palette, image: &Image) -> Self {
-        Self {
+    pub(crate) fn palette_indices_unaligned(palette: &Palette, image: &Image) -> Result<Self> {
+        Ok(Self {
             image: image
                 .convert(TextureFormat::Rgba8UnormSrgb)
                 .unwrap()
                 .data
-                .into_iter()
-                .fold(
-                    (Vec::default(), [0, 0, 0], 0),
-                    |(mut colors, mut color, i), value| {
-                        if i == 3 {
-                            colors.push((value != 0).then(|| {
-                                *palette
-                                    .indices
-                                    .get(&color)
-                                    .expect("a sprite contained a color that wasn't in the palette")
-                            }));
-                            (colors, [0, 0, 0], 0)
-                        } else {
-                            color[i] = value;
-                            (colors, color, i + 1)
-                        }
-                    },
-                )
-                .0,
+                .chunks_exact(4)
+                .map(|color| {
+                    (color[3] != 0)
+                        .then(|| {
+                            palette
+                                .indices
+                                .get(&[color[0], color[1], color[2]])
+                                .copied()
+                                .ok_or_else(|| {
+                                    anyhow!("a sprite contained a color that wasn't in the palette")
+                                })
+                        })
+                        .transpose()
+                })
+                .collect::<Result<_>>()?,
             width: image.texture_descriptor.size.width as usize,
-        }
+        })
     }
 
     pub(crate) fn trim_right(&mut self) {

@@ -13,17 +13,17 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(32), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(32), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: PxAssets<PxFilter>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
-    let mage = sprites.load("sprite/mage.png");
+    let mage = assets.load("sprite/mage.px_sprite.png");
 
     commands.spawn(PxSpriteBundle::<Layer> {
         sprite: mage,
@@ -35,7 +35,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: Px
     commands.spawn(PxLineBundle::<Layer> {
         line: [(3, 22).into(), (31, 10).into()].into(),
         layers: PxFilterLayers::single_over(Layer),
-        filter: filters.load("filter/invert.png"),
+        filter: assets.load("filter/invert.px_filter.png"),
         ..default()
     });
 }

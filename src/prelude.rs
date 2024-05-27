@@ -20,7 +20,6 @@ pub use crate::{
         PxAnimationBundle, PxAnimationDirection, PxAnimationDuration, PxAnimationFinishBehavior,
         PxAnimationFinished, PxAnimationFrameTransition,
     },
-    asset::PxAssets,
     button::{
         PxButtonFilterBundle, PxButtonSpriteBundle, PxClick, PxClickFilter, PxClickSprite,
         PxEnableButtons, PxHover, PxHoverFilter, PxHoverSprite, PxIdleFilter, PxIdleSprite,
@@ -34,7 +33,7 @@ pub use crate::{
     position::{PxAnchor, PxLayer, PxPosition, PxScreenAlign, PxSubPosition, PxVelocity},
     px_plugin,
     sprite::{PxSprite, PxSpriteBundle},
-    text::{PxCharacterConfig, PxSeparatorConfig, PxText, PxTextBundle, PxTypeface},
+    text::{PxText, PxTextBundle, PxTypeface},
     ui::{Align, PxLayout, PxLayoutBundle, PxRect},
     PxPlugin,
 };

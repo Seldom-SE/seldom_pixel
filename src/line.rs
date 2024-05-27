@@ -4,7 +4,6 @@ use line_drawing::Bresenham;
 
 use crate::{
     animation::{draw_animation, Animation},
-    filter::PxFilterData,
     image::PxImageSliceMut,
     pixel::Pixel,
     position::{PxLayer, Spatial},
@@ -32,11 +31,11 @@ impl Spatial for PxLine {
     }
 }
 
-impl Animation for (&PxLine, &PxFilterData) {
+impl Animation for (&PxLine, &PxFilter) {
     type Param = IVec2;
 
     fn frame_count(&self) -> usize {
-        let (_, PxFilterData(filter)) = self;
+        let (_, PxFilter(filter)) = self;
         filter.area() / filter.width()
     }
 
@@ -47,7 +46,7 @@ impl Animation for (&PxLine, &PxFilterData) {
         frame: impl Fn(UVec2) -> usize,
         _: impl Fn(u8) -> u8,
     ) {
-        let (line, PxFilterData(filter)) = self;
+        let (line, PxFilter(filter)) = self;
         for (start, end) in line.iter().zip(line.iter().skip(1)) {
             let start = *start + param;
             let end = *end + param;
@@ -89,7 +88,7 @@ pub struct PxLineBundle<L: PxLayer> {
 
 pub(crate) fn draw_line(
     line: &PxLine,
-    filter: &PxFilterData,
+    filter: &PxFilter,
     image: &mut PxImageSliceMut<impl Pixel>,
     canvas: PxCanvas,
     animation: Option<(
@@ -101,6 +100,7 @@ pub(crate) fn draw_line(
     )>,
     camera: PxCamera,
 ) {
+    // TODO Make an `animated_line` example
     draw_animation(
         &(line, filter),
         match canvas {

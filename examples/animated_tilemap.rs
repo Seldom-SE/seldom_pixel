@@ -14,14 +14,14 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(mut commands: Commands, mut tilesets: PxAssets<PxTileset>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     let mut map = PxMap::new(UVec2::new(2, 4));
@@ -43,7 +43,7 @@ fn init(mut commands: Commands, mut tilesets: PxAssets<PxTileset>) {
         }
     }
 
-    let tileset = tilesets.load("tileset/tileset.png", UVec2::splat(4));
+    let tileset = assets.load("tileset/tileset.px_tileset.png");
 
     // Spawn the map
     commands.spawn((

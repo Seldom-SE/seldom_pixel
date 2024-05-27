@@ -1,36 +1,72 @@
 //! Color palettes
 
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
-use bevy::{render::render_resource::TextureFormat, utils::HashMap};
+use anyhow::{Error, Result};
+use bevy::{
+    asset::{io::Reader, AssetLoader, LoadContext},
+    render::{
+        render_resource::TextureFormat,
+        texture::{ImageLoader, ImageLoaderSettings},
+    },
+    utils::{BoxedFuture, HashMap},
+};
+use event_listener::Event;
+use seldom_singleton::AssetSingleton;
 
-use crate::{prelude::*, set::PxSet};
+use crate::prelude::*;
 
 pub(crate) fn palette_plugin(palette_path: PathBuf) -> impl FnOnce(&mut App) {
     move |app| {
-        app.add_systems(Startup, load_palette(palette_path))
-            .configure_sets(
+        app.init_asset::<Palette>()
+            .init_asset_loader::<PaletteLoader>()
+            .add_systems(Startup, init_palette(palette_path))
+            .add_systems(
                 PreUpdate,
-                (
-                    PxSet::Unloaded.run_if(resource_exists::<LoadingPalette>),
-                    PxSet::Loaded.run_if(resource_exists::<Palette>),
-                ),
-            )
-            .add_systems(PreUpdate, init_palette.in_set(PxSet::Unloaded))
-            .configure_sets(PostUpdate, PxSet::Loaded.run_if(resource_exists::<Palette>));
+                load_asset_palette.run_if(resource_exists::<LoadingAssetPaletteHandle>),
+            );
     }
 }
 
-#[derive(Deref, DerefMut, Resource)]
-struct LoadingPalette(Handle<Image>);
+struct PaletteLoader(ImageLoader);
 
-/// Resource representing the game's palette. The palette is loaded from an image containing pixels
+impl FromWorld for PaletteLoader {
+    fn from_world(world: &mut World) -> Self {
+        Self(ImageLoader::from_world(world))
+    }
+}
+
+impl AssetLoader for PaletteLoader {
+    type Asset = Palette;
+    type Settings = ImageLoaderSettings;
+    type Error = Error;
+
+    fn load<'a>(
+        &'a self,
+        reader: &'a mut Reader,
+        settings: &'a ImageLoaderSettings,
+        load_context: &'a mut LoadContext,
+    ) -> BoxedFuture<'a, Result<Palette>> {
+        Box::pin(async move {
+            let Self(image_loader) = self;
+            Ok(Palette::new(
+                &image_loader.load(reader, settings, load_context).await?,
+            ))
+        })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["palette.png"]
+    }
+}
+
+/// A palette. Palettes are loaded from images containing pixels
 /// that represent what colors the game may display. You may use up to 255 colors.
-/// The bottom-left pixel in the palette is used as the background color. Set this resource
-/// to a new palette to change the game's palette. The replacement palette's pixels
-/// must be laid out the same as the original. You cannot change the palette that is used
-/// to load assets.
-#[derive(Clone, Debug, Resource)]
+/// The bottom-left pixel in the palette is used as the background color.
+#[derive(Asset, Clone, TypePath, Debug)]
 pub struct Palette {
     pub(crate) size: UVec2,
     // TODO This could be a `[[u8; 3]; 255]`
@@ -38,9 +74,19 @@ pub struct Palette {
     pub(crate) indices: HashMap<[u8; 3], u8>,
 }
 
-/// Internal resource representing the palette used to load assets.
-#[derive(Debug, Resource)]
-pub struct AssetPalette(pub(crate) Palette);
+/// Resource containing the game's palette. Set this resource
+/// to a new palette to change the game's palette. The replacement palette's pixels
+/// must be laid out the same as the original. You cannot change the palette that is used
+/// to load assets.
+#[derive(Resource, Deref, DerefMut)]
+pub struct PaletteHandle(pub Handle<Palette>);
+
+pub(crate) type PaletteParam<'w> = AssetSingleton<'w, PaletteHandle>;
+
+#[derive(Resource, Deref)]
+struct LoadingAssetPaletteHandle(Handle<Palette>);
+
+type LoadingAssetPaletteParam<'w> = AssetSingleton<'w, LoadingAssetPaletteHandle>;
 
 impl Palette {
     /// Create a palette from an [`Image`]
@@ -85,21 +131,56 @@ impl Palette {
     }
 }
 
-fn load_palette(path: PathBuf) -> impl Fn(Commands, Res<AssetServer>) {
+fn init_palette(path: PathBuf) -> impl Fn(Commands, Res<AssetServer>) {
     move |mut commands, assets| {
-        commands.insert_resource(LoadingPalette(assets.load(path.clone())));
+        let palette = assets.load(path.clone());
+        commands.insert_resource(PaletteHandle(palette.clone()));
+        commands.insert_resource(LoadingAssetPaletteHandle(palette));
     }
 }
 
-fn init_palette(
-    mut commands: Commands,
-    images: Res<Assets<Image>>,
-    loading_palette: Res<LoadingPalette>,
-) {
-    if let Some(palette) = images.get(&**loading_palette) {
-        let palette = Palette::new(palette);
-        commands.insert_resource(palette.clone());
-        commands.insert_resource(AssetPalette(palette));
-        commands.remove_resource::<LoadingPalette>();
+/// # Safety
+///
+/// Must not be read before `ASSET_PALETTE_INITIALIZED` is set. Must not be mutated after
+/// `ASSET_PALETTE_INITIALIZED` is set.
+static mut ASSET_PALETTE: Option<Palette> = None;
+/// Must not be unset after it has been set
+static ASSET_PALETTE_INITIALIZED: AtomicBool = AtomicBool::new(false);
+/// Notifies after `ASSET_PALETTE_INITIALIZED` is set
+static ASSET_PALETTE_JUST_INITIALIZED: Event = Event::new();
+
+pub(crate) async fn asset_palette() -> &'static Palette {
+    if ASSET_PALETTE_INITIALIZED.load(Ordering::SeqCst) {
+        // SAFETY: Checked above
+        return unsafe { ASSET_PALETTE.as_ref() }.unwrap();
     }
+
+    let just_initialized = ASSET_PALETTE_JUST_INITIALIZED.listen();
+
+    if ASSET_PALETTE_INITIALIZED.load(Ordering::SeqCst) {
+        // SAFETY: Checked above
+        return unsafe { ASSET_PALETTE.as_ref() }.unwrap();
+    }
+
+    just_initialized.await;
+    // SAFETY: `just_initialized` finished waiting, so `ASSET_PALETTE_INITIALIZED` is set
+    return unsafe { ASSET_PALETTE.as_ref() }.unwrap();
+}
+
+fn load_asset_palette(palette: LoadingAssetPaletteParam, mut cmd: Commands) {
+    let Some(palette) = palette.get() else {
+        return;
+    };
+
+    if ASSET_PALETTE_INITIALIZED.load(Ordering::SeqCst) {
+        panic!("Tried to set the asset palette after it was initialized");
+    }
+
+    let palette = Some(palette.clone());
+    // SAFETY: Checked above
+    unsafe { ASSET_PALETTE = palette };
+    ASSET_PALETTE_INITIALIZED.store(true, Ordering::SeqCst);
+    ASSET_PALETTE_JUST_INITIALIZED.notify(usize::MAX);
+
+    cmd.remove_resource::<LoadingAssetPaletteHandle>();
 }

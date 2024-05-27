@@ -6,16 +6,14 @@ pub(crate) fn button_plugin(app: &mut App) {
             PreUpdate,
             interact_buttons
                 .run_if(resource_equals(PxEnableButtons(true)))
-                .after(PxSet::UpdateCursorPosition)
-                .in_set(PxSet::Loaded),
+                .after(PxSet::UpdateCursorPosition),
         )
         .configure_sets(
             PostUpdate,
             (
                 PxSet::AddButtonAssets.run_if(resource_equals(PxEnableButtons(true))),
                 PxSet::UpdateButtonAssets,
-            )
-                .in_set(PxSet::Loaded),
+            ),
         )
         .add_systems(
             PostUpdate,

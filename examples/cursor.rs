@@ -13,34 +13,29 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(
-    mut commands: Commands,
-    mut sprites: PxAssets<PxSprite>,
-    mut filters: PxAssets<PxFilter>,
-    mut cursor: ResMut<PxCursor>,
-) {
+fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
-    let idle = filters.load("filter/invert.png");
+    let idle = assets.load("filter/invert.px_filter.png");
 
     // Switch to an in-game cursor. If the cursor feels like it lags behind,
     // consider `bevy_framepace` (https://github.com/aevyrie/bevy_framepace).
     *cursor = PxCursor::Filter {
         idle: idle.clone(),
-        left_click: filters.load("filter/invert_dim.png"),
+        left_click: assets.load("filter/invert_dim.px_filter.png"),
         right_click: idle,
     };
 
     // Sprite to show how the cursor's filter applies
     commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: sprites.load("sprite/mage.png"),
+        sprite: assets.load("sprite/mage.px_sprite.png"),
         position: IVec2::new(8, 8).into(),
         ..default()
     });

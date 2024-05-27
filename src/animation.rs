@@ -4,17 +4,12 @@ use std::time::Duration;
 
 use bevy::utils::Instant;
 
-use crate::map::PxTilesetData;
 use crate::position::Spatial;
 use crate::{
-    asset::{PxAsset, PxAssetData},
-    filter::PxFilterData,
     image::{PxImage, PxImageSliceMut},
     pixel::Pixel,
     prelude::*,
     set::PxSet,
-    sprite::PxSpriteData,
-    text::PxTypefaceData,
 };
 
 pub(crate) fn animation_plugin(app: &mut App) {
@@ -27,16 +22,12 @@ pub(crate) fn animation_plugin(app: &mut App) {
     .add_systems(
         PostUpdate,
         (
-            finish_animations::<PxSpriteData>,
-            finish_animations::<PxFilterData>,
-            finish_animations::<PxTypefaceData>,
+            finish_animations::<PxSprite>,
+            finish_animations::<PxFilter>,
+            finish_animations::<PxTypeface>,
+            finish_animations::<PxTileset>,
         )
             .in_set(PxSet::FinishAnimations),
-    );
-
-    app.add_systems(
-        PostUpdate,
-        finish_animations::<PxTilesetData>.in_set(PxSet::FinishAnimations),
     );
 }
 
@@ -148,7 +139,7 @@ pub(crate) trait Animation {
     );
 }
 
-pub(crate) trait AnimationAsset: PxAssetData {
+pub(crate) trait AnimationAsset: Asset {
     fn max_frame_count(&self) -> usize;
 }
 
@@ -235,7 +226,7 @@ pub(crate) fn draw_animation<'a, A: Animation>(
         PxAnimationFrameTransition,
         Duration,
     )>,
-    filters: impl IntoIterator<Item = &'a PxFilterData>,
+    filters: impl IntoIterator<Item = &'a PxFilter>,
 ) {
     let mut filter: Box<dyn Fn(u8) -> u8> = Box::new(|pixel| pixel);
     for filter_part in filters {
@@ -278,7 +269,7 @@ pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
         PxAnimationFrameTransition,
         Duration,
     )>,
-    filters: impl IntoIterator<Item = &'a PxFilterData>,
+    filters: impl IntoIterator<Item = &'a PxFilter>,
     camera: PxCamera,
 ) {
     let size = spatial.frame_size();
@@ -329,17 +320,17 @@ fn finish_animations<A: AnimationAsset>(
     mut commands: Commands,
     animations: Query<(
         Entity,
-        &Handle<PxAsset<A>>,
+        &Handle<A>,
         &PxAnimationDuration,
         &PxAnimationFinishBehavior,
         &PxAnimationStart,
         Option<&PxAnimationFinished>,
     )>,
-    assets: Res<Assets<PxAsset<A>>>,
+    assets: Res<Assets<A>>,
     time: Res<Time<Real>>,
 ) {
     for (entity, animation, duration, on_finish, spawn_time, finished) in &animations {
-        if let Some(PxAsset::Loaded { asset: animation }) = assets.get(animation) {
+        if let Some(animation) = assets.get(animation) {
             let lifetime = match duration {
                 PxAnimationDuration::PerAnimation(duration) => *duration,
                 PxAnimationDuration::PerFrame(duration) => {

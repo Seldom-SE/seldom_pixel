@@ -15,22 +15,22 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(32), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(32), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     // Spawn a particle emitter
     commands.spawn(PxEmitterBundle::<Layer> {
         // Any `IntoIterator<Item = Handle<PxSprite>>` works here
         sprites: [
-            sprites.load_animated("sprite/snow_1.png", 2),
-            sprites.load_animated("sprite/snow_2.png", 2),
+            assets.load("sprite/snow_1.px_sprite.png"),
+            assets.load("sprite/snow_2.px_sprite.png"),
         ]
         .into(),
         // Range where the particles can spawn

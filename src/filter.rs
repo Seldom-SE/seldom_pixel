@@ -2,70 +2,114 @@
 
 use std::time::Duration;
 
+use anyhow::{Error, Result};
+use bevy::{
+    asset::{io::Reader, AssetLoader, LoadContext},
+    render::texture::{ImageLoader, ImageLoaderSettings},
+    utils::BoxedFuture,
+};
+
 use crate::{
     animation::{draw_animation, Animation, AnimationAsset},
-    asset::{PxAsset, PxAssetData},
     image::{PxImage, PxImageSliceMut},
-    palette::Palette,
+    palette::asset_palette,
     pixel::Pixel,
     position::PxLayer,
     prelude::*,
 };
 
-/// Internal data for a [`PxFilter`]
-#[derive(Debug, Reflect)]
-pub struct PxFilterData(pub(crate) PxImage<u8>);
+pub(crate) fn filter_plugin(app: &mut App) {
+    app.init_asset::<PxFilter>()
+        .init_asset_loader::<PxFilterLoader>();
+}
 
-impl PxAssetData for PxFilterData {
-    type Config = ();
+struct PxFilterLoader(ImageLoader);
 
-    fn new(palette: &Palette, image: &Image, _: &Self::Config) -> Self {
-        let indices = PxImage::palette_indices(palette, image);
-        let mut filter = Vec::with_capacity(indices.area());
-        let frame_size = palette.size;
-        let frame_area = frame_size.x * frame_size.y;
-        let filter_width = image.texture_descriptor.size.width;
-        let frame_filter_width = filter_width / palette.size.x;
-
-        let mut frame_visible = true;
-
-        for i in 0..indices.area() {
-            let frame_index = i as u32 / frame_area;
-            let frame_pos = i as u32 % frame_area;
-
-            if frame_pos == 0 {
-                if !frame_visible {
-                    for _ in 0..frame_area {
-                        filter.pop();
-                    }
-                    break;
-                }
-
-                frame_visible = false;
-            }
-
-            filter.push(
-                if let Some(index) = indices.pixel(
-                    (UVec2::new(
-                        frame_index % frame_filter_width,
-                        frame_index / frame_filter_width,
-                    ) * frame_size
-                        + UVec2::new(frame_pos % frame_size.x, frame_pos / frame_size.x))
-                    .as_ivec2(),
-                ) {
-                    frame_visible = true;
-                    index
-                } else {
-                    0
-                },
-            );
-        }
-
-        Self(PxImage::new(filter, frame_area as usize))
+impl FromWorld for PxFilterLoader {
+    fn from_world(world: &mut World) -> Self {
+        Self(ImageLoader::from_world(world))
     }
 }
 
-impl Animation for PxFilterData {
+impl AssetLoader for PxFilterLoader {
+    type Asset = PxFilter;
+    type Settings = ImageLoaderSettings;
+    type Error = Error;
+
+    fn load<'a>(
+        &'a self,
+        reader: &'a mut Reader,
+        settings: &'a ImageLoaderSettings,
+        load_context: &'a mut LoadContext,
+    ) -> BoxedFuture<'a, Result<PxFilter>> {
+        Box::pin(async move {
+            let Self(image_loader) = self;
+            let image = image_loader.load(reader, settings, load_context).await?;
+            let palette = asset_palette().await;
+            let indices = PxImage::palette_indices(palette, &image)?;
+
+            let mut filter = Vec::with_capacity(indices.area());
+            let frame_size = palette.size;
+            let frame_area = frame_size.x * frame_size.y;
+            let filter_width = image.texture_descriptor.size.width;
+            let frame_filter_width = filter_width / palette.size.x;
+
+            let mut frame_visible = true;
+
+            for i in 0..indices.area() {
+                let frame_index = i as u32 / frame_area;
+                let frame_pos = i as u32 % frame_area;
+
+                if frame_pos == 0 {
+                    if !frame_visible {
+                        for _ in 0..frame_area {
+                            filter.pop();
+                        }
+                        break;
+                    }
+
+                    frame_visible = false;
+                }
+
+                filter.push(
+                    if let Some(index) = indices.pixel(
+                        (UVec2::new(
+                            frame_index % frame_filter_width,
+                            frame_index / frame_filter_width,
+                        ) * frame_size
+                            + UVec2::new(frame_pos % frame_size.x, frame_pos / frame_size.x))
+                        .as_ivec2(),
+                    ) {
+                        frame_visible = true;
+                        index
+                    } else {
+                        0
+                    },
+                );
+            }
+
+            Ok(PxFilter(PxImage::new(filter, frame_area as usize)))
+        })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["px_filter.png"]
+    }
+}
+
+/// Maps colors of an image to different colors. Filter a single sprite, text, or tilemap
+/// by adding a [`Handle<PxFilter>`] to it, or filter entire layers
+/// by spawning a [`PxFilterBundle`]. Create a [`Handle<PxFilter>`] with a [`PxAssets<PxFilter>`]
+/// and an image file. The image should have pixels in the same positions as the palette.
+/// The position of each pixel describes the mapping of colors. The image must only contain colors
+/// that are also in the palette. For animated filters, arrange a number of filters
+/// from the bottom-left corner, moving rightwards, wrapping upwards when it gets to the edge
+/// of the image. For examples, see the `assets/` directory in this repository. `fade_to_black.png`
+/// is an animated filter.
+#[derive(Asset, Reflect, Debug)]
+pub struct PxFilter(pub(crate) PxImage<u8>);
+
+impl Animation for PxFilter {
     type Param = ();
 
     fn frame_count(&self) -> usize {
@@ -94,29 +138,18 @@ impl Animation for PxFilterData {
     }
 }
 
-impl AnimationAsset for PxFilterData {
+impl AnimationAsset for PxFilter {
     fn max_frame_count(&self) -> usize {
         self.frame_count()
     }
 }
 
-impl PxFilterData {
+impl PxFilter {
     pub(crate) fn as_fn(&self) -> impl '_ + Fn(u8) -> u8 {
         let Self(filter) = self;
         |pixel| filter.pixel(IVec2::new(pixel as i32, 0))
     }
 }
-
-/// Maps colors of an image to different colors. Filter a single sprite, text, or tilemap
-/// by adding a [`Handle<PxFilter>`] to it, or filter entire layers
-/// by spawning a [`PxFilterBundle`]. Create a [`Handle<PxFilter>`] with a [`PxAssets<PxFilter>`]
-/// and an image file. The image should have pixels in the same positions as the palette.
-/// The position of each pixel describes the mapping of colors. The image must only contain colors
-/// that are also in the palette. For animated filters, arrange a number of filters
-/// from the bottom-left corner, moving rightwards, wrapping upwards when it gets to the edge
-/// of the image. For examples, see the `assets/` directory in this repository. `fade_to_black.png`
-/// is an animated filter.
-pub type PxFilter = PxAsset<PxFilterData>;
 
 /// Determines which layers a filter appies to
 #[derive(Component)]
@@ -172,7 +205,7 @@ pub struct PxFilterBundle<L: PxLayer> {
 }
 
 pub(crate) fn draw_filter(
-    filter: &PxFilterData,
+    filter: &PxFilter,
     animation: Option<(
         PxAnimationDirection,
         PxAnimationDuration,

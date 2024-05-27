@@ -2,7 +2,10 @@
 
 use bevy::prelude::*;
 use rand::{thread_rng, Rng};
-use seldom_pixel::{palette::Palette, prelude::*};
+use seldom_pixel::{
+    palette::{Palette, PaletteHandle},
+    prelude::*,
+};
 
 fn main() {
     App::new()
@@ -18,49 +21,39 @@ fn main() {
                 UVec2::splat(64),
                 // This is the palette that assets will be loaded with
                 // It is also the palette that assets will be displayed with, until changed
-                "palette/palette_1.png".into(),
+                "palette/palette_1.palette.png".into(),
             ),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
-        .add_systems(
-            Update,
-            (
-                spawn_mage,
-                change_palette.run_if(resource_exists::<Palette>),
-            ),
-        )
+        .add_systems(Update, (spawn_mage, change_palette))
         .run();
 }
 
 #[derive(Resource)]
 struct GameAssets {
     // Palettes are created from normal images
-    palette_1: Handle<Image>,
-    palette_2: Handle<Image>,
+    palette_1: Handle<Palette>,
+    palette_2: Handle<Palette>,
 }
 
-fn init(mut commands: Commands, assets: Res<AssetServer>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     commands.insert_resource(GameAssets {
-        palette_1: assets.load("palette/palette_1.png"),
-        palette_2: assets.load("palette/palette_2.png"),
+        palette_1: assets.load("palette/palette_1.palette.png"),
+        palette_2: assets.load("palette/palette_2.palette.png"),
     });
 }
 
-fn spawn_mage(
-    mut commands: Commands,
-    mut sprites: PxAssets<PxSprite>,
-    keys: Res<ButtonInput<KeyCode>>,
-) {
+fn spawn_mage(keys: Res<ButtonInput<KeyCode>>, assets: Res<AssetServer>, mut commands: Commands) {
     if keys.just_pressed(KeyCode::Space) {
         let mut rng = thread_rng();
         commands.spawn(PxSpriteBundle::<Layer> {
             // Usually, this sprite would be added in `init` to avoid duplicating data,
             // but it's here instead to show that loading assets is independent
             // of the current palette
-            sprite: sprites.load("sprite/mage.png"),
+            sprite: assets.load("sprite/mage.png"),
             position: IVec2::new(rng.gen_range(0..56), rng.gen_range(0..48)).into(),
             anchor: PxAnchor::BottomLeft,
             ..default()
@@ -74,22 +67,20 @@ struct CurrentPalette(bool);
 
 fn change_palette(
     mut current_palette: Local<CurrentPalette>,
-    keys: Res<ButtonInput<KeyCode>>,
+    mut palette: ResMut<PaletteHandle>,
     assets: Res<GameAssets>,
-    images: Res<Assets<Image>>,
-    mut palette: ResMut<Palette>,
+    keys: Res<ButtonInput<KeyCode>>,
 ) {
     if keys.just_pressed(KeyCode::Tab) {
         // Tab was pressed; switch palette
-        // `if let Some` to make sure the image is loaded already
-        if let Some(palette_image) = images.get(match **current_palette {
-            true => &assets.palette_1,
-            false => &assets.palette_2,
-        }) {
-            **current_palette = !**current_palette;
-            // Create a new palette
-            *palette = Palette::new(palette_image);
+        **palette = if **current_palette {
+            &assets.palette_1
+        } else {
+            &assets.palette_2
         }
+        .clone();
+
+        **current_palette = !**current_palette;
     }
 }
 

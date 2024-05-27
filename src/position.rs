@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use crate::{asset::PxAsset, math::Diagonal, prelude::*, screen::Screen, set::PxSet};
+use crate::{math::Diagonal, prelude::*, screen::Screen, set::PxSet};
 
 // TODO Try to use traits instead of macros when we get the new solver
 macro_rules! align_to_screen {
@@ -15,6 +15,7 @@ macro_rules! align_to_screen {
             spatials
                 .iter_mut()
                 .for_each(|(components, PxScreenAlign(align), anchor, mut pos)| {
+                    #[allow(clippy::redundant_closure_call)]
                     let Some(size) = ($get)(components, &param) else {
                         return;
                     };
@@ -45,21 +46,14 @@ pub(crate) fn position_plugin(app: &mut App) {
                 (&PxMap, &Handle<PxTileset>),
                 Res<Assets<PxTileset>>,
                 |(map, tileset), tilesets: &Res<Assets<PxTileset>>| {
-                    let PxAsset::Loaded { asset } = tilesets.get(tileset)? else {
-                        return None;
-                    };
-
-                    Some((map, asset).frame_size())
+                    Some((map, tilesets.get(tileset)?).frame_size())
                 }
             ),
             align_to_screen!(&Handle<PxSprite>, Res<Assets<PxSprite>>, |sprite,
                                                                         sprites: &Res<
                 Assets<PxSprite>,
-            >| match sprites
-                .get(sprite)?
-            {
-                PxAsset::Loaded { asset } => Some(asset.frame_size()),
-                PxAsset::Loading { .. } => None,
+            >| {
+                Some(sprites.get(sprite)?.frame_size())
             }),
             align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
             #[cfg(feature = "line")]

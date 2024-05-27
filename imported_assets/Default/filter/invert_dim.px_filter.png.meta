@@ -1,0 +1,17 @@
+(
+    meta_format_version: "1.0",
+    processed_info: Some((
+        hash: (205, 113, 102, 177, 246, 59, 33, 171, 247, 155, 144, 45, 163, 219, 172, 248, 74, 210, 203, 167, 5, 54, 208, 213, 141, 1, 232, 43, 96, 107, 4, 54),
+        full_hash: (205, 113, 102, 177, 246, 59, 33, 171, 247, 155, 144, 45, 163, 219, 172, 248, 74, 210, 203, 167, 5, 54, 208, 213, 141, 1, 232, 43, 96, 107, 4, 54),
+        process_dependencies: [],
+    )),
+    asset: Load(
+        loader: "seldom_pixel::filter::PxFilterLoader",
+        settings: (
+            format: FromExtension,
+            is_srgb: true,
+            sampler: Default,
+            asset_usage: ("MAIN_WORLD | RENDER_WORLD"),
+        ),
+    ),
+)

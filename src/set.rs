@@ -5,12 +5,6 @@ use crate::prelude::*;
 /// Stages used by this crate
 #[derive(Clone, Debug, Eq, Hash, PartialEq, SystemSet)]
 pub enum PxSet {
-    // General
-    /// Runs if the palette is not loaded
-    Unloaded,
-    /// Runs if the palette is loaded
-    Loaded,
-
     // `PreUpdate`
     /// The [`PxPosition`] is updated to match [`PxSubPosition`]. In [`CoreSet::PreUpdate`].
     UpdatePosToSubPos,

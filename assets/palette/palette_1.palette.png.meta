@@ -1,0 +1,12 @@
+(
+    meta_format_version: "1.0",
+    asset: Load(
+        loader: "seldom_pixel::palette::PaletteLoader",
+        settings: (
+            format: FromExtension,
+            is_srgb: true,
+            sampler: Default,
+            asset_usage: ("MAIN_WORLD | RENDER_WORLD"),
+        ),
+    ),
+)

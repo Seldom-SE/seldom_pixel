@@ -13,17 +13,17 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::new(51, 35), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::new(51, 35), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: PxAssets<PxFilter>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
-    let mage = sprites.load("sprite/mage.png");
+    let mage = assets.load("sprite/mage.px_sprite.png");
 
     // Spawn a bunch of sprites on different layers
     for layer in 0..8 {
@@ -37,7 +37,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: Px
     }
 
     // Load the filter
-    let fade_to_black = filters.load("filter/fade_to_black.png");
+    let fade_to_black = assets.load("filter/fade_to_black.px_filter.png");
 
     // Despawn at the end
     commands.spawn((

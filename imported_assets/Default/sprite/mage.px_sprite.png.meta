@@ -1,0 +1,20 @@
+(
+    meta_format_version: "1.0",
+    processed_info: Some((
+        hash: (32, 119, 81, 149, 93, 98, 119, 26, 51, 89, 73, 150, 107, 251, 38, 112, 207, 232, 107, 141, 218, 22, 77, 145, 37, 147, 9, 183, 5, 234, 23, 28),
+        full_hash: (32, 119, 81, 149, 93, 98, 119, 26, 51, 89, 73, 150, 107, 251, 38, 112, 207, 232, 107, 141, 218, 22, 77, 145, 37, 147, 9, 183, 5, 234, 23, 28),
+        process_dependencies: [],
+    )),
+    asset: Load(
+        loader: "seldom_pixel::sprite::PxSpriteLoader",
+        settings: (
+            frame_count: 1,
+            image_loader_settings: (
+                format: FromExtension,
+                is_srgb: true,
+                sampler: Default,
+                asset_usage: ("MAIN_WORLD | RENDER_WORLD"),
+            ),
+        ),
+    ),
+)

@@ -3,10 +3,8 @@
 use bevy::window::PrimaryWindow;
 
 use crate::{
-    asset::PxAsset,
-    filter::PxFilterData,
+    filter::PxFilter,
     image::PxImageSliceMut,
-    palette::Palette,
     prelude::*,
     screen::{Screen, ScreenMarker},
     set::PxSet,
@@ -17,16 +15,14 @@ pub(crate) fn cursor_plugin(app: &mut App) {
         .init_resource::<PxCursorPosition>()
         .add_systems(
             PreUpdate,
-            update_cursor_position
-                .run_if(resource_exists::<Palette>)
-                .in_set(PxSet::UpdateCursorPosition),
+            update_cursor_position.in_set(PxSet::UpdateCursorPosition),
         )
         .configure_sets(PostUpdate, PxSet::DrawCursor.after(PxSet::Draw))
         .add_systems(
             PostUpdate,
             (
                 change_cursor.before(PxSet::DrawCursor),
-                draw_cursor.in_set(PxSet::DrawCursor).in_set(PxSet::Loaded),
+                draw_cursor.in_set(PxSet::DrawCursor),
             ),
         );
 }
@@ -63,6 +59,10 @@ fn update_cursor_position(
     screen: Res<Screen>,
     mut position: ResMut<PxCursorPosition>,
 ) {
+    let Ok(screen_tf) = screens.get_single() else {
+        return;
+    };
+
     if leave_events.read().next().is_some() {
         **position = None;
         return;
@@ -79,7 +79,7 @@ fn update_cursor_position(
         **position = None;
         return;
     };
-    let new_position = new_position / screens.single().scale.truncate() * screen.size.as_vec2()
+    let new_position = new_position / screen_tf.scale.truncate() * screen.size.as_vec2()
         + screen.size.as_vec2() / 2.;
 
     **position = (new_position.cmpge(Vec2::ZERO).all()
@@ -118,9 +118,7 @@ fn draw_cursor(
     } = &*cursor
     {
         if let Some(cursor_pos) = **cursor_pos {
-            if let Some(PxAsset::Loaded {
-                asset: PxFilterData(filter),
-            }) = filters.get(if mouse.pressed(MouseButton::Left) {
+            if let Some(PxFilter(filter)) = filters.get(if mouse.pressed(MouseButton::Left) {
                 left_click
             } else if mouse.pressed(MouseButton::Right) {
                 right_click

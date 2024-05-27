@@ -13,25 +13,20 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(64), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(64), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(mut commands: Commands, mut typefaces: PxAssets<PxTypeface>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     // Spawn text
     commands.spawn(PxTextBundle::<Layer> {
         text: "THE MITOCHONDRIA IS THE POWERHOUSE OF THE CELL".into(),
-        typeface: typefaces.load(
-            "typeface/typeface.png",
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-            // Equivalent to, for example, `vec![PxSeparatorConfig { character: ' ', width: 4 }]`
-            [(' ', 4)],
-        ),
+        typeface: assets.load("typeface/typeface.px_typeface.png"),
         rect: IRect::new(0, 0, 64, 64).into(),
         ..default()
     });

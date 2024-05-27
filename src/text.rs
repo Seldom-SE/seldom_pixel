@@ -1,14 +1,20 @@
-use bevy::utils::HashMap;
+use anyhow::{anyhow, Error, Result};
+use bevy::{
+    asset::{io::Reader, AssetLoader, LoadContext},
+    render::texture::{ImageLoader, ImageLoaderSettings},
+    utils::{BoxedFuture, HashMap},
+};
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    animation::AnimationAsset,
-    asset::{PxAsset, PxAssetData},
-    image::PxImage,
-    palette::Palette,
-    position::PxLayer,
+    animation::AnimationAsset, image::PxImage, palette::asset_palette, position::PxLayer,
     prelude::*,
-    sprite::PxSpriteData,
 };
+
+pub(crate) fn text_plugin(app: &mut App) {
+    app.init_asset::<PxTypeface>()
+        .init_asset_loader::<PxTypefaceLoader>();
+}
 
 /// Text to be drawn on the screen
 #[derive(Component, Debug, Default, Deref, DerefMut)]
@@ -20,40 +26,128 @@ impl<T: Into<String>> From<T> for PxText {
     }
 }
 
-/// Configuration for a character in a typeface
-#[derive(Debug)]
-pub struct PxCharacterConfig {
-    /// The character
-    pub character: char,
-    /// The number of frames of animation this character has
-    pub frames: u32,
+#[derive(Serialize, Deserialize)]
+struct PxTypefaceLoaderSettings {
+    default_frames: u32,
+    characters: String,
+    character_frames: HashMap<char, u32>,
+    separator_widths: HashMap<char, u32>,
+    image_loader_settings: ImageLoaderSettings,
 }
 
-impl From<(char, u32)> for PxCharacterConfig {
-    fn from((character, frames): (char, u32)) -> Self {
-        Self { character, frames }
+impl Default for PxTypefaceLoaderSettings {
+    fn default() -> Self {
+        Self {
+            default_frames: 1,
+            characters: String::new(),
+            character_frames: HashMap::new(),
+            separator_widths: HashMap::new(),
+            image_loader_settings: default(),
+        }
     }
 }
 
-/// Configuration for a separator in a typeface
-#[derive(Debug)]
-pub struct PxSeparatorConfig {
-    /// The character
-    pub character: char,
-    /// Width in pixels
-    pub width: u32,
-}
+struct PxTypefaceLoader(ImageLoader);
 
-impl From<(char, u32)> for PxSeparatorConfig {
-    fn from((character, width): (char, u32)) -> Self {
-        Self { character, width }
+impl FromWorld for PxTypefaceLoader {
+    fn from_world(world: &mut World) -> Self {
+        Self(ImageLoader::from_world(world))
     }
 }
 
-#[derive(Debug)]
-pub struct PxTypefaceConfig {
-    pub(crate) characters: Vec<PxCharacterConfig>,
-    pub(crate) separators: Vec<PxSeparatorConfig>,
+impl AssetLoader for PxTypefaceLoader {
+    type Asset = PxTypeface;
+    type Settings = PxTypefaceLoaderSettings;
+    type Error = Error;
+
+    fn load<'a>(
+        &'a self,
+        reader: &'a mut Reader,
+        settings: &'a PxTypefaceLoaderSettings,
+        load_context: &'a mut LoadContext,
+    ) -> BoxedFuture<'a, Result<PxTypeface>> {
+        Box::pin(async move {
+            let Self(image_loader) = self;
+            let image = image_loader
+                .load(reader, &settings.image_loader_settings, load_context)
+                .await?;
+            let palette = asset_palette().await;
+            let indices = PxImage::palette_indices_unaligned(palette, &image)?;
+            let height = indices.height();
+
+            let characters = if settings.characters.is_empty() {
+                HashMap::new()
+            } else {
+                settings
+                    .characters
+                    .chars()
+                    .zip(
+                        indices
+                            .split_vert(height / settings.characters.len())
+                            .into_iter()
+                            .rev(),
+                    )
+                    .map(|(character, image)| {
+                        let mut image = image.flip_vert();
+                        image.trim_right();
+                        let image_width = image.width();
+                        let image_area = image.area();
+                        let frames = settings
+                            .character_frames
+                            .get(&character)
+                            .copied()
+                            .unwrap_or(settings.default_frames)
+                            as usize;
+
+                        (
+                            character,
+                            PxSprite {
+                                data: PxImage::from_parts_vert(
+                                    image.split_horz(image_width / frames),
+                                )
+                                .unwrap(),
+                                frame_size: image_area / frames,
+                            },
+                        )
+                    })
+                    .collect::<HashMap<_, _>>()
+            };
+
+            let max_frame_count =
+                characters
+                    .values()
+                    .fold(0, |max, character| match character.frame_size > max {
+                        true => character.frame_size,
+                        false => max,
+                    });
+
+            Ok(PxTypeface {
+                height: if image.texture_descriptor.size.height == 0 {
+                    0
+                } else if settings.characters.is_empty() {
+                    return Err(anyhow!(
+                        "Typeface `{}` was assigned no characters. \
+                        If no `.meta` file exists for that asset, create one. \
+                        See `assets/typeface/` for examples.",
+                        load_context.path().display()
+                    ));
+                } else {
+                    image.texture_descriptor.size.height / settings.characters.len() as u32
+                },
+                characters,
+                separators: settings
+                    .separator_widths
+                    .iter()
+                    .map(|(&separator, &width)| (separator, PxSeparator { width }))
+                    .collect(),
+                max_frame_count,
+            })
+        })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["px_typeface.png"]
+    }
 }
 
 #[derive(Debug, Reflect)]
@@ -61,88 +155,24 @@ pub(crate) struct PxSeparator {
     pub(crate) width: u32,
 }
 
-#[derive(Debug, Reflect)]
-pub struct PxTypefaceData {
-    pub(crate) height: u32,
-    pub(crate) characters: HashMap<char, PxSpriteData>,
-    pub(crate) separators: HashMap<char, PxSeparator>,
-    pub(crate) max_frame_count: usize,
-}
-
-impl PxAssetData for PxTypefaceData {
-    type Config = PxTypefaceConfig;
-
-    fn new(palette: &Palette, image: &Image, config: &Self::Config) -> Self {
-        let indices = PxImage::palette_indices_unaligned(palette, image);
-        let height = indices.height();
-
-        let characters = config
-            .characters
-            .iter()
-            .zip(
-                indices
-                    .split_vert(height / config.characters.len())
-                    .into_iter()
-                    .rev(),
-            )
-            .map(|(character, image)| {
-                let mut image = image.flip_vert();
-                image.trim_right();
-                let image_width = image.width();
-                let image_area = image.area();
-                (
-                    character.character,
-                    PxSpriteData {
-                        data: PxImage::from_parts_vert(
-                            image.split_horz(image_width / character.frames as usize),
-                        )
-                        .unwrap(),
-                        frame_size: image_area / character.frames as usize,
-                    },
-                )
-            })
-            .collect::<HashMap<_, _>>();
-
-        let max_frame_count =
-            characters
-                .values()
-                .fold(0, |max, character| match character.frame_size > max {
-                    true => character.frame_size,
-                    false => max,
-                });
-
-        Self {
-            height: image.texture_descriptor.size.height / config.characters.len() as u32,
-            characters,
-            separators: config
-                .separators
-                .iter()
-                .map(|separator| {
-                    (
-                        separator.character,
-                        PxSeparator {
-                            width: separator.width,
-                        },
-                    )
-                })
-                .collect(),
-            max_frame_count,
-        }
-    }
-}
-
-impl AnimationAsset for PxTypefaceData {
-    fn max_frame_count(&self) -> usize {
-        self.max_frame_count
-    }
-}
-
 /// A typeface. Create a [`Handle<PxTypeface>`] with a [`PxAssets<PxTypeface>`]
 /// and an image file. The image file contains a column of characters, ordered from bottom to top.
 /// For animated typefaces, add additional frames to the right of characters, marking the end
 /// of an animation with a fully transparent character or the end of the image.
 /// See the images in `assets/typeface/` for examples.
-pub type PxTypeface = PxAsset<PxTypefaceData>;
+#[derive(Asset, Reflect, Debug)]
+pub struct PxTypeface {
+    pub(crate) height: u32,
+    pub(crate) characters: HashMap<char, PxSprite>,
+    pub(crate) separators: HashMap<char, PxSeparator>,
+    pub(crate) max_frame_count: usize,
+}
+
+impl AnimationAsset for PxTypeface {
+    fn max_frame_count(&self) -> usize {
+        self.max_frame_count
+    }
+}
 
 /// Spawns text to be rendered on-screen
 #[derive(Bundle, Debug, Default)]

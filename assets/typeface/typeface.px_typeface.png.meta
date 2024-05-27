@@ -1,0 +1,20 @@
+(
+    meta_format_version: "1.0",
+    asset: Load(
+        loader: "seldom_pixel::text::PxTypefaceLoader",
+        settings: (
+            default_frames: 1,
+            characters: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            character_frames: {},
+            separator_widths: {
+                ' ': 4,
+            },
+            image_loader_settings: (
+                format: FromExtension,
+                is_srgb: true,
+                sampler: Default,
+                asset_usage: ("MAIN_WORLD | RENDER_WORLD"),
+            ),
+        ),
+    ),
+)

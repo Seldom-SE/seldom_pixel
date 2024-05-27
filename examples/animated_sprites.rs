@@ -13,18 +13,18 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::new(51, 35), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::new(51, 35), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     // Load an animated sprite with `add_animated`
-    let runner = sprites.load_animated("sprite/runner.png", 8);
+    let runner = assets.load("sprite/runner.px_sprite.png");
 
     // Despawn at the end
     commands.spawn((

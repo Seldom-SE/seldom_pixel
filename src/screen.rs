@@ -15,12 +15,11 @@ use bevy::{
 use crate::line::draw_line;
 use crate::{
     animation::{copy_animation_params, draw_spatial, PxAnimationStart},
-    asset::{get_asset, PxAsset},
-    filter::{draw_filter, PxFilterData},
+    filter::draw_filter,
     image::{PxImage, PxImageSliceMut},
     map::PxTile,
     math::RectExt,
-    palette::Palette,
+    palette::{PaletteHandle, PaletteParam},
     position::PxLayer,
     prelude::*,
     set::PxSet,
@@ -37,7 +36,8 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
         );
         app.add_plugins(Material2dPlugin::<ScreenMaterial>::default())
             .configure_sets(PostUpdate, PxSet::Draw)
-            .add_systems(Update, init_screen(size).run_if(resource_added::<Palette>))
+            .add_systems(Startup, insert_screen(size))
+            .add_systems(Update, init_screen)
             .add_systems(
                 PostUpdate,
                 (
@@ -52,8 +52,7 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
                             .chain(),
                         resize_screen,
                         update_screen_palette,
-                    )
-                        .in_set(PxSet::Loaded),
+                    ),
                 ),
             );
     }
@@ -91,82 +90,83 @@ fn screen_scale(screen_size: UVec2, window_size: Vec2) -> Vec2 {
     })
 }
 
-fn init_screen(
-    size: UVec2,
-) -> impl Fn(
-    Commands,
-    EventWriter<WindowResized>,
-    Query<(Entity, &Window), With<PrimaryWindow>>,
-    Res<Palette>,
-    ResMut<Assets<Image>>,
-    ResMut<Assets<Mesh>>,
-    ResMut<Assets<ScreenMaterial>>,
-) {
-    move |mut commands,
-          mut window_resized,
-          windows,
-          palette,
-          mut images,
-          mut meshes,
-          mut screen_materials| {
-        let mut screen_palette = [default(); 256];
-
-        for (i, [r, g, b]) in palette.colors.iter().enumerate() {
-            let [r, g, b, _] = Color::rgb_u8(*r, *g, *b).as_linear_rgba_f32();
-            screen_palette[i] = Vec3::new(r, g, b);
-        }
-
-        let image = images.add(Image {
-            data: vec![0; (size.x * size.y) as usize],
-            texture_descriptor: TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width: size.x,
-                    height: size.y,
-                    ..default()
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::R8Uint,
-                usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
-                view_formats: &[TextureFormat::R8Uint],
-            },
-            ..default()
-        });
-
+fn insert_screen(size: UVec2) -> impl Fn(ResMut<Assets<Image>>, Commands) {
+    move |mut images, mut commands| {
         commands.insert_resource(Screen {
-            image: image.clone(),
+            image: images.add(Image {
+                data: vec![0; (size.x * size.y) as usize],
+                texture_descriptor: TextureDescriptor {
+                    label: None,
+                    size: Extent3d {
+                        width: size.x,
+                        height: size.y,
+                        ..default()
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format: TextureFormat::R8Uint,
+                    usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[TextureFormat::R8Uint],
+                },
+                ..default()
+            }),
             size,
         });
-
-        let (entity, window) = windows.single();
-        let calculated_screen_scale =
-            screen_scale(size, Vec2::new(window.width(), window.height())).extend(1.);
-
-        commands.spawn((
-            MaterialMesh2dBundle {
-                mesh: meshes.add(Rectangle::default()).into(),
-                material: screen_materials.add(ScreenMaterial {
-                    image,
-                    palette: screen_palette,
-                }),
-                transform: Transform::from_scale(calculated_screen_scale),
-                // Ensure transform matches global_transform to ensure correct rendering for WASM
-                global_transform: GlobalTransform::from_scale(calculated_screen_scale),
-                ..default()
-            },
-            ScreenMarker,
-            Name::new("Screen"),
-        ));
-
-        // I do not know why, but the screen does not display unless the window has been resized
-        window_resized.send(WindowResized {
-            window: entity,
-            width: window.width(),
-            height: window.height(),
-        });
     }
+}
+
+fn init_screen(
+    palette: PaletteParam,
+    mut screen_materials: ResMut<Assets<ScreenMaterial>>,
+    screens: Query<(), With<ScreenMarker>>,
+    screen: Res<Screen>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    windows: Query<(Entity, &Window), With<PrimaryWindow>>,
+    mut window_resized: EventWriter<WindowResized>,
+    mut commands: Commands,
+) {
+    if screens.iter().next().is_some() {
+        return;
+    }
+
+    let Some(palette) = palette.get() else {
+        return;
+    };
+
+    let mut screen_palette = [default(); 256];
+
+    for (i, [r, g, b]) in palette.colors.iter().enumerate() {
+        let [r, g, b, _] = Color::rgb_u8(*r, *g, *b).as_linear_rgba_f32();
+        screen_palette[i] = Vec3::new(r, g, b);
+    }
+
+    let (entity, window) = windows.single();
+    let calculated_screen_scale =
+        screen_scale(screen.size, Vec2::new(window.width(), window.height())).extend(1.);
+
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: meshes.add(Rectangle::default()).into(),
+            material: screen_materials.add(ScreenMaterial {
+                image: screen.image.clone(),
+                palette: screen_palette,
+            }),
+            transform: Transform::from_scale(calculated_screen_scale),
+            // Ensure transform matches global_transform to ensure correct rendering for WASM
+            global_transform: GlobalTransform::from_scale(calculated_screen_scale),
+            ..default()
+        },
+        ScreenMarker,
+        Name::new("Screen"),
+    ));
+
+    // I do not know why, but the screen does not display unless the window has been resized
+    window_resized.send(WindowResized {
+        window: entity,
+        width: window.width(),
+        height: window.height(),
+    });
 }
 
 fn resize_screen(
@@ -470,25 +470,28 @@ fn draw_screen<L: PxLayer>(
         layer_image.clear();
 
         for (map, tileset, position, canvas, animation, map_filter) in maps {
-            if let Some(PxAsset::Loaded { asset: tileset }) = tilesets.get(tileset) {
-                let map_filter = get_asset(&filter_assets, map_filter);
-                let size = map.size();
+            let Some(tileset) = tilesets.get(tileset) else {
+                continue;
+            };
 
-                for x in 0..size.x {
-                    for y in 0..size.y {
-                        let pos = UVec2::new(x, y);
-                        let Some(tile) = map.get(pos) else {
-                            continue;
-                        };
+            let map_filter = map_filter.and_then(|map_filter| filter_assets.get(map_filter));
+            let size = map.size();
 
-                        let (&PxTile { texture }, visibility, tile_filter) =
-                            tiles.get(tile).expect("entity in map is not a valid tile");
+            for x in 0..size.x {
+                for y in 0..size.y {
+                    let pos = UVec2::new(x, y);
+                    let Some(tile) = map.get(pos) else {
+                        continue;
+                    };
 
-                        if let Visibility::Hidden = visibility {
-                            continue;
-                        }
+                    let (&PxTile { texture }, visibility, tile_filter) =
+                        tiles.get(tile).expect("entity in map is not a valid tile");
 
-                        draw_spatial(
+                    if let Visibility::Hidden = visibility {
+                        continue;
+                    }
+
+                    draw_spatial(
                             tileset
                                 .tileset
                                 .get(texture as usize)
@@ -502,196 +505,200 @@ fn draw_screen<L: PxLayer>(
                             PxAnchor::BottomLeft,
                             *canvas,
                             copy_animation_params(animation, &time),
-                            [get_asset(&filter_assets, tile_filter), map_filter].into_iter().flatten(),
+                            [tile_filter.and_then(|tile_filter| filter_assets.get(tile_filter)), map_filter].into_iter().flatten(),
                             *camera,
                         );
-                    }
                 }
             }
         }
 
         for (sprite, position, anchor, canvas, animation, filter) in sprites {
-            if let Some(PxAsset::Loaded { asset: sprite }) = sprite_assets.get(sprite) {
-                draw_spatial(
-                    sprite,
-                    (),
-                    &mut layer_image,
-                    *position,
-                    *anchor,
-                    *canvas,
-                    copy_animation_params(animation, &time),
-                    get_asset(&filter_assets, filter),
-                    *camera,
-                );
-            }
+            let Some(sprite) = sprite_assets.get(sprite) else {
+                continue;
+            };
+
+            draw_spatial(
+                sprite,
+                (),
+                &mut layer_image,
+                *position,
+                *anchor,
+                *canvas,
+                copy_animation_params(animation, &time),
+                filter.and_then(|filter| filter_assets.get(filter)),
+                *camera,
+            );
         }
 
         for (text, typeface, rect, alignment, canvas, animation, filter) in texts {
-            if let Some(PxAsset::Loaded { asset: typeface }) = typefaces.get(typeface) {
-                let rect = match canvas {
-                    PxCanvas::World => rect.sub_ivec2(**camera),
-                    PxCanvas::Camera => **rect,
-                };
-                let rect_size = rect.size().as_uvec2();
-                let line_count = (rect_size.y + 1) / (typeface.height + 1);
+            let Some(typeface) = typefaces.get(typeface) else {
+                continue;
+            };
 
-                let mut lines = Vec::default();
-                let mut line = Vec::default();
-                let mut line_width = 0;
-                let mut word = Vec::default();
-                let mut word_width = 0;
-                let mut separator = Vec::default();
-                let mut separator_width = 0;
-                for character in text.chars() {
-                    let (character_width, is_separator) = typeface
-                        .characters
-                        .get(&character)
-                        .map(|character| (character.data.width() as u32, false))
-                        .unwrap_or_else(|| {
-                            (
-                                typeface
-                                    .separators
-                                    .get(&character)
-                                    .expect("received character that isn't in typeface")
-                                    .width,
-                                true,
-                            )
-                        });
+            let rect = match canvas {
+                PxCanvas::World => rect.sub_ivec2(**camera),
+                PxCanvas::Camera => **rect,
+            };
+            let rect_size = rect.size().as_uvec2();
+            let line_count = (rect_size.y + 1) / (typeface.height + 1);
 
-                    if if is_separator {
-                        if line_width + separator_width + word_width - 1 > rect_size.x {
-                            lines.push((line_width, line));
-                            line_width = word_width - 1;
-                            line = word;
-                            word_width = 0;
-                            word = default();
-                            separator_width = character_width;
-                            separator = vec![character];
-                            true
-                        } else if word.is_empty() {
-                            separator_width += character_width;
-                            separator.push(character);
-                            false
-                        } else {
-                            line_width += separator_width + word_width - 1;
-                            line.append(&mut separator);
-                            line.append(&mut word);
-                            word_width = 0;
-                            separator_width = character_width;
-                            separator = vec![character];
-                            false
-                        }
-                    } else if word_width + character_width > rect_size.x {
-                        if !line.is_empty() {
-                            lines.push((line_width, line));
-                            line_width = 0;
-                            line = default();
-                        }
+            let mut lines = Vec::default();
+            let mut line = Vec::default();
+            let mut line_width = 0;
+            let mut word = Vec::default();
+            let mut word_width = 0;
+            let mut separator = Vec::default();
+            let mut separator_width = 0;
+            for character in text.chars() {
+                let (character_width, is_separator) = typeface
+                    .characters
+                    .get(&character)
+                    .map(|character| (character.data.width() as u32, false))
+                    .unwrap_or_else(|| {
+                        (
+                            typeface
+                                .separators
+                                .get(&character)
+                                .map(|separator| separator.width)
+                                .unwrap_or_else(|| {
+                                    error!(
+                                        "received character '{character}' that isn't in typeface"
+                                    );
+                                    0
+                                }),
+                            true,
+                        )
+                    });
 
-                        if word_width > 0 {
-                            lines.push((word_width - 1, word));
-                        }
-                        word_width = character_width + 1;
-                        word = vec![character];
-                        separator_width = 0;
-                        separator = default();
-                        true
-                    } else {
-                        word_width += character_width + 1;
-                        word.push(character);
-                        false
-                    } && lines.len() as u32 > line_count
-                    {
-                        line_width = 0;
-                        line.clear();
+                if if is_separator {
+                    if line_width + separator_width + word_width - 1 > rect_size.x {
+                        lines.push((line_width, line));
+                        line_width = word_width - 1;
+                        line = word;
                         word_width = 0;
-                        word.clear();
-                        separator_width = 0;
-                        separator.clear();
-                        break;
+                        word = default();
+                        separator_width = character_width;
+                        separator = vec![character];
+                        true
+                    } else if word.is_empty() {
+                        separator_width += character_width;
+                        separator.push(character);
+                        false
+                    } else {
+                        line_width += separator_width + word_width - 1;
+                        line.append(&mut separator);
+                        line.append(&mut word);
+                        word_width = 0;
+                        separator_width = character_width;
+                        separator = vec![character];
+                        false
                     }
-                }
+                } else if word_width + character_width > rect_size.x {
+                    if !line.is_empty() {
+                        lines.push((line_width, line));
+                        line_width = 0;
+                        line = default();
+                    }
 
-                if line_width + separator_width + word_width + 1 > rect_size.x {
-                    lines.push((line_width, line));
                     if word_width > 0 {
                         lines.push((word_width - 1, word));
                     }
-                } else if !word.is_empty() {
-                    line_width += separator_width + word_width - 1;
-                    line.append(&mut separator);
-                    line.append(&mut word);
-                    lines.push((line_width, line));
+                    word_width = character_width + 1;
+                    word = vec![character];
+                    separator_width = 0;
+                    separator = default();
+                    true
+                } else {
+                    word_width += character_width + 1;
+                    word.push(character);
+                    false
+                } && lines.len() as u32 > line_count
+                {
+                    line_width = 0;
+                    line.clear();
+                    word_width = 0;
+                    word.clear();
+                    separator_width = 0;
+                    separator.clear();
+                    break;
                 }
-
-                if lines.len() as u32 > line_count {
-                    for _ in 0..lines.len() as u32 - line_count {
-                        lines.pop();
-                    }
-                }
-
-                let mut text_image = PxImage::empty(rect_size);
-                let lines_height =
-                    (lines.len() as u32 * typeface.height + lines.len() as u32).max(1) - 1;
-                let mut line_y = alignment.y_pos(rect_size.y - lines_height)
-                    + lines.len() as u32 * (typeface.height + 1);
-
-                for (line_width, line) in lines {
-                    line_y -= typeface.height + 1;
-                    let mut character_x = alignment.x_pos(rect_size.x - line_width);
-                    let mut was_character = false;
-
-                    for character in line {
-                        character_x += if let Some(character) = typeface.characters.get(&character)
-                        {
-                            was_character = true;
-
-                            draw_spatial(
-                                character,
-                                (),
-                                &mut text_image,
-                                IVec2::new(character_x as i32, line_y as i32).into(),
-                                PxAnchor::BottomLeft,
-                                PxCanvas::Camera,
-                                copy_animation_params(animation, &time),
-                                get_asset(&filter_assets, filter),
-                                *camera,
-                            );
-
-                            character.data.width() as u32 + 1
-                        } else {
-                            if was_character {
-                                character_x -= 1;
-                            }
-                            was_character = false;
-
-                            typeface.separators.get(&character).unwrap().width
-                        };
-                    }
-                }
-
-                if let Some(filter) = filter {
-                    if let Some(PxAsset::Loaded {
-                        asset: PxFilterData(filter),
-                    }) = filter_assets.get(filter)
-                    {
-                        text_image.slice_all_mut().for_each_mut(|_, _, pixel| {
-                            if let Some(pixel) = pixel {
-                                *pixel = filter.pixel(IVec2::new(*pixel as i32, 0));
-                            }
-                        });
-                    }
-                }
-
-                layer_image.slice_mut(rect).draw(&text_image);
             }
+
+            if line_width + separator_width + word_width + 1 > rect_size.x {
+                lines.push((line_width, line));
+                if word_width > 0 {
+                    lines.push((word_width - 1, word));
+                }
+            } else if !word.is_empty() {
+                line_width += separator_width + word_width - 1;
+                line.append(&mut separator);
+                line.append(&mut word);
+                lines.push((line_width, line));
+            }
+
+            if lines.len() as u32 > line_count {
+                for _ in 0..lines.len() as u32 - line_count {
+                    lines.pop();
+                }
+            }
+
+            let mut text_image = PxImage::empty(rect_size);
+            let lines_height =
+                (lines.len() as u32 * typeface.height + lines.len() as u32).max(1) - 1;
+            let mut line_y = alignment.y_pos(rect_size.y - lines_height)
+                + lines.len() as u32 * (typeface.height + 1);
+
+            for (line_width, line) in lines {
+                line_y -= typeface.height + 1;
+                let mut character_x = alignment.x_pos(rect_size.x - line_width);
+                let mut was_character = false;
+
+                for character in line {
+                    character_x += if let Some(character) = typeface.characters.get(&character) {
+                        was_character = true;
+
+                        draw_spatial(
+                            character,
+                            (),
+                            &mut text_image,
+                            IVec2::new(character_x as i32, line_y as i32).into(),
+                            PxAnchor::BottomLeft,
+                            PxCanvas::Camera,
+                            copy_animation_params(animation, &time),
+                            filter.and_then(|filter| filter_assets.get(filter)),
+                            *camera,
+                        );
+
+                        character.data.width() as u32 + 1
+                    } else {
+                        if was_character {
+                            character_x -= 1;
+                        }
+                        was_character = false;
+
+                        typeface.separators.get(&character).unwrap().width
+                    };
+                }
+            }
+
+            if let Some(filter) = filter {
+                if let Some(PxFilter(filter)) = filter_assets.get(filter) {
+                    text_image.slice_all_mut().for_each_mut(|_, _, pixel| {
+                        if let Some(pixel) = pixel {
+                            *pixel = filter.pixel(IVec2::new(*pixel as i32, 0));
+                        }
+                    });
+                }
+            }
+
+            layer_image.slice_mut(rect).draw(&text_image);
         }
 
         // This is where I draw the line! /j
         #[cfg(feature = "line")]
         for (line, filter, canvas, visibility, animation) in clip_lines {
             if let Visibility::Visible | Visibility::Inherited = visibility {
-                if let Some(PxAsset::Loaded { asset: filter }) = filter_assets.get(filter) {
+                if let Some(filter) = filter_assets.get(filter) {
                     draw_line(
                         line,
                         filter,
@@ -705,7 +712,7 @@ fn draw_screen<L: PxLayer>(
         }
 
         for (filter, animation) in clip_filters {
-            if let Some(PxAsset::Loaded { asset: filter }) = filter_assets.get(filter) {
+            if let Some(filter) = filter_assets.get(filter) {
                 draw_filter(
                     filter,
                     copy_animation_params(animation, &time),
@@ -719,7 +726,7 @@ fn draw_screen<L: PxLayer>(
         #[cfg(feature = "line")]
         for (line, filter, canvas, visibility, animation) in over_lines {
             if let Visibility::Visible | Visibility::Inherited = visibility {
-                if let Some(PxAsset::Loaded { asset: filter }) = filter_assets.get(filter) {
+                if let Some(filter) = filter_assets.get(filter) {
                     draw_line(
                         line,
                         filter,
@@ -733,7 +740,7 @@ fn draw_screen<L: PxLayer>(
         }
 
         for (filter, animation) in over_filters {
-            if let Some(PxAsset::Loaded { asset: filter }) = filter_assets.get(filter) {
+            if let Some(filter) = filter_assets.get(filter) {
                 draw_filter(
                     filter,
                     copy_animation_params(animation, &time),
@@ -754,13 +761,20 @@ fn update_screen(
 }
 
 fn update_screen_palette(
+    mut waiting_for_load: Local<bool>,
     screen_materials: Query<&Handle<ScreenMaterial>>,
-    palette: Res<Palette>,
+    palette_handle: Res<PaletteHandle>,
+    palette: PaletteParam,
     mut screen_material_assets: ResMut<Assets<ScreenMaterial>>,
 ) {
-    if !palette.is_changed() {
+    if !palette_handle.is_changed() && !*waiting_for_load {
         return;
     }
+
+    let Some(palette) = palette.get() else {
+        *waiting_for_load = true;
+        return;
+    };
 
     let mut screen_palette = [default(); 256];
 
@@ -775,4 +789,6 @@ fn update_screen_palette(
             .unwrap()
             .palette = screen_palette;
     }
+
+    *waiting_for_load = false;
 }

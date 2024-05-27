@@ -1,37 +1,92 @@
 //! Sprites
 
+use anyhow::{Error, Result};
+use bevy::{
+    asset::{io::Reader, AssetLoader, LoadContext},
+    render::texture::{ImageLoader, ImageLoaderSettings},
+    utils::BoxedFuture,
+};
+use serde::{Deserialize, Serialize};
+
 use crate::{
     animation::{Animation, AnimationAsset},
-    asset::{PxAsset, PxAssetData},
     image::{PxImage, PxImageSliceMut},
-    palette::Palette,
+    palette::asset_palette,
     pixel::Pixel,
     position::{PxLayer, Spatial},
     prelude::*,
 };
 
-/// Internal data for [`PxSprite`]
-#[derive(Debug, Reflect)]
-pub struct PxSpriteData {
+pub(crate) fn sprite_plugin(app: &mut App) {
+    app.init_asset::<PxSprite>()
+        .init_asset_loader::<PxSpriteLoader>();
+}
+
+#[derive(Serialize, Deserialize)]
+struct PxSpriteLoaderSettings {
+    frame_count: usize,
+    image_loader_settings: ImageLoaderSettings,
+}
+
+impl Default for PxSpriteLoaderSettings {
+    fn default() -> Self {
+        Self {
+            frame_count: 1,
+            image_loader_settings: default(),
+        }
+    }
+}
+
+struct PxSpriteLoader(ImageLoader);
+
+impl FromWorld for PxSpriteLoader {
+    fn from_world(world: &mut World) -> Self {
+        Self(ImageLoader::from_world(world))
+    }
+}
+
+impl AssetLoader for PxSpriteLoader {
+    type Asset = PxSprite;
+    type Settings = PxSpriteLoaderSettings;
+    type Error = Error;
+
+    fn load<'a>(
+        &'a self,
+        reader: &'a mut Reader,
+        settings: &'a PxSpriteLoaderSettings,
+        load_context: &'a mut LoadContext,
+    ) -> BoxedFuture<'a, Result<PxSprite>> {
+        Box::pin(async move {
+            let Self(image_loader) = self;
+            let image = image_loader
+                .load(reader, &settings.image_loader_settings, load_context)
+                .await?;
+            let palette = asset_palette().await;
+            let data = PxImage::palette_indices(palette, &image)?;
+
+            Ok(PxSprite {
+                frame_size: data.area() / settings.frame_count,
+                data,
+            })
+        })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["px_sprite.png"]
+    }
+}
+
+/// A sprite. Create a [`Handle<PxSprite>`] with a [`PxAssets<PxSprite>`] and an image.
+/// If the sprite is animated, the frames should be laid out from bottom to top.
+/// See `assets/sprite/runner.png` for an example of an animated sprite.
+#[derive(Asset, Serialize, Deserialize, Reflect, Debug)]
+pub struct PxSprite {
     // TODO Use 0 for transparency
     pub(crate) data: PxImage<Option<u8>>,
     pub(crate) frame_size: usize,
 }
 
-impl PxAssetData for PxSpriteData {
-    type Config = usize;
-
-    fn new(palette: &Palette, image: &Image, frame_count: &Self::Config) -> Self {
-        let data = PxImage::palette_indices(palette, image);
-
-        Self {
-            frame_size: data.area() / *frame_count,
-            data,
-        }
-    }
-}
-
-impl Animation for PxSpriteData {
+impl Animation for PxSprite {
     type Param = ();
 
     fn frame_count(&self) -> usize {
@@ -63,7 +118,7 @@ impl Animation for PxSpriteData {
     }
 }
 
-impl Spatial for PxSpriteData {
+impl Spatial for PxSprite {
     fn frame_size(&self) -> UVec2 {
         UVec2::new(
             self.data.width() as u32,
@@ -72,16 +127,11 @@ impl Spatial for PxSpriteData {
     }
 }
 
-impl AnimationAsset for PxSpriteData {
+impl AnimationAsset for PxSprite {
     fn max_frame_count(&self) -> usize {
         self.frame_count()
     }
 }
-
-/// A sprite. Create a [`Handle<PxSprite>`] with a [`PxAssets<PxSprite>`] and an image.
-/// If the sprite is animated, the frames should be laid out from bottom to top.
-/// See `assets/sprite/runner.png` for an example of an animated sprite.
-pub type PxSprite = PxAsset<PxSpriteData>;
 
 /// Spawns a sprite
 #[derive(Bundle, Debug, Default)]

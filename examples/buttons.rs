@@ -13,7 +13,7 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
@@ -21,24 +21,19 @@ fn main() {
         .run();
 }
 
-fn init(
-    mut commands: Commands,
-    mut sprites: PxAssets<PxSprite>,
-    mut filters: PxAssets<PxFilter>,
-    mut cursor: ResMut<PxCursor>,
-) {
+fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
-    let idle = filters.load("filter/invert.png");
+    let idle = assets.load("filter/invert.px_filter.png");
 
     // Switch to an in-game cursor to show the player that they can click on things
     *cursor = PxCursor::Filter {
         idle: idle.clone(),
-        left_click: filters.load("filter/invert_dim.png"),
+        left_click: assets.load("filter/invert_dim.px_filter.png"),
         right_click: idle,
     };
 
-    let button_idle = sprites.load("sprite/button_idle.png");
+    let button_idle = assets.load("sprite/button_idle.px_sprite.png");
 
     // Sprite-based button
     commands.spawn((
@@ -50,8 +45,8 @@ fn init(
         PxButtonSpriteBundle {
             bounds: UVec2::new(8, 4).into(),
             idle: button_idle.clone().into(),
-            hover: sprites.load("sprite/button_hover.png").into(),
-            click: sprites.load("sprite/button_click.png").into(),
+            hover: assets.load("sprite/button_hover.px_sprite.png").into(),
+            click: assets.load("sprite/button_click.px_sprite.png").into(),
         },
         Button,
     ));
@@ -65,9 +60,9 @@ fn init(
         },
         PxButtonFilterBundle {
             bounds: UVec2::new(8, 4).into(),
-            idle: filters.load("palette/palette_1.png").into(),
-            hover: filters.load("filter/hover.png").into(),
-            click: filters.load("filter/click.png").into(),
+            idle: assets.load("filter/identity.px_filter.png").into(),
+            hover: assets.load("filter/hover.px_filter.png").into(),
+            click: assets.load("filter/click.px_filter.png").into(),
         },
         Button,
     ));

@@ -18,7 +18,7 @@ fn main() {
             }),
             InputManagerPlugin::<Action>::default(),
             StateMachinePlugin,
-            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
@@ -39,11 +39,11 @@ struct CastBundle {
     animation: PxAnimationBundle,
 }
 
-fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
-    let idle = sprites.load("sprite/mage.png");
-    let cast = sprites.load_animated("sprite/mage_cast.png", 4);
+    let idle = assets.load("sprite/mage.px_sprite.png");
+    let cast = assets.load("sprite/mage_cast.px_sprite.png");
 
     // Spawn a sprite
     commands.spawn((

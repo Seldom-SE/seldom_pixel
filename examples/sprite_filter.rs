@@ -13,19 +13,19 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(32), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(32), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: PxAssets<PxFilter>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     // Spawn a sprite
     commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: sprites.load("sprite/mage.png"),
+        sprite: assets.load("sprite/mage.px_sprite.png"),
         position: IVec2::new(8, 16).into(),
         ..default()
     });
@@ -33,11 +33,11 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>, mut filters: Px
     // Spawn a sprite with a filter
     commands.spawn((
         PxSpriteBundle::<Layer> {
-            sprite: sprites.load("sprite/mage.png"),
+            sprite: assets.load("sprite/mage.px_sprite.png"),
             position: IVec2::new(24, 16).into(),
             ..default()
         },
-        filters.load("filter/invert.png"),
+        assets.load::<PxFilter>("filter/invert.px_filter.png"),
     ));
 }
 

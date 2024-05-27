@@ -15,7 +15,7 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(64), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(64), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
@@ -23,7 +23,7 @@ fn main() {
         .run();
 }
 
-fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     // `PxSubPosition` contains a `Vec2`. This is used
@@ -35,7 +35,7 @@ fn init(mut commands: Commands, mut sprites: PxAssets<PxSprite>) {
     // based on where the camera is
     commands.spawn((
         PxSpriteBundle::<Layer> {
-            sprite: sprites.load("sprite/mage.png"),
+            sprite: assets.load("sprite/mage.px_sprite.png"),
             position: IVec2::splat(32).into(),
             ..default()
         },

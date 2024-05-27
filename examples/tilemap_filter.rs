@@ -14,22 +14,18 @@ fn main() {
                 }),
                 ..default()
             }),
-            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.palette.png".into()),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
         .run();
 }
 
-fn init(
-    mut commands: Commands,
-    mut filters: PxAssets<PxFilter>,
-    mut tilesets: PxAssets<PxTileset>,
-) {
+fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
     let mut map = PxMap::new(UVec2::splat(4));
-    let dim = filters.load("filter/dim.png");
+    let dim = assets.load::<PxFilter>("filter/dim.px_filter.png");
     let mut rng = thread_rng();
 
     for x in 0..4 {
@@ -55,11 +51,11 @@ fn init(
     commands
         .spawn(PxMapBundle::<Layer> {
             map,
-            tileset: tilesets.load("tileset/tileset.png", UVec2::splat(4)),
+            tileset: assets.load("tileset/tileset.px_tileset.png"),
             ..default()
         })
         // Insert a filter on the map. This filter applies to all tiles in the map.
-        .insert(filters.load("filter/invert.png"));
+        .insert(assets.load::<PxFilter>("filter/invert.px_filter.png"));
 }
 
 #[px_layer]
