@@ -32,6 +32,7 @@ pub use crate::{
     math::{Diagonal, Orthogonal},
     position::{PxAnchor, PxLayer, PxPosition, PxScreenAlign, PxSubPosition, PxVelocity},
     px_plugin,
+    screen::ScreenSize,
     sprite::{PxSprite, PxSpriteBundle},
     text::{PxText, PxTextBundle, PxTypeface},
     ui::{Align, PxLayout, PxLayoutBundle, PxRect},

@@ -28,7 +28,7 @@ use crate::{
 const SCREEN_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(0x48CE_4F2C_8B78_5954_08A8_461F_62E1_0E84);
 
-pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
+pub(crate) fn screen_plugin<L: PxLayer>(size: ScreenSize) -> impl FnOnce(&mut App) {
     move |app| {
         app.world.resource_mut::<Assets<Shader>>().insert(
             SCREEN_SHADER_HANDLE,
@@ -58,10 +58,21 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
     }
 }
 
+/// Size of the image which `seldom_pixel` draws to
+#[derive(Clone, Debug)]
+pub enum ScreenSize {
+    /// The screen will have the given dimensions, which is scaled up to fit the window, preserving
+    /// the given dimensions' aspect ratio
+    Fixed(UVec2),
+    /// The screen will match the aspect ratio of the window, with dimensions with at least as many
+    /// pixels as given
+    MinPixels(u32),
+}
+
 #[derive(Clone, Resource)]
 pub(crate) struct Screen {
     pub(crate) image: Handle<Image>,
-    pub(crate) size: UVec2,
+    pub(crate) size: ScreenSize,
 }
 
 #[derive(Component)]
@@ -90,16 +101,24 @@ fn screen_scale(screen_size: UVec2, window_size: Vec2) -> Vec2 {
     })
 }
 
-fn insert_screen(size: UVec2) -> impl Fn(ResMut<Assets<Image>>, Commands) {
-    move |mut images, mut commands| {
+fn insert_screen(
+    size: ScreenSize,
+) -> impl Fn(ResMut<Assets<Image>>, Query<&Window, With<PrimaryWindow>>, Commands) {
+    move |mut images, windows, mut commands| {
+        let window = windows.single();
+        let computed_size = size.compute(UVec2::new(
+            window.physical_width(),
+            window.physical_height(),
+        ));
+
         commands.insert_resource(Screen {
             image: images.add(Image {
-                data: vec![0; (size.x * size.y) as usize],
+                data: vec![0; (computed_size.x * computed_size.y) as usize],
                 texture_descriptor: TextureDescriptor {
                     label: None,
                     size: Extent3d {
-                        width: size.x,
-                        height: size.y,
+                        width: computed_size.x,
+                        height: computed_size.y,
                         ..default()
                     },
                     mip_level_count: 1,
@@ -112,6 +131,7 @@ fn insert_screen(size: UVec2) -> impl Fn(ResMut<Assets<Image>>, Commands) {
                 ..default()
             }),
             size,
+            computed_size,
         });
     }
 }
