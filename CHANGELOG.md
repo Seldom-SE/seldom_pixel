@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2024-05-30)
+
+### Fixed
+
+- Fixed crash when drawing lines against the bounds of the screen
+
 ## 0.6 (2024-05-07)
 
 ### Changed

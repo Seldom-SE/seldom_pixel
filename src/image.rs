@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use bevy::render::render_resource::TextureFormat;
 use serde::{Deserialize, Serialize};
 
-use crate::{palette::Palette, pixel::Pixel, prelude::*};
+use crate::{math::RectExt, palette::Palette, pixel::Pixel, prelude::*};
 
 #[derive(Serialize, Deserialize, Reflect, Debug)]
 pub(crate) struct PxImage<P: Pixel> {
@@ -38,7 +38,7 @@ impl<P: Pixel> PxImage<P> {
             min: IVec2::splat(0),
             max: IVec2::new(self.width as i32, (self.image.len() / self.width) as i32),
         }
-        .contains(position)
+        .contains_exclusive(position)
         .then(|| self.pixel(position))
     }
 
@@ -249,8 +249,8 @@ impl<'a, P: Pixel> PxImageSliceMut<'a, P> {
             min: IVec2::splat(0),
             max: IVec2::new(self.width as i32, self.image.len() as i32),
         }
-        .contains(position + self.slice.min)
-            && self.slice.contains(position))
+        .contains_exclusive(position + self.slice.min)
+            && self.slice.contains_exclusive(position))
         .then(|| self.pixel_mut(position))
     }
 
