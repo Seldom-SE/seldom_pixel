@@ -219,12 +219,11 @@ fn resize_screen(
         let computed_size = screen.size.compute(window_size);
 
         if computed_size != screen.computed_size {
-            let image = images.get_mut(&screen.image).unwrap();
-            image.data = vec![0; (computed_size.x * computed_size.y) as usize];
-
-            let size = &mut image.texture_descriptor.size;
-            size.width = computed_size.x;
-            size.height = computed_size.y;
+            images.get_mut(&screen.image).unwrap().resize(Extent3d {
+                width: computed_size.x,
+                height: computed_size.y,
+                ..default()
+            });
         }
 
         screen.computed_size = computed_size;
