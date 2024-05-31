@@ -162,7 +162,13 @@ impl PxImage<Option<u8>> {
                                 .get(&[color[0], color[1], color[2]])
                                 .copied()
                                 .ok_or_else(|| {
-                                    anyhow!("a sprite contained a color that wasn't in the palette")
+                                    anyhow!(
+                                        "a sprite contained a color `#{:02X}{:02X}{:02X}` \
+                                        that wasn't in the palette",
+                                        color[0],
+                                        color[1],
+                                        color[2]
+                                    )
                                 })
                         })
                         .transpose()
