@@ -21,7 +21,7 @@ macro_rules! align_to_screen {
                     };
 
                     **pos = align.as_uvec2().as_ivec2()
-                        * (screen.size.as_ivec2() - size.as_ivec2())
+                        * (screen.computed_size.as_ivec2() - size.as_ivec2())
                         + anchor.pos(size).as_ivec2();
                 });
         }

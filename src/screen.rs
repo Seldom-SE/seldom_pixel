@@ -43,36 +43,55 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: ScreenSize) -> impl FnOnce(&mut Ap
                 (
                     update_screen,
                     (
-                        (
-                            clear_screen,
-                            (apply_deferred, draw_screen::<L>)
-                                .chain()
-                                .in_set(PxSet::Draw),
-                        )
-                            .chain(),
-                        resize_screen,
-                        update_screen_palette,
-                    ),
+                        (clear_screen, resize_screen),
+                        draw_screen::<L>.in_set(PxSet::Draw),
+                    )
+                        .chain(),
+                    update_screen_palette,
                 ),
             );
     }
 }
 
 /// Size of the image which `seldom_pixel` draws to
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum ScreenSize {
     /// The screen will have the given dimensions, which is scaled up to fit the window, preserving
     /// the given dimensions' aspect ratio
     Fixed(UVec2),
-    /// The screen will match the aspect ratio of the window, with dimensions with at least as many
+    /// The screen will match the aspect ratio of the window, with an area of at least as many
     /// pixels as given
     MinPixels(u32),
+}
+
+impl From<UVec2> for ScreenSize {
+    fn from(value: UVec2) -> Self {
+        Self::Fixed(value)
+    }
+}
+
+impl ScreenSize {
+    fn compute(self, window_size: Vec2) -> UVec2 {
+        use ScreenSize::*;
+
+        match self {
+            Fixed(size) => size,
+            MinPixels(pixels) => {
+                let pixels = pixels as f32;
+                let width = (window_size.x * pixels / window_size.y).sqrt();
+                let height = pixels / width;
+
+                UVec2::new(width as u32, height as u32)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Resource)]
 pub(crate) struct Screen {
     pub(crate) image: Handle<Image>,
     pub(crate) size: ScreenSize,
+    pub(crate) computed_size: UVec2,
 }
 
 #[derive(Component)]
@@ -106,10 +125,7 @@ fn insert_screen(
 ) -> impl Fn(ResMut<Assets<Image>>, Query<&Window, With<PrimaryWindow>>, Commands) {
     move |mut images, windows, mut commands| {
         let window = windows.single();
-        let computed_size = size.compute(UVec2::new(
-            window.physical_width(),
-            window.physical_height(),
-        ));
+        let computed_size = size.compute(Vec2::new(window.width(), window.height()));
 
         commands.insert_resource(Screen {
             image: images.add(Image {
@@ -162,8 +178,11 @@ fn init_screen(
     }
 
     let (entity, window) = windows.single();
-    let calculated_screen_scale =
-        screen_scale(screen.size, Vec2::new(window.width(), window.height())).extend(1.);
+    let calculated_screen_scale = screen_scale(
+        screen.computed_size,
+        Vec2::new(window.width(), window.height()),
+    )
+    .extend(1.);
 
     commands.spawn((
         MaterialMesh2dBundle {
@@ -192,13 +211,28 @@ fn init_screen(
 fn resize_screen(
     mut window_resized: EventReader<WindowResized>,
     mut screens: Query<&mut Transform, With<ScreenMarker>>,
-    screen: Res<Screen>,
+    mut screen: ResMut<Screen>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     if let Some(window_resized) = window_resized.read().last() {
+        let window_size = Vec2::new(window_resized.width, window_resized.height);
+        let computed_size = screen.size.compute(window_size);
+
+        if computed_size != screen.computed_size {
+            let image = images.get_mut(&screen.image).unwrap();
+            image.data = vec![0; (computed_size.x * computed_size.y) as usize];
+
+            let size = &mut image.texture_descriptor.size;
+            size.width = computed_size.x;
+            size.height = computed_size.y;
+        }
+
+        screen.computed_size = computed_size;
+
         let mut transform = screens.single_mut();
 
         transform.scale = screen_scale(
-            screen.size,
+            computed_size,
             Vec2::new(window_resized.width, window_resized.height),
         )
         .extend(1.);

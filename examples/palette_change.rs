@@ -21,7 +21,7 @@ fn main() {
                 UVec2::splat(64),
                 // This is the palette that assets will be loaded with
                 // It is also the palette that assets will be displayed with, until changed
-                "palette/palette_1.palette.png".into(),
+                "palette/palette_1.palette.png",
             ),
         ))
         .insert_resource(ClearColor(Color::BLACK))

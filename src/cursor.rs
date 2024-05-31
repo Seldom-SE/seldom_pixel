@@ -79,11 +79,11 @@ fn update_cursor_position(
         **position = None;
         return;
     };
-    let new_position = new_position / screen_tf.scale.truncate() * screen.size.as_vec2()
-        + screen.size.as_vec2() / 2.;
+    let new_position = new_position / screen_tf.scale.truncate() * screen.computed_size.as_vec2()
+        + screen.computed_size.as_vec2() / 2.;
 
     **position = (new_position.cmpge(Vec2::ZERO).all()
-        && new_position.cmplt(screen.size.as_vec2()).all())
+        && new_position.cmplt(screen.computed_size.as_vec2()).all())
     .then(|| new_position.as_uvec2());
 }
 

@@ -18,7 +18,7 @@ fn main() {
             }),
             InputManagerPlugin::<Action>::default(),
             StateMachinePlugin,
-            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.palette.png".into()),
+            PxPlugin::<Layer>::new(UVec2::splat(16), "palette/palette_1.palette.png"),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
