@@ -33,6 +33,10 @@ impl<P: Pixel> PxImage<P> {
         self.image[(position.x + position.y * self.width as i32) as usize]
     }
 
+    pub(crate) fn pixel_mut(&mut self, position: IVec2) -> &mut P {
+        &mut self.image[(position.x + position.y * self.width as i32) as usize]
+    }
+
     pub(crate) fn get_pixel(&self, position: IVec2) -> Option<P> {
         IRect {
             min: IVec2::splat(0),

@@ -11,15 +11,17 @@ use serde::{Deserialize, Serialize};
 use crate::{
     animation::{Animation, AnimationAsset},
     image::{PxImage, PxImageSliceMut},
-    palette::asset_palette,
+    palette::{asset_palette, PaletteParam},
     pixel::Pixel,
     position::{PxLayer, Spatial},
     prelude::*,
+    set::PxSet,
 };
 
 pub(crate) fn sprite_plugin(app: &mut App) {
     app.init_asset::<PxSprite>()
-        .init_asset_loader::<PxSpriteLoader>();
+        .init_asset_loader::<PxSpriteLoader>()
+        .add_systems(PostUpdate, image_to_sprite.before(PxSet::Draw));
 }
 
 #[derive(Serialize, Deserialize)]
@@ -148,4 +150,111 @@ pub struct PxSpriteBundle<L: PxLayer> {
     pub canvas: PxCanvas,
     /// A [`Visibility`] component
     pub visibility: Visibility,
+}
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c >= 0.04045 {
+        ((c + 0.055) / (1. + 0.055)).powf(2.4)
+    } else {
+        c / 12.92
+    }
+}
+
+#[allow(clippy::excessive_precision)]
+fn srgb_to_oklab(rd: f32, gn: f32, bu: f32) -> (f32, f32, f32) {
+    let rd = srgb_to_linear(rd);
+    let gn = srgb_to_linear(gn);
+    let bu = srgb_to_linear(bu);
+
+    let l = 0.4122214708 * rd + 0.5363325363 * gn + 0.0514459929 * bu;
+    let m = 0.2119034982 * rd + 0.6806995451 * gn + 0.1073969566 * bu;
+    let s = 0.0883024619 * rd + 0.2817188376 * gn + 0.6299787005 * bu;
+
+    let lp = l.cbrt();
+    let mp = m.cbrt();
+    let sp = s.cbrt();
+
+    (
+        0.2104542553 * lp + 0.7936177850 * mp - 0.0040720468 * sp,
+        1.9779984951 * lp - 2.4285922050 * mp + 0.4505937099 * sp,
+        0.0259040371 * lp + 0.7827717662 * mp - 0.8086757660 * sp,
+    )
+}
+
+/// Renders the contents of an image to a sprite every tick, dithered. The image is interpreted as
+/// `Rgba8UnormSrgb`. Inefficient.
+#[derive(Component, Deref)]
+pub struct ImageToSprite(pub Handle<Image>);
+
+fn image_to_sprite(
+    mut to_sprites: Query<(&ImageToSprite, &mut Handle<PxSprite>)>,
+    images: Res<Assets<Image>>,
+    palette: PaletteParam,
+    mut sprites: ResMut<Assets<PxSprite>>,
+) {
+    if to_sprites.iter().next().is_none() {
+        return;
+    }
+
+    let Some(palette) = palette.get() else {
+        return;
+    };
+
+    let palette = palette
+        .colors
+        .iter()
+        .map(|&[r, g, b]| srgb_to_oklab(r as f32 / 255., g as f32 / 255., b as f32 / 255.).into())
+        .collect::<Vec<Vec3>>();
+
+    to_sprites.iter_mut().for_each(|(image, mut sprite)| {
+        let image = images.get(&**image).unwrap();
+
+        if *sprite == Handle::default() {
+            let data = PxImage::empty_from_image(image);
+
+            *sprite = sprites.add(PxSprite {
+                frame_size: data.area(),
+                data,
+            });
+        }
+
+        let sprite = sprites.get_mut(&*sprite).unwrap();
+
+        let size = image.texture_descriptor.size;
+        let size = UVec2::new(size.width, size.height);
+        if sprite.data.size() != size {
+            let data = PxImage::empty_from_image(image);
+
+            sprite.frame_size = data.area();
+            sprite.data = data;
+        }
+
+        for (i, color) in image.data.chunks_exact(4).enumerate() {
+            let i = i as u32;
+            let pos = UVec2::new(i % size.x, i / size.x);
+            let pixel = sprite.data.pixel_mut(pos.as_ivec2());
+
+            if color[3] == 0 {
+                *pixel = None;
+                continue;
+            }
+
+            let color = Vec3::from(srgb_to_oklab(
+                color[0] as f32 / 255.,
+                color[1] as f32 / 255.,
+                color[2] as f32 / 255.,
+            ));
+
+            let (index, _) = palette
+                .iter()
+                .enumerate()
+                .min_by(|(_, color_1), (_, color_2)| {
+                    color_1
+                        .distance_squared(color)
+                        .total_cmp(&color_2.distance_squared(color))
+                })
+                .unwrap();
+            *pixel = Some(index as u8);
+        }
+    });
 }
