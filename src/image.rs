@@ -23,10 +23,7 @@ impl<P: Pixel> PxImage<P> {
     }
 
     pub(crate) fn empty_from_image(image: &Image) -> Self {
-        Self {
-            image: vec![default(); image.data.len()],
-            width: image.texture_descriptor.size.width as usize,
-        }
+        Self::empty(image.size())
     }
 
     pub(crate) fn pixel(&self, position: IVec2) -> P {

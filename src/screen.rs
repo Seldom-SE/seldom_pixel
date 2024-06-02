@@ -87,11 +87,19 @@ impl ScreenSize {
     }
 }
 
+/// The image that `seldom_pixel` draws to
 #[derive(Clone, Resource)]
-pub(crate) struct Screen {
+pub struct Screen {
     pub(crate) image: Handle<Image>,
     pub(crate) size: ScreenSize,
     pub(crate) computed_size: UVec2,
+}
+
+impl Screen {
+    /// Computed size of the screen
+    pub fn size(&self) -> UVec2 {
+        self.computed_size
+    }
 }
 
 #[derive(Component)]

@@ -254,6 +254,7 @@ fn image_to_sprite(
                         .total_cmp(&color_2.distance_squared(color))
                 })
                 .unwrap();
+
             *pixel = Some(index as u8);
         }
     });
