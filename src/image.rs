@@ -30,10 +30,6 @@ impl<P: Pixel> PxImage<P> {
         self.image[(position.x + position.y * self.width as i32) as usize]
     }
 
-    pub(crate) fn pixel_mut(&mut self, position: IVec2) -> &mut P {
-        &mut self.image[(position.x + position.y * self.width as i32) as usize]
-    }
-
     pub(crate) fn get_pixel(&self, position: IVec2) -> Option<P> {
         IRect {
             min: IVec2::splat(0),
@@ -58,6 +54,10 @@ impl<P: Pixel> PxImage<P> {
 
     pub(crate) fn area(&self) -> usize {
         self.image.len()
+    }
+
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut P> {
+        self.image.iter_mut()
     }
 
     pub(crate) fn slice_mut(&mut self, slice: IRect) -> PxImageSliceMut<P> {
@@ -289,7 +289,6 @@ impl<'a> PxImageSliceMut<'a, u8> {
             image: image
                 .data
                 .chunks_exact_mut(image.texture_descriptor.size.width as usize)
-                .rev()
                 .collect(),
             width: image.texture_descriptor.size.width as usize,
         }

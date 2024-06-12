@@ -4,8 +4,10 @@ use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::texture::{ImageLoader, ImageLoaderSettings},
+    tasks::{ComputeTaskPool, ParallelSliceMut},
     utils::BoxedFuture,
 };
+use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -186,12 +188,29 @@ fn srgb_to_oklab(rd: f32, gn: f32, bu: f32) -> (f32, f32, f32) {
 #[derive(Component, Deref)]
 pub struct ImageToSprite(pub Handle<Image>);
 
+const THRESHOLD_MAP: [[usize; 4]; 4] =
+    [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+// const THRESHOLD_MAP: [[usize; 8]; 8] = [
+//     [0, 48, 12, 60, 3, 51, 15, 63],
+//     [32, 16, 44, 28, 35, 19, 47, 31],
+//     [8, 56, 4, 52, 11, 59, 7, 55],
+//     [40, 24, 36, 20, 43, 27, 39, 23],
+//     [2, 50, 14, 62, 1, 49, 13, 61],
+//     [34, 18, 46, 30, 33, 17, 45, 29],
+//     [10, 58, 6, 54, 9, 57, 5, 53],
+//     [42, 26, 38, 22, 41, 25, 37, 21],
+// ];
+const MAP_SIZE: usize = THRESHOLD_MAP.len();
+const DITHER: f32 = 0.1;
+
+// TODO Use more helpers
 fn image_to_sprite(
     mut to_sprites: Query<(&ImageToSprite, &mut Handle<PxSprite>)>,
     images: Res<Assets<Image>>,
     palette: PaletteParam,
     mut sprites: ResMut<Assets<PxSprite>>,
 ) {
+    let span = info_span!("init", name = "init").entered();
     if to_sprites.iter().next().is_none() {
         return;
     }
@@ -206,7 +225,16 @@ fn image_to_sprite(
         .map(|&[r, g, b]| srgb_to_oklab(r as f32 / 255., g as f32 / 255., b as f32 / 255.).into())
         .collect::<Vec<Vec3>>();
 
+    let palette_tree = ImmutableKdTree::from(
+        &palette
+            .iter()
+            .map(|&color| color.into())
+            .collect::<Vec<[f32; 3]>>()[..],
+    );
+    drop(span);
+
     to_sprites.iter_mut().for_each(|(image, mut sprite)| {
+        let span = info_span!("making_images", name = "making_images").entered();
         let image = images.get(&**image).unwrap();
 
         if *sprite == Handle::default() {
@@ -229,33 +257,68 @@ fn image_to_sprite(
             sprite.data = data;
         }
 
-        for (i, color) in image.data.chunks_exact(4).enumerate() {
-            let i = i as u32;
-            let pos = UVec2::new(i % size.x, i / size.x);
-            let pixel = sprite.data.pixel_mut(pos.as_ivec2());
+        let mut pixels = image
+            .data
+            .chunks_exact(4)
+            .zip(sprite.data.iter_mut())
+            .enumerate()
+            .collect::<Vec<_>>();
+        drop(span);
 
-            if color[3] == 0 {
-                *pixel = None;
-                continue;
+        let span = info_span!("doing_pixels", name = "doing_pixels").entered();
+        // doing_pixels:
+        // `par_chunk_map_mut` 10_000 2.29 s
+        // `par_chunk_map_mut` 1000 883 ms
+        // ...now without inner spans:
+        // `par_chunk_map_mut` 1000 807 ms
+        // `par_chunk_map_mut` 100 550 ms
+        // `par_chunk_map_mut` 50 547 ms 650 ms
+        // `par_chunk_map_mut` 20 516 ms 570 ms
+        // `par_chunk_map_mut` 10 508 ms 622 ms
+        // `par_chunk_map_mut` 5 661 ms
+        // `par_chunk_map_mut` 1 636 ms
+        // `par_splat_map_mut` `None` 700 ms
+        // single-theaded 2.25 s
+        //
+        // 4x4 threshold map 162 ms
+        // `seldom_pixel` opt-level = 3 6.68 ms
+        pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |pixels| {
+            let mut candidates = [0; MAP_SIZE * MAP_SIZE];
+
+            for &mut (i, (color, ref mut pixel)) in pixels {
+                let i = i as u32;
+                let pos = UVec2::new(i % size.x, i / size.x);
+
+                if color[3] == 0 {
+                    **pixel = None;
+                    continue;
+                }
+
+                let color = Vec3::from(srgb_to_oklab(
+                    color[0] as f32 / 255.,
+                    color[1] as f32 / 255.,
+                    color[2] as f32 / 255.,
+                ));
+
+                let mut error = Vec3::ZERO;
+                for i in 0..MAP_SIZE * MAP_SIZE {
+                    let sample = color + error * DITHER;
+                    let candidate = palette_tree
+                        .approx_nearest_one::<SquaredEuclidean>(&sample.into())
+                        .item as usize;
+
+                    candidates[i] = candidate;
+                    error += color - palette[candidate];
+                }
+
+                candidates.sort_by(|&candidate_1, &candidate_2| {
+                    palette[candidate_1][0].total_cmp(&palette[candidate_2][0])
+                });
+
+                let index = THRESHOLD_MAP[pos.x as usize % MAP_SIZE][pos.y as usize % MAP_SIZE];
+                **pixel = Some(candidates[index] as u8);
             }
-
-            let color = Vec3::from(srgb_to_oklab(
-                color[0] as f32 / 255.,
-                color[1] as f32 / 255.,
-                color[2] as f32 / 255.,
-            ));
-
-            let (index, _) = palette
-                .iter()
-                .enumerate()
-                .min_by(|(_, color_1), (_, color_2)| {
-                    color_1
-                        .distance_squared(color)
-                        .total_cmp(&color_2.distance_squared(color))
-                })
-                .unwrap();
-
-            *pixel = Some(index as u8);
-        }
+        });
+        drop(span);
     });
 }
