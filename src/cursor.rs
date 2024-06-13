@@ -12,7 +12,7 @@ use crate::{
     set::PxSet,
 };
 
-pub(crate) fn cursor_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.init_resource::<PxCursor>()
         .init_resource::<PxCursorPosition>()
         .add_systems(

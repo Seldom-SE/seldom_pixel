@@ -29,10 +29,10 @@ use crate::{
 const SCREEN_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(0x48CE_4F2C_8B78_5954_08A8_461F_62E1_0E84);
 
-pub(crate) fn screen_plugin<L: PxLayer>(size: UVec2) -> impl FnOnce(&mut App) {
+pub(crate) fn plug<L: PxLayer>(size: UVec2) -> impl Fn(&mut App) {
     move |app| {
-        app.world.resource_mut::<Assets<Shader>>().insert(
-            SCREEN_SHADER_HANDLE,
+        app.world_mut().resource_mut::<Assets<Shader>>().insert(
+            SCREEN_SHADER_HANDLE.id(),
             Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
         );
         app.add_plugins(Material2dPlugin::<ScreenMaterial>::default())
@@ -109,11 +109,10 @@ fn init_screen(
           mut images,
           mut meshes,
           mut screen_materials| {
-        let mut screen_palette = [default(); 256];
+        let mut screen_palette = [Vec3::ZERO; 256];
 
         for (i, [r, g, b]) in palette.colors.iter().enumerate() {
-            let [r, g, b, _] = Color::rgb_u8(*r, *g, *b).as_linear_rgba_f32();
-            screen_palette[i] = Vec3::new(r, g, b);
+            screen_palette[i] = Color::srgb_u8(*r, *g, *b).linear().to_vec3();
         }
 
         let image = images.add(Image {
@@ -762,11 +761,10 @@ fn update_screen_palette(
         return;
     }
 
-    let mut screen_palette = [default(); 256];
+    let mut screen_palette = [Vec3::ZERO; 256];
 
     for (i, [r, g, b]) in palette.colors.iter().enumerate() {
-        let [r, g, b, _] = Color::rgb_u8(*r, *g, *b).as_linear_rgba_f32();
-        screen_palette[i] = Vec3::new(r, g, b);
+        screen_palette[i] = Color::srgb_u8(*r, *g, *b).linear().to_vec3();
     }
 
     for screen_material in &screen_materials {

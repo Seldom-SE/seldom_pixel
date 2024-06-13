@@ -8,8 +8,6 @@ use bevy::{
     reflect::TypePath,
 };
 
-use seldom_fn_plugin::FnPluginExt;
-
 use crate::map::PxTilesetData;
 use crate::{
     filter::PxFilterData,
@@ -22,18 +20,20 @@ use crate::{
 
 use self::sealed::{PxAssetDataSealed, PxAssetTraitSealed};
 
-pub(crate) fn asset_plugin(app: &mut App) {
-    app.configure_sets(
+pub(crate) fn plug(app: &mut App) {
+    app.add_plugins((
+        asset_plug::<PxSpriteData>,
+        asset_plug::<PxTypefaceData>,
+        asset_plug::<PxFilterData>,
+        asset_plug::<PxTilesetData>,
+    ))
+    .configure_sets(
         PostUpdate,
         PxSet::LoadAssets.before(PxSet::Draw).in_set(PxSet::Loaded),
-    )
-    .fn_plugin(px_asset_plugin::<PxSpriteData>)
-    .fn_plugin(px_asset_plugin::<PxTypefaceData>)
-    .fn_plugin(px_asset_plugin::<PxFilterData>)
-    .fn_plugin(px_asset_plugin::<PxTilesetData>);
+    );
 }
 
-fn px_asset_plugin<D: PxAssetData>(app: &mut App) {
+fn asset_plug<D: PxAssetData>(app: &mut App) {
     app.init_asset::<PxAsset<D>>()
         .init_resource::<LoadingAssets<D>>()
         .add_systems(PostUpdate, D::load.in_set(PxSet::LoadAssets));

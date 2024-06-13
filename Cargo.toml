@@ -19,21 +19,22 @@ state = ["dep:seldom_state"]
 [dependencies]
 bevy_turborand = { version = "0.8.1", optional = true }
 line_drawing = { version = "1.0", optional = true }
-seldom_fn_plugin = "0.6.0"
-seldom_map_nav = { version = "0.6.0", optional = true }
+seldom_map_nav = { git = "https://github.com/Seldom-SE/seldom_map_nav", rev = "bfa6889", optional = true }
 seldom_pixel_macros = { version = "0.1.0", path = "macros" }
-seldom_state = { version = "0.10.0", optional = true }
+seldom_state = { git = "https://github.com/Seldom-SE/seldom_state", rev = "d0abfd8", optional = true }
 
 [dependencies.bevy]
-version = "0.13.0"
+version = "0.14.0-rc.2"
 default-features = false
 features = ["bevy_asset", "bevy_core_pipeline", "bevy_render", "bevy_sprite"]
 
 [dev-dependencies]
-bevy = { version = "0.13.0", features = ["png"] }
-leafwing-input-manager = "0.13.3"
+bevy = { version = "0.14.0-rc.2", features = ["png"] }
+leafwing-input-manager = { git = "https://github.com/Leafwing-Studios/leafwing-input-manager", rev = "a603533" }
 rand = "0.8.5"
-seldom_state = { version = "0.10.0", features = ["leafwing_input"] }
+seldom_state = { git = "https://github.com/Seldom-SE/seldom_state", rev = "d0abfd8", features = [
+    "leafwing_input",
+] }
 
 [[example]]
 name = "line"

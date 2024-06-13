@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use crate::{prelude::*, set::PxSet};
 
-pub(crate) fn position_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.configure_sets(PreUpdate, PxSet::UpdatePosToSubPos)
         .add_systems(
             PreUpdate,

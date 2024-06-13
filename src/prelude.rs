@@ -31,7 +31,6 @@ pub use crate::{
     filter::{PxFilter, PxFilterBundle, PxFilterLayers},
     map::{PxMap, PxMapBundle, PxTile, PxTileBundle, PxTileset},
     position::{PxAnchor, PxLayer, PxPosition, PxSubPosition, PxVelocity},
-    px_plugin,
     sprite::{PxSprite, PxSpriteBundle},
     text::{PxCharacterConfig, PxSeparatorConfig, PxText, PxTextBundle, PxTypeface},
     ui::PxRect,

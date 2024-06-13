@@ -6,9 +6,9 @@ use bevy::{render::render_resource::TextureFormat, utils::HashMap};
 
 use crate::{prelude::*, set::PxSet};
 
-pub(crate) fn palette_plugin(palette_path: PathBuf) -> impl FnOnce(&mut App) {
+pub(crate) fn plug(palette_path: PathBuf) -> impl Fn(&mut App) {
     move |app| {
-        app.add_systems(Startup, load_palette(palette_path))
+        app.add_systems(Startup, load_palette(palette_path.clone()))
             .configure_sets(
                 PreUpdate,
                 (

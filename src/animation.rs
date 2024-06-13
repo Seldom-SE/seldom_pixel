@@ -16,7 +16,7 @@ use crate::{
     text::PxTypefaceData,
 };
 
-pub(crate) fn animation_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.configure_sets(
         PostUpdate,
         PxSet::FinishAnimations
