@@ -186,6 +186,7 @@ fn srgb_to_oklab(rd: f32, gn: f32, bu: f32) -> (f32, f32, f32) {
 /// Size of threshold map to use for dithering. The image is tiled with dithering according to this
 /// map, so smaller sizes will have more visible repetition and worse color approximation, but
 /// larger sizes are much, much slower with pattern dithering.
+#[derive(Clone, Copy)]
 pub enum ThresholdMap {
     /// 2x2
     X2_2,
@@ -197,6 +198,7 @@ pub enum ThresholdMap {
 
 /// Dithering algorithm. Perf measurements are for 10,000 pixels with a 4x4 threshold map on a
 /// pretty old machine.
+#[derive(Clone, Copy)]
 pub enum DitherAlgorithm {
     /// Almost as fast as undithered. 16.0 ms in debug mode and 1.23 ms in release mode. Doesn't
     /// make very good use of the color palette.
@@ -226,72 +228,138 @@ pub struct ImageToSprite {
     pub dither: Option<Dither>,
 }
 
-// const MAP_SIZE: usize = THRESHOLD_MAP.len();
+trait MapSize<const SIZE: usize> {
+    const WIDTH: usize;
+    const MAP: [usize; SIZE];
+}
 
-trait MapSize<const MAP_SIZE: usize> {
-    fn width() -> usize;
-    fn map() -> [usize; MAP_SIZE];
+impl MapSize<1> for () {
+    const WIDTH: usize = 1;
+    const MAP: [usize; 1] = [0];
 }
 
 impl MapSize<4> for () {
-    fn width() -> usize {
-        2
-    }
-
+    const WIDTH: usize = 2;
     #[rustfmt::skip]
-    fn map() -> [usize; 4] {
-        [
-            0, 2,
-            3, 1,
-        ]
-    }
+    const MAP: [usize; 4] = [
+        0, 2,
+        3, 1,
+    ];
 }
 
 impl MapSize<16> for () {
-    fn width() -> usize {
-        4
-    }
-
+    const WIDTH: usize = 4;
     #[rustfmt::skip]
-    fn map() -> [usize; 16] {
-        [
-            0, 8, 2, 10,
-            12, 4, 14, 6,
-            3, 11, 1, 9,
-            15, 7, 13, 5,
-        ]
-    }
+    const MAP: [usize; 16] = [
+        0, 8, 2, 10,
+        12, 4, 14, 6,
+        3, 11, 1, 9,
+        15, 7, 13, 5,
+    ];
 }
 
 impl MapSize<64> for () {
-    fn width() -> usize {
-        8
-    }
-
+    const WIDTH: usize = 8;
     #[rustfmt::skip]
-    fn map() -> [usize; 64] {
-        [
-            0, 48, 12, 60, 3, 51, 15, 63,
-            32, 16, 44, 28, 35, 19, 47, 31,
-            8, 56, 4, 52, 11, 59, 7, 55,
-            40, 24, 36, 20, 43, 27, 39, 23,
-            2, 50, 14, 62, 1, 49, 13, 61,
-            34, 18, 46, 30, 33, 17, 45, 29,
-            10, 58, 6, 54, 9, 57, 5, 53,
-            42, 26, 38, 22, 41, 25, 37, 21,
-        ]
+    const MAP: [usize; 64] = [
+        0, 48, 12, 60, 3, 51, 15, 63,
+        32, 16, 44, 28, 35, 19, 47, 31,
+        8, 56, 4, 52, 11, 59, 7, 55,
+        40, 24, 36, 20, 43, 27, 39, 23,
+        2, 50, 14, 62, 1, 49, 13, 61,
+        34, 18, 46, 30, 33, 17, 45, 29,
+        10, 58, 6, 54, 9, 57, 5, 53,
+        42, 26, 38, 22, 41, 25, 37, 21,
+    ];
+}
+
+trait Algorithm<const MAP_SIZE: usize> {
+    fn compute(
+        color: Vec3,
+        threshold: Vec3,
+        threshold_index: usize,
+        candidates: &mut [usize; MAP_SIZE],
+        palette_tree: &ImmutableKdTree<f32, 3>,
+        palette: &[Vec3],
+    ) -> u8;
+}
+
+enum ClosestAlg {}
+
+impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for ClosestAlg {
+    fn compute(
+        color: Vec3,
+        _: Vec3,
+        _: usize,
+        _: &mut [usize; MAP_SIZE],
+        palette_tree: &ImmutableKdTree<f32, 3>,
+        _: &[Vec3],
+    ) -> u8 {
+        palette_tree
+            .approx_nearest_one::<SquaredEuclidean>(&color.into())
+            .item as usize as u8
     }
 }
 
-fn dither<const MAP_SIZE: usize, const ALGORITHM: usize>(pixels: &mut [(usize, (&[u8], &mut Option<u8>))]) where (): MapSize<MAP_SIZE> {
-    let threshold_map = <() as MapSize<MAP_SIZE>>::map();
+enum OrderedAlg {}
 
-    let mut candidates = [0; MAP_SIZE];
-
-    let threshold_map = match *dither {
-        None => Vec::new(),
-        Some(Dither {  })
+impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for OrderedAlg {
+    fn compute(
+        color: Vec3,
+        threshold: Vec3,
+        threshold_index: usize,
+        _: &mut [usize; MAP_SIZE],
+        palette_tree: &ImmutableKdTree<f32, 3>,
+        _: &[Vec3],
+    ) -> u8 {
+        palette_tree
+            .approx_nearest_one::<SquaredEuclidean>(
+                &(color + threshold * (threshold_index as f32 / MAP_SIZE as f32 - 0.5)).into(),
+            )
+            .item as u8
     }
+}
+
+enum PatternAlg {}
+
+impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for PatternAlg {
+    fn compute(
+        color: Vec3,
+        threshold: Vec3,
+        threshold_index: usize,
+        candidates: &mut [usize; MAP_SIZE],
+        palette_tree: &ImmutableKdTree<f32, 3>,
+        palette: &[Vec3],
+    ) -> u8 {
+        let mut error = Vec3::ZERO;
+        for candidate_ref in &mut *candidates {
+            let sample = color + error * threshold;
+            let candidate = palette_tree
+                .approx_nearest_one::<SquaredEuclidean>(&sample.into())
+                .item as usize;
+
+            *candidate_ref = candidate;
+            error += color - palette[candidate];
+        }
+
+        candidates.sort_unstable_by(|&candidate_1, &candidate_2| {
+            palette[candidate_1][0].total_cmp(&palette[candidate_2][0])
+        });
+
+        candidates[threshold_index] as u8
+    }
+}
+
+fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
+    pixels: &mut [(usize, (&[u8], &mut Option<u8>))],
+    threshold: f32,
+    size: UVec2,
+    palette_tree: &ImmutableKdTree<f32, 3>,
+    palette: &[Vec3],
+) where
+    (): MapSize<MAP_SIZE>,
+{
+    let mut candidates = [0; MAP_SIZE];
 
     for &mut (i, (color, ref mut pixel)) in pixels {
         let i = i as u32;
@@ -302,61 +370,20 @@ fn dither<const MAP_SIZE: usize, const ALGORITHM: usize>(pixels: &mut [(usize, (
             continue;
         }
 
-        let color = Vec3::from(srgb_to_oklab(
-            color[0] as f32 / 255.,
-            color[1] as f32 / 255.,
-            color[2] as f32 / 255.,
+        **pixel = Some(A::compute(
+            Vec3::from(srgb_to_oklab(
+                color[0] as f32 / 255.,
+                color[1] as f32 / 255.,
+                color[2] as f32 / 255.,
+            )),
+            Vec3::splat(threshold),
+            <() as MapSize<MAP_SIZE>>::MAP[pos.x as usize % <() as MapSize<MAP_SIZE>>::WIDTH
+                * <() as MapSize<MAP_SIZE>>::WIDTH
+                + pos.y as usize % <() as MapSize<MAP_SIZE>>::WIDTH],
+            &mut candidates,
+            palette_tree,
+            palette,
         ));
-
-        **pixel = Some(match *dither {
-            None => {
-                palette_tree
-                    .approx_nearest_one::<SquaredEuclidean>(&color.into())
-                    .item as usize as u8
-            }
-            Some(Dither {
-                algorithm: DitherAlgorithm::Ordered,
-                threshold,
-                threshold_map,
-            }) => {
-                palette_tree
-                    .approx_nearest_one::<SquaredEuclidean>(
-                        &(color
-                            + Vec3::splat(0.04)
-                                * (THRESHOLD_MAP[pos.x as usize % MAP_SIZE]
-                                    [pos.y as usize % MAP_SIZE]
-                                    as f32
-                                    / (MAP_SIZE * MAP_SIZE) as f32
-                                    - 0.5))
-                            .into(),
-                    )
-                    .item as u8
-            }
-            Some(Dither {
-                algorithm: DitherAlgorithm::Pattern,
-                threshold,
-                threshold_map,
-            }) => {
-                let mut error = Vec3::ZERO;
-                for candidate_ref in &mut candidates {
-                    let sample = color + error * Vec3::splat(0.1);
-                    let candidate = palette_tree
-                        .approx_nearest_one::<SquaredEuclidean>(&sample.into())
-                        .item as usize;
-
-                    *candidate_ref = candidate;
-                    error += color - palette[candidate];
-                }
-
-                candidates.sort_unstable_by(|&candidate_1, &candidate_2| {
-                    palette[candidate_1][0].total_cmp(&palette[candidate_2][0])
-                });
-
-                let index =
-                    THRESHOLD_MAP[pos.x as usize % MAP_SIZE][pos.y as usize % MAP_SIZE];
-                candidates[index] as u8
-            }
-        });
     }
 }
 
@@ -424,6 +451,54 @@ fn image_to_sprite(
         drop(span);
 
         pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |pixels| {
+            use DitherAlgorithm::*;
+            use ThresholdMap::*;
+
+            match *dither {
+                None => dither_slice::<ClosestAlg, 1>(pixels, 0., size, &palette_tree, &palette),
+                Some(Dither {
+                    algorithm: Ordered,
+                    threshold,
+                    threshold_map: X2_2,
+                }) => {
+                    dither_slice::<OrderedAlg, 4>(pixels, threshold, size, &palette_tree, &palette)
+                }
+                Some(Dither {
+                    algorithm: Ordered,
+                    threshold,
+                    threshold_map: X4_4,
+                }) => {
+                    dither_slice::<OrderedAlg, 16>(pixels, threshold, size, &palette_tree, &palette)
+                }
+                Some(Dither {
+                    algorithm: Ordered,
+                    threshold,
+                    threshold_map: X8_8,
+                }) => {
+                    dither_slice::<OrderedAlg, 64>(pixels, threshold, size, &palette_tree, &palette)
+                }
+                Some(Dither {
+                    algorithm: Pattern,
+                    threshold,
+                    threshold_map: X2_2,
+                }) => {
+                    dither_slice::<PatternAlg, 4>(pixels, threshold, size, &palette_tree, &palette)
+                }
+                Some(Dither {
+                    algorithm: Pattern,
+                    threshold,
+                    threshold_map: X4_4,
+                }) => {
+                    dither_slice::<PatternAlg, 16>(pixels, threshold, size, &palette_tree, &palette)
+                }
+                Some(Dither {
+                    algorithm: Pattern,
+                    threshold,
+                    threshold_map: X8_8,
+                }) => {
+                    dither_slice::<PatternAlg, 64>(pixels, threshold, size, &palette_tree, &palette)
+                }
+            }
         });
     });
 }

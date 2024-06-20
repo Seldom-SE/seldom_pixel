@@ -65,8 +65,6 @@ to develop and maintain. Anyway, limitations can incite creativity.
 
 ## Future Work
 
-This crate is currently in maintenance mode, so I'm not currently adding new features.
-
 - [ ] Advanced UI, good enough to build a UI library on
 - [ ] More advanced particle system
 - [ ] More shape primitives
