@@ -183,25 +183,182 @@ fn srgb_to_oklab(rd: f32, gn: f32, bu: f32) -> (f32, f32, f32) {
     )
 }
 
-/// Renders the contents of an image to a sprite every tick, dithered. The image is interpreted as
-/// `Rgba8UnormSrgb`. Inefficient.
-#[derive(Component, Deref)]
-pub struct ImageToSprite(pub Handle<Image>);
+/// Size of threshold map to use for dithering. The image is tiled with dithering according to this
+/// map, so smaller sizes will have more visible repetition and worse color approximation, but
+/// larger sizes are much, much slower with pattern dithering.
+pub enum ThresholdMap {
+    /// 2x2
+    X2_2,
+    /// 4x4
+    X4_4,
+    /// 8x8
+    X8_8,
+}
 
-const THRESHOLD_MAP: [[usize; 4]; 4] =
-    [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
-// const THRESHOLD_MAP: [[usize; 8]; 8] = [
-//     [0, 48, 12, 60, 3, 51, 15, 63],
-//     [32, 16, 44, 28, 35, 19, 47, 31],
-//     [8, 56, 4, 52, 11, 59, 7, 55],
-//     [40, 24, 36, 20, 43, 27, 39, 23],
-//     [2, 50, 14, 62, 1, 49, 13, 61],
-//     [34, 18, 46, 30, 33, 17, 45, 29],
-//     [10, 58, 6, 54, 9, 57, 5, 53],
-//     [42, 26, 38, 22, 41, 25, 37, 21],
-// ];
-const MAP_SIZE: usize = THRESHOLD_MAP.len();
-const DITHER: f32 = 0.1;
+/// Dithering algorithm. Perf measurements are for 10,000 pixels with a 4x4 threshold map on a
+/// pretty old machine.
+pub enum DitherAlgorithm {
+    /// Almost as fast as undithered. 16.0 ms in debug mode and 1.23 ms in release mode. Doesn't
+    /// make very good use of the color palette.
+    Ordered,
+    /// Slow, but mixes colors very well. 219 ms in debug mode and 6.81 ms in release mode. Consider
+    /// only using this algorithm with some optimizations enabled.
+    Pattern,
+}
+
+/// Info needed to dither an image
+pub struct Dither {
+    /// Dithering algorithm
+    pub algorithm: DitherAlgorithm,
+    /// How much to dither. Lower values leave solid color areas. Should range from 0 to 1.
+    pub threshold: f32,
+    /// Threshold map size
+    pub threshold_map: ThresholdMap,
+}
+
+/// Renders the contents of an image to a sprite every tick. The image is interpreted as
+/// `Rgba8UnormSrgb`.
+#[derive(Component)]
+pub struct ImageToSprite {
+    /// Image to render
+    pub image: Handle<Image>,
+    /// Dithering
+    pub dither: Option<Dither>,
+}
+
+// const MAP_SIZE: usize = THRESHOLD_MAP.len();
+
+trait MapSize<const MAP_SIZE: usize> {
+    fn width() -> usize;
+    fn map() -> [usize; MAP_SIZE];
+}
+
+impl MapSize<4> for () {
+    fn width() -> usize {
+        2
+    }
+
+    #[rustfmt::skip]
+    fn map() -> [usize; 4] {
+        [
+            0, 2,
+            3, 1,
+        ]
+    }
+}
+
+impl MapSize<16> for () {
+    fn width() -> usize {
+        4
+    }
+
+    #[rustfmt::skip]
+    fn map() -> [usize; 16] {
+        [
+            0, 8, 2, 10,
+            12, 4, 14, 6,
+            3, 11, 1, 9,
+            15, 7, 13, 5,
+        ]
+    }
+}
+
+impl MapSize<64> for () {
+    fn width() -> usize {
+        8
+    }
+
+    #[rustfmt::skip]
+    fn map() -> [usize; 64] {
+        [
+            0, 48, 12, 60, 3, 51, 15, 63,
+            32, 16, 44, 28, 35, 19, 47, 31,
+            8, 56, 4, 52, 11, 59, 7, 55,
+            40, 24, 36, 20, 43, 27, 39, 23,
+            2, 50, 14, 62, 1, 49, 13, 61,
+            34, 18, 46, 30, 33, 17, 45, 29,
+            10, 58, 6, 54, 9, 57, 5, 53,
+            42, 26, 38, 22, 41, 25, 37, 21,
+        ]
+    }
+}
+
+fn dither<const MAP_SIZE: usize, const ALGORITHM: usize>(pixels: &mut [(usize, (&[u8], &mut Option<u8>))]) where (): MapSize<MAP_SIZE> {
+    let threshold_map = <() as MapSize<MAP_SIZE>>::map();
+
+    let mut candidates = [0; MAP_SIZE];
+
+    let threshold_map = match *dither {
+        None => Vec::new(),
+        Some(Dither {  })
+    }
+
+    for &mut (i, (color, ref mut pixel)) in pixels {
+        let i = i as u32;
+        let pos = UVec2::new(i % size.x, i / size.x);
+
+        if color[3] == 0 {
+            **pixel = None;
+            continue;
+        }
+
+        let color = Vec3::from(srgb_to_oklab(
+            color[0] as f32 / 255.,
+            color[1] as f32 / 255.,
+            color[2] as f32 / 255.,
+        ));
+
+        **pixel = Some(match *dither {
+            None => {
+                palette_tree
+                    .approx_nearest_one::<SquaredEuclidean>(&color.into())
+                    .item as usize as u8
+            }
+            Some(Dither {
+                algorithm: DitherAlgorithm::Ordered,
+                threshold,
+                threshold_map,
+            }) => {
+                palette_tree
+                    .approx_nearest_one::<SquaredEuclidean>(
+                        &(color
+                            + Vec3::splat(0.04)
+                                * (THRESHOLD_MAP[pos.x as usize % MAP_SIZE]
+                                    [pos.y as usize % MAP_SIZE]
+                                    as f32
+                                    / (MAP_SIZE * MAP_SIZE) as f32
+                                    - 0.5))
+                            .into(),
+                    )
+                    .item as u8
+            }
+            Some(Dither {
+                algorithm: DitherAlgorithm::Pattern,
+                threshold,
+                threshold_map,
+            }) => {
+                let mut error = Vec3::ZERO;
+                for candidate_ref in &mut candidates {
+                    let sample = color + error * Vec3::splat(0.1);
+                    let candidate = palette_tree
+                        .approx_nearest_one::<SquaredEuclidean>(&sample.into())
+                        .item as usize;
+
+                    *candidate_ref = candidate;
+                    error += color - palette[candidate];
+                }
+
+                candidates.sort_unstable_by(|&candidate_1, &candidate_2| {
+                    palette[candidate_1][0].total_cmp(&palette[candidate_2][0])
+                });
+
+                let index =
+                    THRESHOLD_MAP[pos.x as usize % MAP_SIZE][pos.y as usize % MAP_SIZE];
+                candidates[index] as u8
+            }
+        });
+    }
+}
 
 // TODO Use more helpers
 fn image_to_sprite(
@@ -235,7 +392,8 @@ fn image_to_sprite(
 
     to_sprites.iter_mut().for_each(|(image, mut sprite)| {
         let span = info_span!("making_images", name = "making_images").entered();
-        let image = images.get(&**image).unwrap();
+        let dither = &image.dither;
+        let image = images.get(&image.image).unwrap();
 
         if *sprite == Handle::default() {
             let data = PxImage::empty_from_image(image);
@@ -265,60 +423,7 @@ fn image_to_sprite(
             .collect::<Vec<_>>();
         drop(span);
 
-        let span = info_span!("doing_pixels", name = "doing_pixels").entered();
-        // doing_pixels:
-        // `par_chunk_map_mut` 10_000 2.29 s
-        // `par_chunk_map_mut` 1000 883 ms
-        // ...now without inner spans:
-        // `par_chunk_map_mut` 1000 807 ms
-        // `par_chunk_map_mut` 100 550 ms
-        // `par_chunk_map_mut` 50 547 ms 650 ms
-        // `par_chunk_map_mut` 20 516 ms 570 ms
-        // `par_chunk_map_mut` 10 508 ms 622 ms
-        // `par_chunk_map_mut` 5 661 ms
-        // `par_chunk_map_mut` 1 636 ms
-        // `par_splat_map_mut` `None` 700 ms
-        // single-theaded 2.25 s
-        //
-        // 4x4 threshold map 162 ms
-        // `seldom_pixel` opt-level = 3 6.68 ms
         pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |pixels| {
-            let mut candidates = [0; MAP_SIZE * MAP_SIZE];
-
-            for &mut (i, (color, ref mut pixel)) in pixels {
-                let i = i as u32;
-                let pos = UVec2::new(i % size.x, i / size.x);
-
-                if color[3] == 0 {
-                    **pixel = None;
-                    continue;
-                }
-
-                let color = Vec3::from(srgb_to_oklab(
-                    color[0] as f32 / 255.,
-                    color[1] as f32 / 255.,
-                    color[2] as f32 / 255.,
-                ));
-
-                let mut error = Vec3::ZERO;
-                for i in 0..MAP_SIZE * MAP_SIZE {
-                    let sample = color + error * DITHER;
-                    let candidate = palette_tree
-                        .approx_nearest_one::<SquaredEuclidean>(&sample.into())
-                        .item as usize;
-
-                    candidates[i] = candidate;
-                    error += color - palette[candidate];
-                }
-
-                candidates.sort_by(|&candidate_1, &candidate_2| {
-                    palette[candidate_1][0].total_cmp(&palette[candidate_2][0])
-                });
-
-                let index = THRESHOLD_MAP[pos.x as usize % MAP_SIZE][pos.y as usize % MAP_SIZE];
-                **pixel = Some(candidates[index] as u8);
-            }
         });
-        drop(span);
     });
 }
