@@ -3,9 +3,12 @@
 use std::collections::BTreeMap;
 
 use bevy::{
-    render::render_resource::{
-        AsBindGroup, Extent3d, ShaderRef, TextureDescriptor, TextureDimension, TextureFormat,
-        TextureUsages,
+    render::{
+        render_resource::{
+            AsBindGroup, Extent3d, ShaderRef, TextureDescriptor, TextureDimension, TextureFormat,
+            TextureUsages,
+        },
+        view::RenderLayers,
     },
     sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle},
     window::{PrimaryWindow, WindowResized},
@@ -28,7 +31,10 @@ use crate::{
 const SCREEN_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(0x48CE_4F2C_8B78_5954_08A8_461F_62E1_0E84);
 
-pub(crate) fn screen_plugin<L: PxLayer>(size: ScreenSize) -> impl FnOnce(&mut App) {
+pub(crate) fn screen_plugin<L: PxLayer>(
+    size: ScreenSize,
+    layers: RenderLayers,
+) -> impl FnOnce(&mut App) {
     move |app| {
         app.world.resource_mut::<Assets<Shader>>().insert(
             SCREEN_SHADER_HANDLE,
@@ -37,7 +43,7 @@ pub(crate) fn screen_plugin<L: PxLayer>(size: ScreenSize) -> impl FnOnce(&mut Ap
         app.add_plugins(Material2dPlugin::<ScreenMaterial>::default())
             .configure_sets(PostUpdate, PxSet::Draw)
             .add_systems(Startup, insert_screen(size))
-            .add_systems(Update, init_screen)
+            .add_systems(Update, init_screen(layers))
             .add_systems(
                 PostUpdate,
                 (
@@ -161,59 +167,71 @@ fn insert_screen(
 }
 
 fn init_screen(
-    palette: PaletteParam,
-    mut screen_materials: ResMut<Assets<ScreenMaterial>>,
-    screens: Query<(), With<ScreenMarker>>,
-    screen: Res<Screen>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    windows: Query<(Entity, &Window), With<PrimaryWindow>>,
-    mut window_resized: EventWriter<WindowResized>,
-    mut commands: Commands,
+    layers: RenderLayers,
+) -> impl Fn(
+    PaletteParam,
+    ResMut<Assets<ScreenMaterial>>,
+    Query<(), With<ScreenMarker>>,
+    Res<Screen>,
+    ResMut<Assets<Mesh>>,
+    Query<(Entity, &Window), With<PrimaryWindow>>,
+    EventWriter<WindowResized>,
+    Commands,
 ) {
-    if screens.iter().next().is_some() {
-        return;
+    move |palette,
+          mut screen_materials,
+          screens,
+          screen,
+          mut meshes,
+          windows,
+          mut window_resized,
+          mut commands| {
+        if screens.iter().next().is_some() {
+            return;
+        }
+
+        let Some(palette) = palette.get() else {
+            return;
+        };
+
+        let mut screen_palette = [default(); 256];
+
+        for (i, [r, g, b]) in palette.colors.iter().enumerate() {
+            let [r, g, b, _] = Color::rgb_u8(*r, *g, *b).as_linear_rgba_f32();
+            screen_palette[i] = Vec3::new(r, g, b);
+        }
+
+        let (entity, window) = windows.single();
+        let calculated_screen_scale = screen_scale(
+            screen.computed_size,
+            Vec2::new(window.width(), window.height()),
+        )
+        .extend(1.);
+
+        commands.spawn((
+            ScreenMarker,
+            layers,
+            MaterialMesh2dBundle {
+                mesh: meshes.add(Rectangle::default()).into(),
+                material: screen_materials.add(ScreenMaterial {
+                    image: screen.image.clone(),
+                    palette: screen_palette,
+                }),
+                transform: Transform::from_scale(calculated_screen_scale),
+                // Ensure transform matches global_transform to ensure correct rendering for WASM
+                global_transform: GlobalTransform::from_scale(calculated_screen_scale),
+                ..default()
+            },
+            Name::new("Screen"),
+        ));
+
+        // I do not know why, but the screen does not display unless the window has been resized
+        window_resized.send(WindowResized {
+            window: entity,
+            width: window.width(),
+            height: window.height(),
+        });
     }
-
-    let Some(palette) = palette.get() else {
-        return;
-    };
-
-    let mut screen_palette = [default(); 256];
-
-    for (i, [r, g, b]) in palette.colors.iter().enumerate() {
-        let [r, g, b, _] = Color::rgb_u8(*r, *g, *b).as_linear_rgba_f32();
-        screen_palette[i] = Vec3::new(r, g, b);
-    }
-
-    let (entity, window) = windows.single();
-    let calculated_screen_scale = screen_scale(
-        screen.computed_size,
-        Vec2::new(window.width(), window.height()),
-    )
-    .extend(1.);
-
-    commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: meshes.add(Rectangle::default()).into(),
-            material: screen_materials.add(ScreenMaterial {
-                image: screen.image.clone(),
-                palette: screen_palette,
-            }),
-            transform: Transform::from_scale(calculated_screen_scale),
-            // Ensure transform matches global_transform to ensure correct rendering for WASM
-            global_transform: GlobalTransform::from_scale(calculated_screen_scale),
-            ..default()
-        },
-        ScreenMarker,
-        Name::new("Screen"),
-    ));
-
-    // I do not know why, but the screen does not display unless the window has been resized
-    window_resized.send(WindowResized {
-        window: entity,
-        width: window.width(),
-        height: window.height(),
-    });
 }
 
 fn resize_screen(

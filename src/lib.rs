@@ -33,6 +33,7 @@ mod ui;
 use std::{marker::PhantomData, path::PathBuf};
 
 use animation::animation_plugin;
+use bevy::render::view::RenderLayers;
 use button::button_plugin;
 use camera::camera_plugin;
 use cursor::cursor_plugin;
@@ -54,13 +55,8 @@ use text::text_plugin;
 pub struct PxPlugin<L: PxLayer> {
     screen_size: ScreenSize,
     palette_path: PathBuf,
+    layers: RenderLayers,
     _l: PhantomData<L>,
-}
-
-impl<L: PxLayer> Plugin for PxPlugin<L> {
-    fn build(&self, app: &mut App) {
-        app.fn_plugin(px_plugin::<L>(self.screen_size, self.palette_path.clone()));
-    }
 }
 
 impl<L: PxLayer> PxPlugin<L> {
@@ -71,8 +67,25 @@ impl<L: PxLayer> PxPlugin<L> {
         Self {
             screen_size: screen_size.into(),
             palette_path: palette_path.into(),
+            layers: RenderLayers::default(),
             _l: default(),
         }
+    }
+
+    /// Sets the render layers that `seldom_pixel` will draw to
+    pub fn with_render_layers(mut self, layers: RenderLayers) -> Self {
+        self.layers = layers;
+        self
+    }
+}
+
+impl<L: PxLayer> Plugin for PxPlugin<L> {
+    fn build(&self, app: &mut App) {
+        app.fn_plugin(px_plugin::<L>(
+            self.screen_size,
+            self.palette_path.clone(),
+            self.layers,
+        ));
     }
 }
 
@@ -81,6 +94,7 @@ impl<L: PxLayer> PxPlugin<L> {
 pub fn px_plugin<L: PxLayer>(
     screen_size: ScreenSize,
     palette_path: PathBuf,
+    layers: RenderLayers,
 ) -> impl FnOnce(&mut App) {
     move |app| {
         app.fn_plugin(animation_plugin)
@@ -91,7 +105,7 @@ pub fn px_plugin<L: PxLayer>(
             .fn_plugin(map_plugin)
             .fn_plugin(palette_plugin(palette_path))
             .fn_plugin(position_plugin)
-            .fn_plugin(screen_plugin::<L>(screen_size))
+            .fn_plugin(screen_plugin::<L>(screen_size, layers))
             .fn_plugin(sprite_plugin)
             .fn_plugin(text_plugin);
         #[cfg(feature = "particle")]
