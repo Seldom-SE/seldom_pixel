@@ -388,6 +388,7 @@ fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
 }
 
 // TODO Use more helpers
+// TODO Feature gate
 fn image_to_sprite(
     mut to_sprites: Query<(&ImageToSprite, &mut Handle<PxSprite>)>,
     images: Res<Assets<Image>>,
