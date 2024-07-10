@@ -90,6 +90,7 @@ Then add `PxPlugin` to your app. Check out the examples for further usage.
 
 | Bevy | `seldom_state` | `seldom_map_nav` | `seldom_interop` | `bevy_ecs_tilemap` | `seldom_pixel` |
 | ---- | -------------- | ---------------- | ---------------- | ------------------ | -------------- |
+| 0.14 | 0.11           | 0.7              |                  |                    | 0.7            |
 | 0.13 | 0.10           | 0.6              |                  |                    | 0.6            |
 | 0.12 | 0.9            |                  | 0.5              | 0.12               | 0.5            |
 | 0.11 | 0.7            |                  | 0.4              | 0.11               | 0.4            |
