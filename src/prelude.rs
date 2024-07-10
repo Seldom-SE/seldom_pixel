@@ -31,7 +31,6 @@ pub use crate::{
     map::{PxMap, PxMapBundle, PxTile, PxTileBundle, PxTileset},
     math::{Diagonal, Orthogonal},
     position::{PxAnchor, PxLayer, PxPosition, PxScreenAlign, PxSubPosition, PxVelocity},
-    px_plugin,
     screen::ScreenSize,
     sprite::{PxSprite, PxSpriteBundle},
     text::{PxText, PxTextBundle, PxTypeface},

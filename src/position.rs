@@ -30,7 +30,7 @@ macro_rules! align_to_screen {
     }};
 }
 
-pub(crate) fn position_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.add_systems(
         PreUpdate,
         (

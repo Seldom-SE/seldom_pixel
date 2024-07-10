@@ -32,22 +32,9 @@ mod ui;
 
 use std::{marker::PhantomData, path::PathBuf};
 
-use animation::animation_plugin;
 use bevy::render::view::RenderLayers;
-use button::button_plugin;
-use camera::camera_plugin;
-use cursor::cursor_plugin;
-use filter::filter_plugin;
-use map::map_plugin;
-use palette::palette_plugin;
-#[cfg(feature = "particle")]
-use particle::particle_plugin;
-use position::{position_plugin, PxLayer};
+use position::PxLayer;
 use prelude::*;
-use screen::screen_plugin;
-use seldom_fn_plugin::FnPluginExt;
-use sprite::sprite_plugin;
-use text::text_plugin;
 
 /// Add to your [`App`] to enable `seldom_pixel`. The type parameter is your custom layer type
 /// used for z-ordering. You can make one using [`px_layer`].
@@ -68,7 +55,7 @@ impl<L: PxLayer> PxPlugin<L> {
             screen_size: screen_size.into(),
             palette_path: palette_path.into(),
             layers: RenderLayers::default(),
-            _l: default(),
+            _l: PhantomData,
         }
     }
 
@@ -81,35 +68,20 @@ impl<L: PxLayer> PxPlugin<L> {
 
 impl<L: PxLayer> Plugin for PxPlugin<L> {
     fn build(&self, app: &mut App) {
-        app.fn_plugin(px_plugin::<L>(
-            self.screen_size,
-            self.palette_path.clone(),
-            self.layers,
+        app.add_plugins((
+            animation::plug,
+            button::plug,
+            camera::plug,
+            cursor::plug,
+            filter::plug,
+            map::plug,
+            palette::plug(self.palette_path.clone()),
+            position::plug,
+            screen::plug::<L>(self.screen_size, self.layers.clone()),
+            sprite::plug,
+            text::plug,
+            #[cfg(feature = "particle")]
+            (RngPlugin::default(), particle::plug::<L>),
         ));
-    }
-}
-
-/// Function called by [`PxPlugin`]. You may instead call it directly or use `seldom_fn_plugin`,
-/// which is another crate I maintain.
-pub fn px_plugin<L: PxLayer>(
-    screen_size: ScreenSize,
-    palette_path: PathBuf,
-    layers: RenderLayers,
-) -> impl FnOnce(&mut App) {
-    move |app| {
-        app.fn_plugin(animation_plugin)
-            .fn_plugin(button_plugin)
-            .fn_plugin(camera_plugin)
-            .fn_plugin(cursor_plugin)
-            .fn_plugin(filter_plugin)
-            .fn_plugin(map_plugin)
-            .fn_plugin(palette_plugin(palette_path))
-            .fn_plugin(position_plugin)
-            .fn_plugin(screen_plugin::<L>(screen_size, layers))
-            .fn_plugin(sprite_plugin)
-            .fn_plugin(text_plugin);
-        #[cfg(feature = "particle")]
-        app.add_plugins(RngPlugin::default())
-            .fn_plugin(particle_plugin::<L>);
     }
 }

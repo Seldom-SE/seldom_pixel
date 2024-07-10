@@ -5,7 +5,6 @@ use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::texture::{ImageLoader, ImageLoaderSettings},
     tasks::{ComputeTaskPool, ParallelSliceMut},
-    utils::BoxedFuture,
 };
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use serde::{Deserialize, Serialize};
@@ -20,7 +19,7 @@ use crate::{
     set::PxSet,
 };
 
-pub(crate) fn sprite_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.init_asset::<PxSprite>()
         .init_asset_loader::<PxSpriteLoader>()
         .add_systems(PostUpdate, image_to_sprite.before(PxSet::Draw));
@@ -54,24 +53,22 @@ impl AssetLoader for PxSpriteLoader {
     type Settings = PxSpriteLoaderSettings;
     type Error = Error;
 
-    fn load<'a>(
+    async fn load<'a>(
         &'a self,
-        reader: &'a mut Reader,
+        reader: &'a mut Reader<'_>,
         settings: &'a PxSpriteLoaderSettings,
-        load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<PxSprite>> {
-        Box::pin(async move {
-            let Self(image_loader) = self;
-            let image = image_loader
-                .load(reader, &settings.image_loader_settings, load_context)
-                .await?;
-            let palette = asset_palette().await;
-            let data = PxImage::palette_indices(palette, &image)?;
+        load_context: &'a mut LoadContext<'_>,
+    ) -> Result<PxSprite> {
+        let Self(image_loader) = self;
+        let image = image_loader
+            .load(reader, &settings.image_loader_settings, load_context)
+            .await?;
+        let palette = asset_palette().await;
+        let data = PxImage::palette_indices(palette, &image)?;
 
-            Ok(PxSprite {
-                frame_size: data.area() / settings.frame_count,
-                data,
-            })
+        Ok(PxSprite {
+            frame_size: data.area() / settings.frame_count,
+            data,
         })
     }
 
@@ -451,7 +448,7 @@ fn image_to_sprite(
             .collect::<Vec<_>>();
         drop(span);
 
-        pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |pixels| {
+        pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |_, pixels| {
             use DitherAlgorithm::*;
             use ThresholdMap::*;
 

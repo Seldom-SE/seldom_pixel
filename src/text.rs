@@ -2,7 +2,7 @@ use anyhow::{anyhow, Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::texture::{ImageLoader, ImageLoaderSettings},
-    utils::{BoxedFuture, HashMap},
+    utils::HashMap,
 };
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,7 @@ use crate::{
     prelude::*,
 };
 
-pub(crate) fn text_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.init_asset::<PxTypeface>()
         .init_asset_loader::<PxTypefaceLoader>();
 }
@@ -60,89 +60,85 @@ impl AssetLoader for PxTypefaceLoader {
     type Settings = PxTypefaceLoaderSettings;
     type Error = Error;
 
-    fn load<'a>(
+    async fn load<'a>(
         &'a self,
-        reader: &'a mut Reader,
+        reader: &'a mut Reader<'_>,
         settings: &'a PxTypefaceLoaderSettings,
-        load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<PxTypeface>> {
-        Box::pin(async move {
-            let Self(image_loader) = self;
-            let image = image_loader
-                .load(reader, &settings.image_loader_settings, load_context)
-                .await?;
-            let palette = asset_palette().await;
-            let indices = PxImage::palette_indices_unaligned(palette, &image)?;
-            let height = indices.height();
-            let character_count = settings.characters.chars().count();
+        load_context: &'a mut LoadContext<'_>,
+    ) -> Result<PxTypeface> {
+        let Self(image_loader) = self;
+        let image = image_loader
+            .load(reader, &settings.image_loader_settings, load_context)
+            .await?;
+        let palette = asset_palette().await;
+        let indices = PxImage::palette_indices_unaligned(palette, &image)?;
+        let height = indices.height();
+        let character_count = settings.characters.chars().count();
 
-            let characters = if character_count == 0 {
-                HashMap::new()
-            } else {
-                settings
-                    .characters
-                    .chars()
-                    .zip(
-                        indices
-                            .split_vert(height / character_count)
-                            .into_iter()
-                            .rev(),
-                    )
-                    .map(|(character, image)| {
-                        let mut image = image.flip_vert();
-                        image.trim_right();
-                        let image_width = image.width();
-                        let image_area = image.area();
-                        let frames = settings
-                            .character_frames
-                            .get(&character)
-                            .copied()
-                            .unwrap_or(settings.default_frames)
-                            as usize;
+        let characters = if character_count == 0 {
+            HashMap::new()
+        } else {
+            settings
+                .characters
+                .chars()
+                .zip(
+                    indices
+                        .split_vert(height / character_count)
+                        .into_iter()
+                        .rev(),
+                )
+                .map(|(character, image)| {
+                    let mut image = image.flip_vert();
+                    image.trim_right();
+                    let image_width = image.width();
+                    let image_area = image.area();
+                    let frames = settings
+                        .character_frames
+                        .get(&character)
+                        .copied()
+                        .unwrap_or(settings.default_frames)
+                        as usize;
 
-                        (
-                            character,
-                            PxSprite {
-                                data: PxImage::from_parts_vert(
-                                    image.split_horz(image_width / frames),
-                                )
+                    (
+                        character,
+                        PxSprite {
+                            data: PxImage::from_parts_vert(image.split_horz(image_width / frames))
                                 .unwrap(),
-                                frame_size: image_area / frames,
-                            },
-                        )
-                    })
-                    .collect::<HashMap<_, _>>()
-            };
+                            frame_size: image_area / frames,
+                        },
+                    )
+                })
+                .collect::<HashMap<_, _>>()
+        };
 
-            let max_frame_count =
-                characters
-                    .values()
-                    .fold(0, |max, character| match character.frame_size > max {
-                        true => character.frame_size,
-                        false => max,
-                    });
+        let max_frame_count =
+            characters
+                .values()
+                .fold(0, |max, character| match character.frame_size > max {
+                    true => character.frame_size,
+                    false => max,
+                });
 
-            Ok(PxTypeface {
-                height: if image.texture_descriptor.size.height == 0 {
-                    0
-                } else if settings.characters.is_empty() {
-                    return Err(anyhow!(
-                        "Typeface `{}` was assigned no characters. \
+        Ok(PxTypeface {
+            height: if image.texture_descriptor.size.height == 0 {
+                0
+            } else if settings.characters.is_empty() {
+                return Err(anyhow!(
+                    "Typeface `{}` was assigned no characters. \
                         If no `.meta` file exists for that asset, create one. \
                         See `assets/typeface/` for examples.",
-                        load_context.path().display()
-                    ));
-                } else {
-                    image.texture_descriptor.size.height / character_count as u32
-                },
-                characters,
-                separators: settings
-                    .separator_widths
-                    .iter()
-                    .map(|(&separator, &width)| (separator, PxSeparator { width }))
-                    .collect(),
-                max_frame_count,
-            })
+                    load_context.path().display()
+                ));
+            } else {
+                image.texture_descriptor.size.height / character_count as u32
+            },
+            characters,
+            separators: settings
+                .separator_widths
+                .iter()
+                .map(|(&separator, &width)| (separator, PxSeparator { width }))
+                .collect(),
+            max_frame_count,
         })
     }
 

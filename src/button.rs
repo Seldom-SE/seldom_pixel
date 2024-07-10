@@ -1,6 +1,6 @@
 use crate::{cursor::PxCursorPosition, math::RectExt, prelude::*, set::PxSet};
 
-pub(crate) fn button_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.init_resource::<PxEnableButtons>()
         .add_systems(
             PreUpdate,
@@ -189,7 +189,7 @@ fn interact_buttons(
             };
 
             if IRect::pos_size_anchor(**position, bounds.size, *anchor)
-                .contains(cursor_pos - bounds.offset.as_ivec2())
+                .contains_exclusive(cursor_pos - bounds.offset.as_ivec2())
             {
                 if hovered.is_none() {
                     button.insert(PxHover);

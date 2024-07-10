@@ -12,18 +12,18 @@ use bevy::{
         render_resource::TextureFormat,
         texture::{ImageLoader, ImageLoaderSettings},
     },
-    utils::{BoxedFuture, HashMap},
+    utils::HashMap,
 };
 use event_listener::Event;
 use seldom_singleton::AssetSingleton;
 
 use crate::prelude::*;
 
-pub(crate) fn palette_plugin(palette_path: PathBuf) -> impl FnOnce(&mut App) {
+pub(crate) fn plug(palette_path: PathBuf) -> impl Fn(&mut App) {
     move |app| {
         app.init_asset::<Palette>()
             .init_asset_loader::<PaletteLoader>()
-            .add_systems(Startup, init_palette(palette_path))
+            .add_systems(Startup, init_palette(palette_path.clone()))
             .add_systems(
                 PreUpdate,
                 load_asset_palette.run_if(resource_exists::<LoadingAssetPaletteHandle>),
@@ -44,18 +44,16 @@ impl AssetLoader for PaletteLoader {
     type Settings = ImageLoaderSettings;
     type Error = Error;
 
-    fn load<'a>(
+    async fn load<'a>(
         &'a self,
-        reader: &'a mut Reader,
+        reader: &'a mut Reader<'_>,
         settings: &'a ImageLoaderSettings,
-        load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<Palette>> {
-        Box::pin(async move {
-            let Self(image_loader) = self;
-            Ok(Palette::new(
-                &image_loader.load(reader, settings, load_context).await?,
-            ))
-        })
+        load_context: &'a mut LoadContext<'_>,
+    ) -> Result<Palette> {
+        let Self(image_loader) = self;
+        Ok(Palette::new(
+            &image_loader.load(reader, settings, load_context).await?,
+        ))
     }
 
     fn extensions(&self) -> &[&str] {

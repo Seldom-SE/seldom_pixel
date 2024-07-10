@@ -6,7 +6,6 @@ use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::texture::{ImageLoader, ImageLoaderSettings},
-    utils::BoxedFuture,
 };
 
 use crate::{
@@ -18,7 +17,7 @@ use crate::{
     prelude::*,
 };
 
-pub(crate) fn filter_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.init_asset::<PxFilter>()
         .init_asset_loader::<PxFilterLoader>();
 }
@@ -36,60 +35,58 @@ impl AssetLoader for PxFilterLoader {
     type Settings = ImageLoaderSettings;
     type Error = Error;
 
-    fn load<'a>(
+    async fn load<'a>(
         &'a self,
-        reader: &'a mut Reader,
+        reader: &'a mut Reader<'_>,
         settings: &'a ImageLoaderSettings,
-        load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<PxFilter>> {
-        Box::pin(async move {
-            let Self(image_loader) = self;
-            let image = image_loader.load(reader, settings, load_context).await?;
-            let palette = asset_palette().await;
-            let indices = PxImage::palette_indices(palette, &image)?;
+        load_context: &'a mut LoadContext<'_>,
+    ) -> Result<PxFilter> {
+        let Self(image_loader) = self;
+        let image = image_loader.load(reader, settings, load_context).await?;
+        let palette = asset_palette().await;
+        let indices = PxImage::palette_indices(palette, &image)?;
 
-            let mut filter = Vec::with_capacity(indices.area());
-            let frame_size = palette.size;
-            let frame_area = frame_size.x * frame_size.y;
-            let filter_width = image.texture_descriptor.size.width;
-            let frame_filter_width = filter_width / palette.size.x;
+        let mut filter = Vec::with_capacity(indices.area());
+        let frame_size = palette.size;
+        let frame_area = frame_size.x * frame_size.y;
+        let filter_width = image.texture_descriptor.size.width;
+        let frame_filter_width = filter_width / palette.size.x;
 
-            let mut frame_visible = true;
+        let mut frame_visible = true;
 
-            for i in 0..indices.area() {
-                let frame_index = i as u32 / frame_area;
-                let frame_pos = i as u32 % frame_area;
+        for i in 0..indices.area() {
+            let frame_index = i as u32 / frame_area;
+            let frame_pos = i as u32 % frame_area;
 
-                if frame_pos == 0 {
-                    if !frame_visible {
-                        for _ in 0..frame_area {
-                            filter.pop();
-                        }
-                        break;
+            if frame_pos == 0 {
+                if !frame_visible {
+                    for _ in 0..frame_area {
+                        filter.pop();
                     }
-
-                    frame_visible = false;
+                    break;
                 }
 
-                filter.push(
-                    if let Some(index) = indices.pixel(
-                        (UVec2::new(
-                            frame_index % frame_filter_width,
-                            frame_index / frame_filter_width,
-                        ) * frame_size
-                            + UVec2::new(frame_pos % frame_size.x, frame_pos / frame_size.x))
-                        .as_ivec2(),
-                    ) {
-                        frame_visible = true;
-                        index
-                    } else {
-                        0
-                    },
-                );
+                frame_visible = false;
             }
 
-            Ok(PxFilter(PxImage::new(filter, frame_area as usize)))
-        })
+            filter.push(
+                if let Some(index) = indices.pixel(
+                    (UVec2::new(
+                        frame_index % frame_filter_width,
+                        frame_index / frame_filter_width,
+                    ) * frame_size
+                        + UVec2::new(frame_pos % frame_size.x, frame_pos / frame_size.x))
+                    .as_ivec2(),
+                ) {
+                    frame_visible = true;
+                    index
+                } else {
+                    0
+                },
+            );
+        }
+
+        Ok(PxFilter(PxImage::new(filter, frame_area as usize)))
     }
 
     fn extensions(&self) -> &[&str] {

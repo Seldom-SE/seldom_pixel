@@ -4,7 +4,6 @@ use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::texture::{ImageLoader, ImageLoaderSettings},
-    utils::BoxedFuture,
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +15,7 @@ use crate::{
     prelude::*,
 };
 
-pub(crate) fn map_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.init_asset::<PxTileset>()
         .init_asset_loader::<PxTilesetLoader>();
 }
@@ -49,73 +48,71 @@ impl AssetLoader for PxTilesetLoader {
     type Settings = PxTilesetLoaderSettings;
     type Error = Error;
 
-    fn load<'a>(
+    async fn load<'a>(
         &'a self,
-        reader: &'a mut Reader,
+        reader: &'a mut Reader<'_>,
         settings: &'a PxTilesetLoaderSettings,
-        load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<PxTileset>> {
-        Box::pin(async move {
-            let Self(image_loader) = self;
-            let image = image_loader
-                .load(reader, &settings.image_loader_settings, load_context)
-                .await?;
-            let palette = asset_palette().await;
-            let indices = PxImage::palette_indices(palette, &image)?;
-            let tile_size = settings.tile_size;
-            let tile_area = tile_size.x * tile_size.y;
-            let mut tileset = Vec::default();
-            let mut tile = Vec::with_capacity(tile_area as usize);
-            let tileset_width = image.texture_descriptor.size.width;
-            let tile_tileset_width = tileset_width / tile_size.x;
-            let mut max_frame_count = 0;
+        load_context: &'a mut LoadContext<'_>,
+    ) -> Result<PxTileset> {
+        let Self(image_loader) = self;
+        let image = image_loader
+            .load(reader, &settings.image_loader_settings, load_context)
+            .await?;
+        let palette = asset_palette().await;
+        let indices = PxImage::palette_indices(palette, &image)?;
+        let tile_size = settings.tile_size;
+        let tile_area = tile_size.x * tile_size.y;
+        let mut tileset = Vec::default();
+        let mut tile = Vec::with_capacity(tile_area as usize);
+        let tileset_width = image.texture_descriptor.size.width;
+        let tile_tileset_width = tileset_width / tile_size.x;
+        let mut max_frame_count = 0;
 
-            for i in 0..indices.area() {
-                let tile_index = i as u32 / tile_area;
-                let tile_pos = i as u32 % tile_area;
+        for i in 0..indices.area() {
+            let tile_index = i as u32 / tile_area;
+            let tile_pos = i as u32 % tile_area;
 
-                tile.push(
-                    indices.pixel(
-                        (UVec2::new(
-                            tile_index % tile_tileset_width,
-                            tile_index / tile_tileset_width,
-                        ) * tile_size
-                            + UVec2::new(tile_pos % tile_size.x, tile_pos / tile_size.y))
-                        .as_ivec2(),
-                    ),
-                );
+            tile.push(
+                indices.pixel(
+                    (UVec2::new(
+                        tile_index % tile_tileset_width,
+                        tile_index / tile_tileset_width,
+                    ) * tile_size
+                        + UVec2::new(tile_pos % tile_size.x, tile_pos / tile_size.y))
+                    .as_ivec2(),
+                ),
+            );
 
-                if tile_pos == tile_area - 1
-                    && tile_index % tile_tileset_width == tile_tileset_width - 1
+            if tile_pos == tile_area - 1
+                && tile_index % tile_tileset_width == tile_tileset_width - 1
+            {
+                while tile.len() > tile_area as usize
+                    && tile[tile.len() - tile_area as usize..tile.len()]
+                        .iter()
+                        .all(|pixel| pixel.is_none())
                 {
-                    while tile.len() > tile_area as usize
-                        && tile[tile.len() - tile_area as usize..tile.len()]
-                            .iter()
-                            .all(|pixel| pixel.is_none())
-                    {
-                        tile.truncate(tile.len() - tile_area as usize);
-                    }
-
-                    let frame_count = tile.len() / tile_area as usize;
-                    if max_frame_count < frame_count {
-                        max_frame_count = frame_count;
-                    }
-
-                    tileset.push(PxSprite {
-                        data: PxImage::new(
-                            replace(&mut tile, Vec::with_capacity(tile_area as usize)),
-                            tile_size.x as usize,
-                        ),
-                        frame_size: tile_area as usize,
-                    });
+                    tile.truncate(tile.len() - tile_area as usize);
                 }
-            }
 
-            Ok(PxTileset {
-                tileset,
-                tile_size,
-                max_frame_count,
-            })
+                let frame_count = tile.len() / tile_area as usize;
+                if max_frame_count < frame_count {
+                    max_frame_count = frame_count;
+                }
+
+                tileset.push(PxSprite {
+                    data: PxImage::new(
+                        replace(&mut tile, Vec::with_capacity(tile_area as usize)),
+                        tile_size.x as usize,
+                    ),
+                    frame_size: tile_area as usize,
+                });
+            }
+        }
+
+        Ok(PxTileset {
+            tileset,
+            tile_size,
+            max_frame_count,
         })
     }
 

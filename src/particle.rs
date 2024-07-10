@@ -11,7 +11,7 @@ use crate::{position::PxLayer, prelude::*, set::PxSet};
 // If a day isn't sufficient for your use case, file an issue!
 const TIME_OFFSET: Duration = Duration::from_secs(60 * 60 * 24);
 
-pub(crate) fn particle_plugin<L: PxLayer>(app: &mut App) {
+pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.configure_sets(PostUpdate, PxSet::UpdateEmitters.before(PxSet::Draw))
         .add_systems(
             PostUpdate,

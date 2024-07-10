@@ -1,6 +1,6 @@
 [package]
 name = "seldom_pixel"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2021"
 categories = ["game-development"]
 description = "Bevy plugin for limited color palette pixel art games"
@@ -22,23 +22,22 @@ event-listener = "5.3"
 serde = "1.0"
 line_drawing = { version = "1.0", optional = true }
 kiddo = { version = "4.2" }
-seldom_fn_plugin = "0.6.0"
-seldom_singleton = "0.1.0"
-bevy_turborand = { version = "0.8.1", optional = true }
-seldom_state = { version = "0.10.0", optional = true }
-seldom_map_nav = { version = "0.6.0", optional = true }
+seldom_singleton = "0.2.0"
+bevy_turborand = { version = "0.9.0", optional = true }
+seldom_map_nav = { version = "0.7.0", optional = true }
 seldom_pixel_macros = { version = "0.1.0", path = "macros" }
+seldom_state = { version = "0.11.0", optional = true }
 
 [dependencies.bevy]
-version = "0.13.0"
+version = "0.14.0"
 default-features = false
 features = ["bevy_asset", "bevy_core_pipeline", "bevy_render", "bevy_sprite"]
 
 [dev-dependencies]
-bevy = { version = "0.13.0", features = ["png"] }
-leafwing-input-manager = "0.13.3"
+bevy = { version = "0.14.0", features = ["png"] }
+leafwing-input-manager = "0.14.0"
 rand = "0.8.5"
-seldom_state = { version = "0.10.0", features = ["leafwing_input"] }
+seldom_state = { version = "0.11.0", features = ["leafwing_input"] }
 
 [[example]]
 name = "line"

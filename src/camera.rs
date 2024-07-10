@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-pub(crate) fn camera_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.init_resource::<PxCamera>();
 }
 

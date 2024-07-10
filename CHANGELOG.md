@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7 (2024-07-09)
+
+### Changed
+
+- Updated `bevy` to 0.14
+
+### Removed
+
+- `seldom_fn_plugin` integration
+
 ## 0.6.1 (2024-05-30)
 
 ### Fixed
