@@ -112,7 +112,7 @@ fn init_screen(
         let mut screen_palette = [Vec3::ZERO; 256];
 
         for (i, [r, g, b]) in palette.colors.iter().enumerate() {
-            screen_palette[i] = Color::srgb_u8(*r, *g, *b).linear().to_vec3();
+            screen_palette[i] = Color::srgb_u8(*r, *g, *b).to_linear().to_vec3();
         }
 
         let image = images.add(Image {
@@ -764,7 +764,7 @@ fn update_screen_palette(
     let mut screen_palette = [Vec3::ZERO; 256];
 
     for (i, [r, g, b]) in palette.colors.iter().enumerate() {
-        screen_palette[i] = Color::srgb_u8(*r, *g, *b).linear().to_vec3();
+        screen_palette[i] = Color::srgb_u8(*r, *g, *b).to_linear().to_vec3();
     }
 
     for screen_material in &screen_materials {
