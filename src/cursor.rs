@@ -132,7 +132,10 @@ fn draw_cursor(
                 let mut image =
                     PxImageSliceMut::from_image_mut(images.get_mut(&screen.image).unwrap());
 
-                if let Some(pixel) = image.get_pixel_mut(cursor_pos.as_ivec2()) {
+                if let Some(pixel) = image.get_pixel_mut(IVec2::new(
+                    cursor_pos.x as i32,
+                    image.height() as i32 - 1 - cursor_pos.y as i32,
+                )) {
                     *pixel = filter
                         .get_pixel(IVec2::new(*pixel as i32, 0))
                         .expect("filter is incorrect size");

@@ -71,7 +71,7 @@ impl AssetLoader for PxTypefaceLoader {
             .load(reader, &settings.image_loader_settings, load_context)
             .await?;
         let palette = asset_palette().await;
-        let indices = PxImage::palette_indices_unaligned(palette, &image)?;
+        let indices = PxImage::palette_indices(palette, &image)?;
         let height = indices.height();
         let character_count = settings.characters.chars().count();
 
@@ -81,14 +81,8 @@ impl AssetLoader for PxTypefaceLoader {
             settings
                 .characters
                 .chars()
-                .zip(
-                    indices
-                        .split_vert(height / character_count)
-                        .into_iter()
-                        .rev(),
-                )
-                .map(|(character, image)| {
-                    let mut image = image.flip_vert();
+                .zip(indices.split_vert(height / character_count).into_iter())
+                .map(|(character, mut image)| {
                     image.trim_right();
                     let image_width = image.width();
                     let image_area = image.area();

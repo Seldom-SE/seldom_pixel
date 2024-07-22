@@ -100,7 +100,7 @@ impl AssetLoader for PxFilterLoader {
 /// and an image file. The image should have pixels in the same positions as the palette.
 /// The position of each pixel describes the mapping of colors. The image must only contain colors
 /// that are also in the palette. For animated filters, arrange a number of filters
-/// from the bottom-left corner, moving rightwards, wrapping upwards when it gets to the edge
+/// from the top-left corner, moving rightwards, wrapping downwards when it gets to the edge
 /// of the image. For examples, see the `assets/` directory in this repository. `fade_to_black.png`
 /// is an animated filter.
 #[derive(Asset, Reflect, Debug)]
@@ -116,7 +116,7 @@ impl Animation for PxFilter {
 
     fn draw(
         &self,
-        _: Self::Param,
+        (): (),
         image: &mut PxImageSliceMut<impl Pixel>,
         frame: impl Fn(UVec2) -> usize,
         _: impl Fn(u8) -> u8,

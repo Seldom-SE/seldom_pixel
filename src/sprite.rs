@@ -386,13 +386,13 @@ fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
 
 // TODO Use more helpers
 // TODO Feature gate
+// TODO Immediate function version
 fn image_to_sprite(
     mut to_sprites: Query<(&ImageToSprite, &mut Handle<PxSprite>)>,
     images: Res<Assets<Image>>,
     palette: PaletteParam,
     mut sprites: ResMut<Assets<PxSprite>>,
 ) {
-    let span = info_span!("init", name = "init").entered();
     if to_sprites.iter().next().is_none() {
         return;
     }
@@ -413,10 +413,8 @@ fn image_to_sprite(
             .map(|&color| color.into())
             .collect::<Vec<[f32; 3]>>()[..],
     );
-    drop(span);
 
     to_sprites.iter_mut().for_each(|(image, mut sprite)| {
-        let span = info_span!("making_images", name = "making_images").entered();
         let dither = &image.dither;
         let image = images.get(&image.image).unwrap();
 
@@ -446,7 +444,6 @@ fn image_to_sprite(
             .zip(sprite.data.iter_mut())
             .enumerate()
             .collect::<Vec<_>>();
-        drop(span);
 
         pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |_, pixels| {
             use DitherAlgorithm::*;

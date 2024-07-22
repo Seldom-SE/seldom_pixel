@@ -93,9 +93,7 @@ impl Palette {
             .convert(TextureFormat::Rgba8UnormSrgb)
             .unwrap()
             .data
-            .chunks_exact(palette.texture_descriptor.size.width as usize * 4)
-            .rev()
-            .flatten()
+            .iter()
             .copied()
             // TODO Should use chunks here
             .fold(

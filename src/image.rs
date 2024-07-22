@@ -79,19 +79,6 @@ impl<P: Pixel> PxImage<P> {
         }
     }
 
-    pub(crate) fn flip_vert(&self) -> Self {
-        PxImage {
-            image: self
-                .image
-                .chunks_exact(self.width)
-                .rev()
-                .flatten()
-                .copied()
-                .collect(),
-            width: self.width,
-        }
-    }
-
     pub(crate) fn split_vert(self, chunk_height: usize) -> Vec<Self> {
         self.image
             .chunks_exact(chunk_height * self.width)
@@ -149,11 +136,6 @@ impl PxImage<Option<u8>> {
                 .convert(TextureFormat::Rgba8UnormSrgb)
                 .ok_or_else(|| anyhow!("could not convert image to `Rgba8UnormSrgb`"))?
                 .data
-                .chunks_exact(image.texture_descriptor.size.width as usize * 4)
-                .rev()
-                .flatten()
-                .copied()
-                .collect::<Vec<_>>()
                 .chunks_exact(4)
                 .map(|color| {
                     (color[3] != 0)
@@ -170,31 +152,6 @@ impl PxImage<Option<u8>> {
                                         color[1],
                                         color[2]
                                     )
-                                })
-                        })
-                        .transpose()
-                })
-                .collect::<Result<_>>()?,
-            width: image.texture_descriptor.size.width as usize,
-        })
-    }
-
-    pub(crate) fn palette_indices_unaligned(palette: &Palette, image: &Image) -> Result<Self> {
-        Ok(Self {
-            image: image
-                .convert(TextureFormat::Rgba8UnormSrgb)
-                .unwrap()
-                .data
-                .chunks_exact(4)
-                .map(|color| {
-                    (color[3] != 0)
-                        .then(|| {
-                            palette
-                                .indices
-                                .get(&[color[0], color[1], color[2]])
-                                .copied()
-                                .ok_or_else(|| {
-                                    anyhow!("a sprite contained a color that wasn't in the palette")
                                 })
                         })
                         .transpose()
@@ -263,6 +220,10 @@ impl<'a, P: Pixel> PxImageSliceMut<'a, P> {
 
     pub(crate) fn width(&self) -> u32 {
         self.slice.size().x as u32
+    }
+
+    pub(crate) fn height(&self) -> u32 {
+        self.slice.size().y as u32
     }
 
     pub(crate) fn image_width(&self) -> usize {

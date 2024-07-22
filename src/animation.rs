@@ -278,10 +278,12 @@ pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
         PxCanvas::World => position - *camera,
         PxCanvas::Camera => position,
     };
+    let position = IVec2::new(position.x, image.size().y as i32 - position.y);
+    let size = size.as_ivec2();
 
     let mut image = image.slice_mut(IRect {
-        min: position,
-        max: position + size.as_ivec2(),
+        min: position - IVec2::new(0, size.y),
+        max: position + IVec2::new(size.x, 0),
     });
 
     draw_animation(spatial, param, &mut image, animation, filters);
