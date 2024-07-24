@@ -70,7 +70,7 @@ to develop and maintain. Anyway, limitations can incite creativity.
 - [ ] More shape primitives
 - [ ] Spatial filters that can filter defined areas, and apply their animations over space
       instead of time. For effects like lighting and bloom.
-- [ ] Make the rendering happen in the render world
+- [x] Make the rendering happen in the render world
 
 ## Usage
 

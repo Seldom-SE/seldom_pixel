@@ -1,14 +1,29 @@
 //! Screen and rendering
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, marker::PhantomData};
 
 use bevy::{
+    core_pipeline::{
+        core_2d::graph::{Core2d, Node2d},
+        fullscreen_vertex_shader::fullscreen_shader_vertex_state,
+    },
     render::{
-        render_resource::{
-            AsBindGroup, Extent3d, ShaderRef, TextureDescriptor, TextureDimension, TextureFormat,
-            TextureUsages,
+        render_graph::{
+            NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
         },
-        view::RenderLayers,
+        render_resource::{
+            binding_types::{sampler, texture_2d},
+            AsBindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
+            CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d, FragmentState,
+            ImageDataLayout, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
+            RenderPipelineDescriptor, Sampler, SamplerBindingType, ShaderRef, ShaderStages,
+            TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
+            TextureViewDescriptor,
+        },
+        renderer::{RenderContext, RenderDevice, RenderQueue},
+        texture::{BevyDefault, TextureFormatPixelInfo},
+        view::{RenderLayers, ViewTarget},
+        RenderApp,
     },
     sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle},
     window::{PrimaryWindow, WindowResized},
@@ -31,28 +46,62 @@ use crate::{
 const SCREEN_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(0x48CE_4F2C_8B78_5954_08A8_461F_62E1_0E84);
 
-pub(crate) fn plug<L: PxLayer>(size: ScreenSize, layers: RenderLayers) -> impl Fn(&mut App) {
-    move |app| {
+pub(crate) struct Plug<L: PxLayer> {
+    size: ScreenSize,
+    layers: RenderLayers,
+    _l: PhantomData<L>,
+}
+
+impl<L: PxLayer> Plug<L> {
+    pub(crate) fn new(size: ScreenSize, layers: RenderLayers) -> Self {
+        Self {
+            size,
+            layers,
+            _l: PhantomData,
+        }
+    }
+}
+
+impl<L: PxLayer> Plugin for Plug<L> {
+    fn build(&self, app: &mut App) {
         app.world_mut().resource_mut::<Assets<Shader>>().insert(
             SCREEN_SHADER_HANDLE.id(),
             Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
         );
-        app.add_plugins(Material2dPlugin::<ScreenMaterial>::default())
-            .configure_sets(PostUpdate, PxSet::Draw)
-            .add_systems(Startup, insert_screen(size))
-            .add_systems(Update, init_screen(layers.clone()))
-            .add_systems(
-                PostUpdate,
+        app.add_plugins((
+            Material2dPlugin::<ScreenMaterial>::default(),
+            // ExtractComponentPlugin::<ScreenMaterial>::default(),
+            // UniformComponentPlugin::<ScreenMaterial>::default(),
+        ))
+        .configure_sets(PostUpdate, PxSet::Draw)
+        .add_systems(Startup, insert_screen(self.size))
+        .add_systems(Update, init_screen(self.layers.clone()))
+        .add_systems(
+            PostUpdate,
+            (
+                update_screen,
                 (
-                    update_screen,
-                    (
-                        (clear_screen, resize_screen),
-                        draw_screen::<L>.in_set(PxSet::Draw),
-                    )
-                        .chain(),
-                    update_screen_palette,
-                ),
-            );
+                    (clear_screen, resize_screen),
+                    draw_screen::<L>.in_set(PxSet::Draw),
+                )
+                    .chain(),
+                update_screen_palette,
+            ),
+        )
+        .sub_app_mut(RenderApp)
+        .add_render_graph_node::<ViewNodeRunner<PxRenderNode<L>>>(Core2d, PxRender)
+        .add_render_graph_edges(
+            Core2d,
+            (
+                Node2d::Tonemapping,
+                PxRender,
+                Node2d::EndMainPassPostProcessing,
+            ),
+        );
+    }
+
+    fn finish(&self, app: &mut App) {
+        app.sub_app_mut(RenderApp).init_resource::<PxPipeline>();
     }
 }
 
@@ -263,6 +312,135 @@ fn resize_screen(
 fn clear_screen(screen: Res<Screen>, mut images: ResMut<Assets<Image>>) {
     for pixel in images.get_mut(&screen.image).unwrap().data.iter_mut() {
         *pixel = 0;
+    }
+}
+
+#[derive(Resource)]
+struct PxPipeline {
+    layout: BindGroupLayout,
+    sampler: Sampler,
+    id: CachedRenderPipelineId,
+}
+
+impl FromWorld for PxPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let render_device = world.resource::<RenderDevice>();
+
+        let layout = render_device.create_bind_group_layout(
+            "px_bind_group_layout",
+            &BindGroupLayoutEntries::sequential(
+                ShaderStages::FRAGMENT,
+                (
+                    texture_2d(TextureSampleType::Float { filterable: true }),
+                    sampler(SamplerBindingType::Filtering),
+                    texture_2d(TextureSampleType::Uint),
+                ),
+            ),
+        );
+
+        Self {
+            sampler: render_device.create_sampler(&default()),
+            id: world.resource_mut::<PipelineCache>().queue_render_pipeline(
+                RenderPipelineDescriptor {
+                    label: Some("px_pipeline".into()),
+                    layout: vec![layout.clone()],
+                    vertex: fullscreen_shader_vertex_state(),
+                    fragment: Some(FragmentState {
+                        shader: SCREEN_SHADER_HANDLE,
+                        shader_defs: Vec::new(),
+                        entry_point: "fragment".into(),
+                        targets: vec![Some(ColorTargetState {
+                            format: TextureFormat::bevy_default(),
+                            blend: None,
+                            write_mask: ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: default(),
+                    depth_stencil: None,
+                    multisample: default(),
+                    push_constant_ranges: Vec::new(),
+                },
+            ),
+            layout,
+        }
+    }
+}
+
+#[derive(RenderLabel, Hash, Eq, PartialEq, Clone, Debug)]
+struct PxRender;
+
+#[derive(Default)]
+struct PxRenderNode<L: PxLayer>(PhantomData<L>);
+
+impl<L: PxLayer> ViewNode for PxRenderNode<L> {
+    type ViewQuery = &'static ViewTarget;
+
+    fn update(&mut self, _world: &mut World) {}
+
+    fn run<'w>(
+        &self,
+        _: &mut RenderGraphContext,
+        render_context: &mut RenderContext<'w>,
+        target: &ViewTarget,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        let image = Image::default();
+        let texture = render_context
+            .render_device()
+            .create_texture(&image.texture_descriptor);
+
+        world.resource::<RenderQueue>().write_texture(
+            texture.as_image_copy(),
+            &image.data,
+            ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(
+                    image.width() * image.texture_descriptor.format.pixel_size() as u32,
+                ),
+                rows_per_image: None,
+            },
+            image.texture_descriptor.size,
+        );
+
+        let texture_view = texture.create_view(&TextureViewDescriptor::default());
+
+        let px_pipeline = world.resource::<PxPipeline>();
+        let Some(pipeline) = world
+            .resource::<PipelineCache>()
+            .get_render_pipeline(px_pipeline.id)
+        else {
+            return Ok(());
+        };
+
+        let post_process = target.post_process_write();
+
+        let bind_group = render_context.render_device().create_bind_group(
+            "px_bind_group",
+            &px_pipeline.layout,
+            &BindGroupEntries::sequential((
+                post_process.source,
+                &px_pipeline.sampler,
+                &texture_view,
+            )),
+        );
+
+        let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("px_pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: post_process.destination,
+                resolve_target: None,
+                ops: default(),
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        render_pass.set_render_pipeline(pipeline);
+        render_pass.set_bind_group(0, &bind_group, &[]);
+        render_pass.draw(0..3, 0..1);
+
+        Ok(())
     }
 }
 

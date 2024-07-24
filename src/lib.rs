@@ -77,7 +77,7 @@ impl<L: PxLayer> Plugin for PxPlugin<L> {
             map::plug,
             palette::plug(self.palette_path.clone()),
             position::plug,
-            screen::plug::<L>(self.screen_size, self.layers.clone()),
+            screen::Plug::<L>::new(self.screen_size, self.layers.clone()),
             sprite::plug,
             text::plug,
             #[cfg(feature = "particle")]
