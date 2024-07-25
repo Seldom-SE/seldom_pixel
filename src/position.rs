@@ -38,29 +38,29 @@ pub(crate) fn plug(app: &mut App) {
             update_position_to_sub.in_set(PxSet::UpdatePosToSubPos),
         )
             .chain(),
-    )
-    .add_systems(
-        PostUpdate,
-        (
-            align_to_screen!(
-                (&PxMap, &Handle<PxTileset>),
-                Res<Assets<PxTileset>>,
-                |(map, tileset), tilesets: &Res<Assets<PxTileset>>| {
-                    Some((map, tilesets.get(tileset)?).frame_size())
-                }
-            ),
-            align_to_screen!(&Handle<PxSprite>, Res<Assets<PxSprite>>, |sprite,
-                                                                        sprites: &Res<
-                Assets<PxSprite>,
-            >| {
-                Some(sprites.get(sprite)?.frame_size())
-            }),
-            align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
-            #[cfg(feature = "line")]
-            align_to_screen!(&PxLine, (), |line: &PxLine, &()| Some(line.frame_size())),
-        )
-            .before(PxSet::Draw),
     );
+    // .add_systems(
+    //     PostUpdate,
+    //     (
+    //         align_to_screen!(
+    //             (&PxMap, &Handle<PxTileset>),
+    //             Res<Assets<PxTileset>>,
+    //             |(map, tileset), tilesets: &Res<Assets<PxTileset>>| {
+    //                 Some((map, tilesets.get(tileset)?).frame_size())
+    //             }
+    //         ),
+    //         align_to_screen!(&Handle<PxSprite>, Res<Assets<PxSprite>>, |sprite,
+    //                                                                     sprites: &Res<
+    //             Assets<PxSprite>,
+    //         >| {
+    //             Some(sprites.get(sprite)?.frame_size())
+    //         }),
+    //         align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
+    //         #[cfg(feature = "line")]
+    //         align_to_screen!(&PxLine, (), |line: &PxLine, &()| Some(line.frame_size())),
+    //     )
+    //         .before(PxSet::Draw),
+    // );
 }
 
 pub(crate) trait Spatial {

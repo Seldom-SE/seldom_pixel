@@ -1,7 +1,10 @@
 use anyhow::{anyhow, Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
-    render::texture::{ImageLoader, ImageLoaderSettings},
+    render::{
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+        texture::{ImageLoader, ImageLoaderSettings},
+    },
     utils::HashMap,
 };
 use serde::{Deserialize, Serialize};
@@ -12,7 +15,8 @@ use crate::{
 };
 
 pub(crate) fn plug(app: &mut App) {
-    app.init_asset::<PxTypeface>()
+    app.add_plugins(RenderAssetPlugin::<PxTypeface>::default())
+        .init_asset::<PxTypeface>()
         .init_asset_loader::<PxTypefaceLoader>();
 }
 
@@ -141,7 +145,7 @@ impl AssetLoader for PxTypefaceLoader {
     }
 }
 
-#[derive(Debug, Reflect)]
+#[derive(Clone, Debug, Reflect)]
 pub(crate) struct PxSeparator {
     pub(crate) width: u32,
 }
@@ -151,12 +155,28 @@ pub(crate) struct PxSeparator {
 /// For animated typefaces, add additional frames to the right of characters, marking the end
 /// of an animation with a fully transparent character or the end of the image.
 /// See the images in `assets/typeface/` for examples.
-#[derive(Asset, Reflect, Debug)]
+#[derive(Asset, Clone, Reflect, Debug)]
 pub struct PxTypeface {
     pub(crate) height: u32,
     pub(crate) characters: HashMap<char, PxSprite>,
     pub(crate) separators: HashMap<char, PxSeparator>,
     pub(crate) max_frame_count: usize,
+}
+
+impl RenderAsset for PxTypeface {
+    type SourceAsset = Self;
+    type Param = ();
+
+    fn asset_usage(_: &Self) -> RenderAssetUsages {
+        RenderAssetUsages::RENDER_WORLD
+    }
+
+    fn prepare_asset(
+        source_asset: Self,
+        &mut (): &mut (),
+    ) -> Result<Self, PrepareAssetError<Self>> {
+        Ok(source_asset)
+    }
 }
 
 impl AnimationAsset for PxTypeface {

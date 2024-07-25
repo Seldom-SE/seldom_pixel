@@ -5,7 +5,10 @@ use std::time::Duration;
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
-    render::texture::{ImageLoader, ImageLoaderSettings},
+    render::{
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+        texture::{ImageLoader, ImageLoaderSettings},
+    },
 };
 
 use crate::{
@@ -18,7 +21,8 @@ use crate::{
 };
 
 pub(crate) fn plug(app: &mut App) {
-    app.init_asset::<PxFilter>()
+    app.add_plugins(RenderAssetPlugin::<PxFilter>::default())
+        .init_asset::<PxFilter>()
         .init_asset_loader::<PxFilterLoader>();
 }
 
@@ -103,8 +107,24 @@ impl AssetLoader for PxFilterLoader {
 /// from the top-left corner, moving rightwards, wrapping downwards when it gets to the edge
 /// of the image. For examples, see the `assets/` directory in this repository. `fade_to_black.png`
 /// is an animated filter.
-#[derive(Asset, Reflect, Debug)]
+#[derive(Asset, Clone, Reflect, Debug)]
 pub struct PxFilter(pub(crate) PxImage<u8>);
+
+impl RenderAsset for PxFilter {
+    type SourceAsset = Self;
+    type Param = ();
+
+    fn asset_usage(_: &Self) -> RenderAssetUsages {
+        RenderAssetUsages::RENDER_WORLD
+    }
+
+    fn prepare_asset(
+        source_asset: Self,
+        &mut (): &mut (),
+    ) -> Result<Self, PrepareAssetError<Self>> {
+        Ok(source_asset)
+    }
+}
 
 impl Animation for PxFilter {
     type Param = ();

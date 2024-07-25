@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::utils::Instant;
 
 use crate::position::Spatial;
@@ -13,22 +14,23 @@ use crate::{
 };
 
 pub(crate) fn plug(app: &mut App) {
-    app.configure_sets(
-        PostUpdate,
-        PxSet::FinishAnimations
-            .after(PxSet::LoadAssets)
-            .before(PxSet::Draw),
-    )
-    .add_systems(
-        PostUpdate,
-        (
-            finish_animations::<PxSprite>,
-            finish_animations::<PxFilter>,
-            finish_animations::<PxTypeface>,
-            finish_animations::<PxTileset>,
+    app.add_plugins(ExtractResourcePlugin::<LastUpdate>::default())
+        .configure_sets(
+            PostUpdate,
+            PxSet::FinishAnimations
+                .after(PxSet::LoadAssets)
+                .before(PxSet::Draw),
         )
-            .in_set(PxSet::FinishAnimations),
-    );
+        .add_systems(
+            PostUpdate,
+            (
+                finish_animations::<PxSprite>,
+                finish_animations::<PxFilter>,
+                finish_animations::<PxTypeface>,
+                finish_animations::<PxTileset>,
+            )
+                .in_set(PxSet::FinishAnimations),
+        );
 }
 
 /// Direction the animation plays
@@ -289,6 +291,17 @@ pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
     draw_animation(spatial, param, &mut image, animation, filters);
 }
 
+#[derive(Resource)]
+pub(crate) struct LastUpdate(pub(crate) Instant);
+
+impl ExtractResource for LastUpdate {
+    type Source = Time<Real>;
+
+    fn extract_resource(source: &Time<Real>) -> Self {
+        Self(source.last_update().unwrap_or_else(|| source.startup()))
+    }
+}
+
 pub(crate) fn copy_animation_params(
     params: Option<(
         &PxAnimationDirection,
@@ -297,7 +310,7 @@ pub(crate) fn copy_animation_params(
         &PxAnimationFrameTransition,
         &PxAnimationStart,
     )>,
-    time: &Time<Real>,
+    last_update: Instant,
 ) -> Option<(
     PxAnimationDirection,
     PxAnimationDuration,
@@ -312,7 +325,7 @@ pub(crate) fn copy_animation_params(
                 duration,
                 on_finish,
                 frame_transition,
-                time.last_update().unwrap_or_else(|| time.startup()) - start,
+                last_update - start,
             )
         },
     )

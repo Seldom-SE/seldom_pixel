@@ -3,7 +3,10 @@
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
-    render::texture::{ImageLoader, ImageLoaderSettings},
+    render::{
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+        texture::{ImageLoader, ImageLoaderSettings},
+    },
     tasks::{ComputeTaskPool, ParallelSliceMut},
 };
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
@@ -20,7 +23,8 @@ use crate::{
 };
 
 pub(crate) fn plug(app: &mut App) {
-    app.init_asset::<PxSprite>()
+    app.add_plugins(RenderAssetPlugin::<PxSprite>::default())
+        .init_asset::<PxSprite>()
         .init_asset_loader::<PxSpriteLoader>()
         .add_systems(PostUpdate, image_to_sprite.before(PxSet::Draw));
 }
@@ -80,11 +84,27 @@ impl AssetLoader for PxSpriteLoader {
 /// A sprite. Create a [`Handle<PxSprite>`] with a [`PxAssets<PxSprite>`] and an image.
 /// If the sprite is animated, the frames should be laid out from bottom to top.
 /// See `assets/sprite/runner.png` for an example of an animated sprite.
-#[derive(Asset, Serialize, Deserialize, Reflect, Debug)]
+#[derive(Asset, Serialize, Deserialize, Clone, Reflect, Debug)]
 pub struct PxSprite {
     // TODO Use 0 for transparency
     pub(crate) data: PxImage<Option<u8>>,
     pub(crate) frame_size: usize,
+}
+
+impl RenderAsset for PxSprite {
+    type SourceAsset = Self;
+    type Param = ();
+
+    fn asset_usage(_: &Self) -> RenderAssetUsages {
+        RenderAssetUsages::RENDER_WORLD
+    }
+
+    fn prepare_asset(
+        source_asset: Self,
+        &mut (): &mut (),
+    ) -> Result<Self, PrepareAssetError<Self>> {
+        Ok(source_asset)
+    }
 }
 
 impl Animation for PxSprite {

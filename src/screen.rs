@@ -8,6 +8,7 @@ use bevy::{
         fullscreen_vertex_shader::fullscreen_shader_vertex_state,
     },
     render::{
+        render_asset::RenderAssets,
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
         },
@@ -18,21 +19,21 @@ use bevy::{
             ImageDataLayout, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
             RenderPipelineDescriptor, Sampler, SamplerBindingType, ShaderRef, ShaderStages,
             TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-            TextureViewDescriptor,
+            TextureViewDescriptor, TextureViewDimension,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{BevyDefault, TextureFormatPixelInfo},
         view::{RenderLayers, ViewTarget},
         RenderApp,
     },
-    sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle},
+    sprite::{Material2d, MaterialMesh2dBundle},
     window::{PrimaryWindow, WindowResized},
 };
 
 #[cfg(feature = "line")]
 use crate::line::draw_line;
 use crate::{
-    animation::{copy_animation_params, draw_spatial, PxAnimationStart},
+    animation::{copy_animation_params, draw_spatial, LastUpdate, PxAnimationStart},
     filter::draw_filter,
     image::{PxImage, PxImageSliceMut},
     map::PxTile,
@@ -40,7 +41,6 @@ use crate::{
     palette::{PaletteHandle, PaletteParam},
     position::PxLayer,
     prelude::*,
-    set::PxSet,
 };
 
 const SCREEN_SHADER_HANDLE: Handle<Shader> =
@@ -68,36 +68,25 @@ impl<L: PxLayer> Plugin for Plug<L> {
             SCREEN_SHADER_HANDLE.id(),
             Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
         );
-        app.add_plugins((
-            Material2dPlugin::<ScreenMaterial>::default(),
-            // ExtractComponentPlugin::<ScreenMaterial>::default(),
-            // UniformComponentPlugin::<ScreenMaterial>::default(),
-        ))
-        .configure_sets(PostUpdate, PxSet::Draw)
-        .add_systems(Startup, insert_screen(self.size))
-        .add_systems(Update, init_screen(self.layers.clone()))
-        .add_systems(
-            PostUpdate,
-            (
-                update_screen,
+        app.add_systems(Startup, insert_screen(self.size))
+            .add_systems(Update, init_screen(self.layers.clone()))
+            .add_systems(
+                PostUpdate,
                 (
-                    (clear_screen, resize_screen),
-                    draw_screen::<L>.in_set(PxSet::Draw),
-                )
-                    .chain(),
-                update_screen_palette,
-            ),
-        )
-        .sub_app_mut(RenderApp)
-        .add_render_graph_node::<ViewNodeRunner<PxRenderNode<L>>>(Core2d, PxRender)
-        .add_render_graph_edges(
-            Core2d,
-            (
-                Node2d::Tonemapping,
-                PxRender,
-                Node2d::EndMainPassPostProcessing,
-            ),
-        );
+                    (update_screen, (clear_screen, resize_screen)).chain(),
+                    update_screen_palette,
+                ),
+            )
+            .sub_app_mut(RenderApp)
+            .add_render_graph_node::<ViewNodeRunner<PxNode<L>>>(Core2d, PxRender)
+            .add_render_graph_edges(
+                Core2d,
+                (
+                    Node2d::Tonemapping,
+                    PxRender,
+                    Node2d::EndMainPassPostProcessing,
+                ),
+            );
     }
 
     fn finish(&self, app: &mut App) {
@@ -369,13 +358,119 @@ impl FromWorld for PxPipeline {
 #[derive(RenderLabel, Hash, Eq, PartialEq, Clone, Debug)]
 struct PxRender;
 
-#[derive(Default)]
-struct PxRenderNode<L: PxLayer>(PhantomData<L>);
+struct PxNode<L: PxLayer> {
+    maps: QueryState<(
+        &'static PxMap,
+        &'static Handle<PxTileset>,
+        &'static PxPosition,
+        &'static L,
+        &'static PxCanvas,
+        &'static Visibility,
+        Option<(
+            &'static PxAnimationDirection,
+            &'static PxAnimationDuration,
+            &'static PxAnimationFinishBehavior,
+            &'static PxAnimationFrameTransition,
+            &'static PxAnimationStart,
+        )>,
+        Option<&'static Handle<PxFilter>>,
+    )>,
+    tiles: QueryState<(
+        &'static PxTile,
+        &'static Visibility,
+        Option<&'static Handle<PxFilter>>,
+    )>,
+    sprites: QueryState<(
+        &'static Handle<PxSprite>,
+        &'static PxPosition,
+        &'static PxAnchor,
+        &'static L,
+        &'static PxCanvas,
+        &'static Visibility,
+        Option<(
+            &'static PxAnimationDirection,
+            &'static PxAnimationDuration,
+            &'static PxAnimationFinishBehavior,
+            &'static PxAnimationFrameTransition,
+            &'static PxAnimationStart,
+        )>,
+        Option<&'static Handle<PxFilter>>,
+    )>,
+    texts: QueryState<(
+        &'static PxText,
+        &'static Handle<PxTypeface>,
+        &'static PxRect,
+        &'static PxAnchor,
+        &'static L,
+        &'static PxCanvas,
+        &'static Visibility,
+        Option<(
+            &'static PxAnimationDirection,
+            &'static PxAnimationDuration,
+            &'static PxAnimationFinishBehavior,
+            &'static PxAnimationFrameTransition,
+            &'static PxAnimationStart,
+        )>,
+        Option<&'static Handle<PxFilter>>,
+    )>,
+    #[cfg(feature = "line")]
+    lines: QueryState<(
+        &PxLine,
+        &Handle<PxFilter>,
+        &PxFilterLayers<L>,
+        &PxCanvas,
+        &Visibility,
+        Option<(
+            &PxAnimationDirection,
+            &PxAnimationDuration,
+            &PxAnimationFinishBehavior,
+            &PxAnimationFrameTransition,
+            &PxAnimationStart,
+        )>,
+    )>,
+    filters: QueryState<
+        (
+            &'static Handle<PxFilter>,
+            &'static PxFilterLayers<L>,
+            &'static Visibility,
+            Option<(
+                &'static PxAnimationDirection,
+                &'static PxAnimationDuration,
+                &'static PxAnimationFinishBehavior,
+                &'static PxAnimationFrameTransition,
+                &'static PxAnimationStart,
+            )>,
+        ),
+        Without<PxCanvas>,
+    >,
+}
 
-impl<L: PxLayer> ViewNode for PxRenderNode<L> {
+impl<L: PxLayer> FromWorld for PxNode<L> {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            maps: world.query(),
+            tiles: world.query(),
+            sprites: world.query(),
+            texts: world.query(),
+            #[cfg(feature = "line")]
+            lines: world.query(),
+            filters: world.query_filtered(),
+        }
+    }
+}
+
+impl<L: PxLayer> ViewNode for PxNode<L> {
     type ViewQuery = &'static ViewTarget;
 
-    fn update(&mut self, _world: &mut World) {}
+    fn update(&mut self, world: &mut World) {
+        self.maps.update_archetypes(world);
+        self.tiles.update_archetypes(world);
+        self.sprites.update_archetypes(world);
+        self.texts.update_archetypes(world);
+        #[cfg(feature = "line")]
+        self.lines.update_archetypes(world);
+        self.filters.update_archetypes(world);
+    }
 
     fn run<'w>(
         &self,
@@ -384,7 +479,509 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         target: &ViewTarget,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        let image = Image::default();
+        let &camera = world.resource::<PxCamera>();
+        let &LastUpdate(last_update) = world.resource::<LastUpdate>();
+
+        let mut image = Image::new_fill(
+            Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[255, 0, 255, 255],
+            TextureFormat::Rgba8Uint,
+            default(),
+        );
+
+        #[cfg(feature = "line")]
+        let mut layer_contents =
+            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>::default();
+        #[cfg(not(feature = "line"))]
+        let mut layer_contents =
+            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
+
+        for (map, tileset, position, layer, canvas, visibility, animation, filter) in
+            self.maps.iter_manual(world)
+        {
+            if let Visibility::Hidden = visibility {
+                continue;
+            }
+
+            if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+                maps.push((map, tileset, position, canvas, animation, filter));
+            } else {
+                layer_contents.insert(
+                    layer.clone(),
+                    (
+                        vec![(map, tileset, position, canvas, animation, filter)],
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                    ),
+                );
+            }
+        }
+
+        for (sprite, position, anchor, layer, canvas, visibility, animation, filter) in
+            self.sprites.iter_manual(world)
+        {
+            if let Visibility::Hidden = visibility {
+                continue;
+            }
+
+            if let Some((_, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+                sprites.push((sprite, position, anchor, canvas, animation, filter));
+            } else {
+                layer_contents.insert(
+                    layer.clone(),
+                    (
+                        default(),
+                        vec![(sprite, position, anchor, canvas, animation, filter)],
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                    ),
+                );
+            }
+        }
+
+        for (text, typeface, rect, alignment, layer, canvas, visibility, animation, filter) in
+            self.texts.iter_manual(world)
+        {
+            if let Visibility::Hidden = visibility {
+                continue;
+            }
+
+            if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
+                texts.push((text, typeface, rect, alignment, canvas, animation, filter));
+            } else {
+                layer_contents.insert(
+                    layer.clone(),
+                    (
+                        default(),
+                        default(),
+                        vec![(text, typeface, rect, alignment, canvas, animation, filter)],
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                    ),
+                );
+            }
+        }
+
+        #[cfg(feature = "line")]
+        for (line, filter, layers, canvas, visibility, animation) in self.lines.iter_manual(world) {
+            for (layer, clip) in match layers {
+                PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
+                PxFilterLayers::Many(layers) => {
+                    layers.iter().map(|layer| (layer.clone(), true)).collect()
+                }
+                PxFilterLayers::Select(select_fn) => layer_contents
+                    .keys()
+                    .filter(|layer| select_fn(layer))
+                    .map(|layer| (layer.clone(), true))
+                    .collect(),
+            }
+            .into_iter()
+            {
+                if let Some((_, _, _, clip_lines, _, over_lines, _)) =
+                    layer_contents.get_mut(&layer)
+                {
+                    if clip { clip_lines } else { over_lines }
+                        .push((line, filter, canvas, visibility, animation));
+                } else {
+                    let lines = vec![(line, filter, canvas, visibility, animation)];
+
+                    layer_contents.insert(
+                        layer,
+                        if clip {
+                            (
+                                default(),
+                                default(),
+                                default(),
+                                lines,
+                                default(),
+                                default(),
+                                default(),
+                            )
+                        } else {
+                            (
+                                default(),
+                                default(),
+                                default(),
+                                default(),
+                                default(),
+                                lines,
+                                default(),
+                            )
+                        },
+                    );
+                }
+            }
+        }
+
+        let tilesets = world.resource::<RenderAssets<PxTileset>>();
+        let sprite_assets = world.resource::<RenderAssets<PxSprite>>();
+        let typefaces = world.resource::<RenderAssets<PxTypeface>>();
+        let filters = world.resource::<RenderAssets<PxFilter>>();
+
+        for (filter, layers, visibility, animation) in self.filters.iter_manual(world) {
+            if let Visibility::Hidden = visibility {
+                continue;
+            }
+
+            for (layer, clip) in match layers {
+                PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
+                PxFilterLayers::Many(layers) => {
+                    layers.iter().map(|layer| (layer.clone(), true)).collect()
+                }
+                PxFilterLayers::Select(select_fn) => layer_contents
+                    .keys()
+                    .filter(|layer| select_fn(layer))
+                    .map(|layer| (layer.clone(), true))
+                    .collect(),
+            }
+            .into_iter()
+            {
+                if let Some((_, _, _, _, clip_filters, _, over_filters)) =
+                    layer_contents.get_mut(&layer)
+                {
+                    if clip { clip_filters } else { over_filters }.push((filter, animation));
+                } else {
+                    let filters = vec![(filter, animation)];
+
+                    layer_contents.insert(
+                        layer,
+                        if clip {
+                            (
+                                default(),
+                                default(),
+                                default(),
+                                default(),
+                                filters,
+                                default(),
+                                default(),
+                            )
+                        } else {
+                            (
+                                default(),
+                                default(),
+                                default(),
+                                default(),
+                                default(),
+                                default(),
+                                filters,
+                            )
+                        },
+                    );
+                }
+            }
+        }
+
+        let mut layer_image = PxImage::<Option<u8>>::empty_from_image(&image);
+        let mut image_slice = PxImageSliceMut::from_image_mut(&mut image);
+
+        #[allow(unused_variables)]
+        for (_, (maps, sprites, texts, clip_lines, clip_filters, over_lines, over_filters)) in
+            layer_contents.into_iter()
+        {
+            layer_image.clear();
+
+            for (map, tileset, position, canvas, animation, map_filter) in maps {
+                let Some(tileset) = tilesets.get(tileset) else {
+                    continue;
+                };
+
+                let map_filter = map_filter.and_then(|map_filter| filters.get(map_filter));
+                let size = map.size();
+
+                for x in 0..size.x {
+                    for y in 0..size.y {
+                        let pos = UVec2::new(x, y);
+                        let Some(tile) = map.get(pos) else {
+                            continue;
+                        };
+
+                        let (&PxTile { texture }, visibility, tile_filter) = self
+                            .tiles
+                            .get_manual(world, tile)
+                            .expect("entity in map is not a valid tile");
+
+                        if let Visibility::Hidden = visibility {
+                            continue;
+                        }
+
+                        let Some(tile) = tileset.tileset.get(texture as usize) else {
+                            error!("tile texture index out of bounds: the len is {}, but the index is {texture}", tileset.tileset.len());
+                            continue;
+                        };
+
+                        draw_spatial(
+                            tile,
+                            (),
+                            &mut layer_image,
+                            (**position + pos.as_ivec2() * tileset.tile_size().as_ivec2()).into(),
+                            PxAnchor::BottomLeft,
+                            *canvas,
+                            copy_animation_params(animation, last_update),
+                            [
+                                tile_filter.and_then(|tile_filter| filters.get(tile_filter)),
+                                map_filter,
+                            ]
+                            .into_iter()
+                            .flatten(),
+                            camera,
+                        );
+                    }
+                }
+            }
+
+            for (sprite, position, anchor, canvas, animation, filter) in sprites {
+                let Some(sprite) = sprite_assets.get(sprite) else {
+                    continue;
+                };
+
+                draw_spatial(
+                    sprite,
+                    (),
+                    &mut layer_image,
+                    *position,
+                    *anchor,
+                    *canvas,
+                    copy_animation_params(animation, last_update),
+                    filter.and_then(|filter| filters.get(filter)),
+                    camera,
+                );
+            }
+
+            for (text, typeface, rect, alignment, canvas, animation, filter) in texts {
+                let Some(typeface) = typefaces.get(typeface) else {
+                    continue;
+                };
+
+                let rect = match canvas {
+                    PxCanvas::World => rect.sub_ivec2(*camera),
+                    PxCanvas::Camera => **rect,
+                };
+                let rect_size = rect.size().as_uvec2();
+                let line_count = (rect_size.y + 1) / (typeface.height + 1);
+
+                let mut lines = Vec::default();
+                let mut line = Vec::default();
+                let mut line_width = 0;
+                let mut word = Vec::default();
+                let mut word_width = 0;
+                let mut separator = Vec::default();
+                let mut separator_width = 0;
+                for character in text.chars() {
+                    let (character_width, is_separator) = typeface
+                        .characters
+                        .get(&character)
+                        .map(|character| (character.data.width() as u32, false))
+                        .unwrap_or_else(|| {
+                            (
+                                typeface
+                                    .separators
+                                    .get(&character)
+                                    .map(|separator| separator.width)
+                                    .unwrap_or_else(|| {
+                                        error!(
+                                            "received character '{character}' that isn't in typeface"
+                                        );
+                                        0
+                                    }),
+                                true,
+                            )
+                        });
+
+                    if if is_separator {
+                        if line_width + separator_width + word_width - 1 > rect_size.x {
+                            lines.push((line_width, line));
+                            line_width = word_width - 1;
+                            line = word;
+                            word_width = 0;
+                            word = default();
+                            separator_width = character_width;
+                            separator = vec![character];
+                            true
+                        } else if word.is_empty() {
+                            separator_width += character_width;
+                            separator.push(character);
+                            false
+                        } else {
+                            line_width += separator_width + word_width - 1;
+                            line.append(&mut separator);
+                            line.append(&mut word);
+                            word_width = 0;
+                            separator_width = character_width;
+                            separator = vec![character];
+                            false
+                        }
+                    } else if word_width + character_width > rect_size.x {
+                        if !line.is_empty() {
+                            lines.push((line_width, line));
+                            line_width = 0;
+                            line = default();
+                        }
+
+                        if word_width > 0 {
+                            lines.push((word_width - 1, word));
+                        }
+                        word_width = character_width + 1;
+                        word = vec![character];
+                        separator_width = 0;
+                        separator = default();
+                        true
+                    } else {
+                        word_width += character_width + 1;
+                        word.push(character);
+                        false
+                    } && lines.len() as u32 > line_count
+                    {
+                        line_width = 0;
+                        line.clear();
+                        word_width = 0;
+                        word.clear();
+                        separator_width = 0;
+                        separator.clear();
+                        break;
+                    }
+                }
+
+                if line_width + separator_width + word_width + 1 > rect_size.x {
+                    lines.push((line_width, line));
+                    if word_width > 0 {
+                        lines.push((word_width - 1, word));
+                    }
+                } else if !word.is_empty() {
+                    line_width += separator_width + word_width - 1;
+                    line.append(&mut separator);
+                    line.append(&mut word);
+                    lines.push((line_width, line));
+                }
+
+                if lines.len() as u32 > line_count {
+                    for _ in 0..lines.len() as u32 - line_count {
+                        lines.pop();
+                    }
+                }
+
+                let mut text_image = PxImage::empty(rect_size);
+                let lines_height =
+                    (lines.len() as u32 * typeface.height + lines.len() as u32).max(1) - 1;
+                let mut line_y = alignment.y_pos(rect_size.y - lines_height)
+                    + lines.len() as u32 * (typeface.height + 1);
+
+                for (line_width, line) in lines {
+                    line_y -= typeface.height + 1;
+                    let mut character_x = alignment.x_pos(rect_size.x - line_width);
+                    let mut was_character = false;
+
+                    for character in line {
+                        character_x += if let Some(character) = typeface.characters.get(&character)
+                        {
+                            was_character = true;
+
+                            draw_spatial(
+                                character,
+                                (),
+                                &mut text_image,
+                                IVec2::new(character_x as i32, line_y as i32).into(),
+                                PxAnchor::BottomLeft,
+                                PxCanvas::Camera,
+                                copy_animation_params(animation, last_update),
+                                filter.and_then(|filter| filters.get(filter)),
+                                camera,
+                            );
+
+                            character.data.width() as u32 + 1
+                        } else {
+                            if was_character {
+                                character_x -= 1;
+                            }
+                            was_character = false;
+
+                            typeface.separators.get(&character).unwrap().width
+                        };
+                    }
+                }
+
+                if let Some(filter) = filter {
+                    if let Some(PxFilter(filter)) = filters.get(filter) {
+                        text_image.slice_all_mut().for_each_mut(|_, _, pixel| {
+                            if let Some(pixel) = pixel {
+                                *pixel = filter.pixel(IVec2::new(*pixel as i32, 0));
+                            }
+                        });
+                    }
+                }
+
+                layer_image.slice_mut(rect).draw(&text_image);
+            }
+
+            // This is where I draw the line! /j
+            #[cfg(feature = "line")]
+            for (line, filter, canvas, visibility, animation) in clip_lines {
+                if let Visibility::Visible | Visibility::Inherited = visibility {
+                    if let Some(filter) = filters.get(filter) {
+                        draw_line(
+                            line,
+                            filter,
+                            &mut layer_image.slice_all_mut(),
+                            *canvas,
+                            copy_animation_params(animation, &time),
+                            *camera,
+                        );
+                    }
+                }
+            }
+
+            for (filter, animation) in clip_filters {
+                if let Some(filter) = filters.get(filter) {
+                    draw_filter(
+                        filter,
+                        copy_animation_params(animation, last_update),
+                        &mut layer_image.slice_all_mut(),
+                    );
+                }
+            }
+
+            image_slice.draw(&layer_image);
+
+            #[cfg(feature = "line")]
+            for (line, filter, canvas, visibility, animation) in over_lines {
+                if let Visibility::Visible | Visibility::Inherited = visibility {
+                    if let Some(filter) = filterns.get(filter) {
+                        draw_line(
+                            line,
+                            filter,
+                            &mut image_slice,
+                            *canvas,
+                            copy_animation_params(animation, &time),
+                            *camera,
+                        );
+                    }
+                }
+            }
+
+            for (filter, animation) in over_filters {
+                if let Some(filter) = filters.get(filter) {
+                    draw_filter(
+                        filter,
+                        copy_animation_params(animation, last_update),
+                        &mut image_slice,
+                    );
+                }
+            }
+        }
+
         let texture = render_context
             .render_device()
             .create_texture(&image.texture_descriptor);
@@ -402,7 +999,12 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             image.texture_descriptor.size,
         );
 
-        let texture_view = texture.create_view(&TextureViewDescriptor::default());
+        let texture_view = texture.create_view(&TextureViewDescriptor {
+            label: Some("px_texture_view"),
+            format: Some(image.texture_descriptor.format),
+            dimension: Some(TextureViewDimension::D2),
+            ..default()
+        });
 
         let px_pipeline = world.resource::<PxPipeline>();
         let Some(pipeline) = world
@@ -441,570 +1043,6 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         render_pass.draw(0..3, 0..1);
 
         Ok(())
-    }
-}
-
-fn draw_screen<L: PxLayer>(
-    maps: Query<(
-        &PxMap,
-        &Handle<PxTileset>,
-        &PxPosition,
-        &L,
-        &PxCanvas,
-        &Visibility,
-        Option<(
-            &PxAnimationDirection,
-            &PxAnimationDuration,
-            &PxAnimationFinishBehavior,
-            &PxAnimationFrameTransition,
-            &PxAnimationStart,
-        )>,
-        Option<&Handle<PxFilter>>,
-    )>,
-    tiles: Query<(&PxTile, &Visibility, Option<&Handle<PxFilter>>)>,
-    sprites: Query<(
-        &Handle<PxSprite>,
-        &PxPosition,
-        &PxAnchor,
-        &L,
-        &PxCanvas,
-        &Visibility,
-        Option<(
-            &PxAnimationDirection,
-            &PxAnimationDuration,
-            &PxAnimationFinishBehavior,
-            &PxAnimationFrameTransition,
-            &PxAnimationStart,
-        )>,
-        Option<&Handle<PxFilter>>,
-    )>,
-    texts: Query<(
-        &PxText,
-        &Handle<PxTypeface>,
-        &PxRect,
-        &PxAnchor,
-        &L,
-        &PxCanvas,
-        &Visibility,
-        Option<(
-            &PxAnimationDirection,
-            &PxAnimationDuration,
-            &PxAnimationFinishBehavior,
-            &PxAnimationFrameTransition,
-            &PxAnimationStart,
-        )>,
-        Option<&Handle<PxFilter>>,
-    )>,
-    #[cfg(feature = "line")] lines: Query<(
-        &PxLine,
-        &Handle<PxFilter>,
-        &PxFilterLayers<L>,
-        &PxCanvas,
-        &Visibility,
-        Option<(
-            &PxAnimationDirection,
-            &PxAnimationDuration,
-            &PxAnimationFinishBehavior,
-            &PxAnimationFrameTransition,
-            &PxAnimationStart,
-        )>,
-    )>,
-    filters: Query<
-        (
-            &Handle<PxFilter>,
-            &PxFilterLayers<L>,
-            &Visibility,
-            Option<(
-                &PxAnimationDirection,
-                &PxAnimationDuration,
-                &PxAnimationFinishBehavior,
-                &PxAnimationFrameTransition,
-                &PxAnimationStart,
-            )>,
-        ),
-        Without<PxCanvas>,
-    >,
-    tilesets: Res<Assets<PxTileset>>,
-    sprite_assets: Res<Assets<PxSprite>>,
-    typefaces: Res<Assets<PxTypeface>>,
-    filter_assets: Res<Assets<PxFilter>>,
-    screen: Res<Screen>,
-    camera: Res<PxCamera>,
-    time: Res<Time<Real>>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    let image = images.get_mut(&screen.image).unwrap();
-
-    #[cfg(feature = "line")]
-    let mut layer_contents =
-        BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>::default();
-    #[cfg(not(feature = "line"))]
-    let mut layer_contents =
-        BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
-
-    for (map, tileset, position, layer, canvas, visibility, animation, filter) in &maps {
-        if let Visibility::Hidden = visibility {
-            continue;
-        }
-
-        if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-            maps.push((map, tileset, position, canvas, animation, filter));
-        } else {
-            layer_contents.insert(
-                layer.clone(),
-                (
-                    vec![(map, tileset, position, canvas, animation, filter)],
-                    default(),
-                    default(),
-                    default(),
-                    default(),
-                    default(),
-                    default(),
-                ),
-            );
-        }
-    }
-
-    for (sprite, position, anchor, layer, canvas, visibility, animation, filter) in &sprites {
-        if let Visibility::Hidden = visibility {
-            continue;
-        }
-
-        if let Some((_, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-            sprites.push((sprite, position, anchor, canvas, animation, filter));
-        } else {
-            layer_contents.insert(
-                layer.clone(),
-                (
-                    default(),
-                    vec![(sprite, position, anchor, canvas, animation, filter)],
-                    default(),
-                    default(),
-                    default(),
-                    default(),
-                    default(),
-                ),
-            );
-        }
-    }
-
-    for (text, typeface, rect, alignment, layer, canvas, visibility, animation, filter) in &texts {
-        if let Visibility::Hidden = visibility {
-            continue;
-        }
-
-        if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
-            texts.push((text, typeface, rect, alignment, canvas, animation, filter));
-        } else {
-            layer_contents.insert(
-                layer.clone(),
-                (
-                    default(),
-                    default(),
-                    vec![(text, typeface, rect, alignment, canvas, animation, filter)],
-                    default(),
-                    default(),
-                    default(),
-                    default(),
-                ),
-            );
-        }
-    }
-
-    #[cfg(feature = "line")]
-    for (line, filter, layers, canvas, visibility, animation) in &lines {
-        for (layer, clip) in match layers {
-            PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
-            PxFilterLayers::Many(layers) => {
-                layers.iter().map(|layer| (layer.clone(), true)).collect()
-            }
-            PxFilterLayers::Select(select_fn) => layer_contents
-                .keys()
-                .filter(|layer| select_fn(layer))
-                .map(|layer| (layer.clone(), true))
-                .collect(),
-        }
-        .into_iter()
-        {
-            if let Some((_, _, _, clip_lines, _, over_lines, _)) = layer_contents.get_mut(&layer) {
-                if clip { clip_lines } else { over_lines }
-                    .push((line, filter, canvas, visibility, animation));
-            } else {
-                let lines = vec![(line, filter, canvas, visibility, animation)];
-
-                layer_contents.insert(
-                    layer,
-                    if clip {
-                        (
-                            default(),
-                            default(),
-                            default(),
-                            lines,
-                            default(),
-                            default(),
-                            default(),
-                        )
-                    } else {
-                        (
-                            default(),
-                            default(),
-                            default(),
-                            default(),
-                            default(),
-                            lines,
-                            default(),
-                        )
-                    },
-                );
-            }
-        }
-    }
-
-    for (filter, layers, visibility, animation) in &filters {
-        if let Visibility::Hidden = visibility {
-            continue;
-        }
-
-        for (layer, clip) in match layers {
-            PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
-            PxFilterLayers::Many(layers) => {
-                layers.iter().map(|layer| (layer.clone(), true)).collect()
-            }
-            PxFilterLayers::Select(select_fn) => layer_contents
-                .keys()
-                .filter(|layer| select_fn(layer))
-                .map(|layer| (layer.clone(), true))
-                .collect(),
-        }
-        .into_iter()
-        {
-            if let Some((_, _, _, _, clip_filters, _, over_filters)) =
-                layer_contents.get_mut(&layer)
-            {
-                if clip { clip_filters } else { over_filters }.push((filter, animation));
-            } else {
-                let filters = vec![(filter, animation)];
-
-                layer_contents.insert(
-                    layer,
-                    if clip {
-                        (
-                            default(),
-                            default(),
-                            default(),
-                            default(),
-                            filters,
-                            default(),
-                            default(),
-                        )
-                    } else {
-                        (
-                            default(),
-                            default(),
-                            default(),
-                            default(),
-                            default(),
-                            default(),
-                            filters,
-                        )
-                    },
-                );
-            }
-        }
-    }
-
-    let mut layer_image = PxImage::<Option<u8>>::empty_from_image(image);
-    let mut image_slice = PxImageSliceMut::from_image_mut(image);
-
-    #[allow(unused_variables)]
-    for (_, (maps, sprites, texts, clip_lines, clip_filters, over_lines, over_filters)) in
-        layer_contents.into_iter()
-    {
-        layer_image.clear();
-
-        for (map, tileset, position, canvas, animation, map_filter) in maps {
-            let Some(tileset) = tilesets.get(tileset) else {
-                continue;
-            };
-
-            let map_filter = map_filter.and_then(|map_filter| filter_assets.get(map_filter));
-            let size = map.size();
-
-            for x in 0..size.x {
-                for y in 0..size.y {
-                    let pos = UVec2::new(x, y);
-                    let Some(tile) = map.get(pos) else {
-                        continue;
-                    };
-
-                    let (&PxTile { texture }, visibility, tile_filter) =
-                        tiles.get(tile).expect("entity in map is not a valid tile");
-
-                    if let Visibility::Hidden = visibility {
-                        continue;
-                    }
-
-                    let Some(tile) = tileset.tileset.get(texture as usize) else {
-                        error!("tile texture index out of bounds: the len is {}, but the index is {texture}", tileset.tileset.len());
-                        continue;
-                    };
-
-                    draw_spatial(
-                        tile,
-                        (),
-                        &mut layer_image,
-                        (**position + pos.as_ivec2() * tileset.tile_size().as_ivec2()).into(),
-                        PxAnchor::BottomLeft,
-                        *canvas,
-                        copy_animation_params(animation, &time),
-                        [
-                            tile_filter.and_then(|tile_filter| filter_assets.get(tile_filter)),
-                            map_filter,
-                        ]
-                        .into_iter()
-                        .flatten(),
-                        *camera,
-                    );
-                }
-            }
-        }
-
-        for (sprite, position, anchor, canvas, animation, filter) in sprites {
-            let Some(sprite) = sprite_assets.get(sprite) else {
-                continue;
-            };
-
-            draw_spatial(
-                sprite,
-                (),
-                &mut layer_image,
-                *position,
-                *anchor,
-                *canvas,
-                copy_animation_params(animation, &time),
-                filter.and_then(|filter| filter_assets.get(filter)),
-                *camera,
-            );
-        }
-
-        for (text, typeface, rect, alignment, canvas, animation, filter) in texts {
-            let Some(typeface) = typefaces.get(typeface) else {
-                continue;
-            };
-
-            let rect = match canvas {
-                PxCanvas::World => rect.sub_ivec2(**camera),
-                PxCanvas::Camera => **rect,
-            };
-            let rect_size = rect.size().as_uvec2();
-            let line_count = (rect_size.y + 1) / (typeface.height + 1);
-
-            let mut lines = Vec::default();
-            let mut line = Vec::default();
-            let mut line_width = 0;
-            let mut word = Vec::default();
-            let mut word_width = 0;
-            let mut separator = Vec::default();
-            let mut separator_width = 0;
-            for character in text.chars() {
-                let (character_width, is_separator) = typeface
-                    .characters
-                    .get(&character)
-                    .map(|character| (character.data.width() as u32, false))
-                    .unwrap_or_else(|| {
-                        (
-                            typeface
-                                .separators
-                                .get(&character)
-                                .map(|separator| separator.width)
-                                .unwrap_or_else(|| {
-                                    error!(
-                                        "received character '{character}' that isn't in typeface"
-                                    );
-                                    0
-                                }),
-                            true,
-                        )
-                    });
-
-                if if is_separator {
-                    if line_width + separator_width + word_width - 1 > rect_size.x {
-                        lines.push((line_width, line));
-                        line_width = word_width - 1;
-                        line = word;
-                        word_width = 0;
-                        word = default();
-                        separator_width = character_width;
-                        separator = vec![character];
-                        true
-                    } else if word.is_empty() {
-                        separator_width += character_width;
-                        separator.push(character);
-                        false
-                    } else {
-                        line_width += separator_width + word_width - 1;
-                        line.append(&mut separator);
-                        line.append(&mut word);
-                        word_width = 0;
-                        separator_width = character_width;
-                        separator = vec![character];
-                        false
-                    }
-                } else if word_width + character_width > rect_size.x {
-                    if !line.is_empty() {
-                        lines.push((line_width, line));
-                        line_width = 0;
-                        line = default();
-                    }
-
-                    if word_width > 0 {
-                        lines.push((word_width - 1, word));
-                    }
-                    word_width = character_width + 1;
-                    word = vec![character];
-                    separator_width = 0;
-                    separator = default();
-                    true
-                } else {
-                    word_width += character_width + 1;
-                    word.push(character);
-                    false
-                } && lines.len() as u32 > line_count
-                {
-                    line_width = 0;
-                    line.clear();
-                    word_width = 0;
-                    word.clear();
-                    separator_width = 0;
-                    separator.clear();
-                    break;
-                }
-            }
-
-            if line_width + separator_width + word_width + 1 > rect_size.x {
-                lines.push((line_width, line));
-                if word_width > 0 {
-                    lines.push((word_width - 1, word));
-                }
-            } else if !word.is_empty() {
-                line_width += separator_width + word_width - 1;
-                line.append(&mut separator);
-                line.append(&mut word);
-                lines.push((line_width, line));
-            }
-
-            if lines.len() as u32 > line_count {
-                for _ in 0..lines.len() as u32 - line_count {
-                    lines.pop();
-                }
-            }
-
-            let mut text_image = PxImage::empty(rect_size);
-            let lines_height =
-                (lines.len() as u32 * typeface.height + lines.len() as u32).max(1) - 1;
-            let mut line_y = alignment.y_pos(rect_size.y - lines_height)
-                + lines.len() as u32 * (typeface.height + 1);
-
-            for (line_width, line) in lines {
-                line_y -= typeface.height + 1;
-                let mut character_x = alignment.x_pos(rect_size.x - line_width);
-                let mut was_character = false;
-
-                for character in line {
-                    character_x += if let Some(character) = typeface.characters.get(&character) {
-                        was_character = true;
-
-                        draw_spatial(
-                            character,
-                            (),
-                            &mut text_image,
-                            IVec2::new(character_x as i32, line_y as i32).into(),
-                            PxAnchor::BottomLeft,
-                            PxCanvas::Camera,
-                            copy_animation_params(animation, &time),
-                            filter.and_then(|filter| filter_assets.get(filter)),
-                            *camera,
-                        );
-
-                        character.data.width() as u32 + 1
-                    } else {
-                        if was_character {
-                            character_x -= 1;
-                        }
-                        was_character = false;
-
-                        typeface.separators.get(&character).unwrap().width
-                    };
-                }
-            }
-
-            if let Some(filter) = filter {
-                if let Some(PxFilter(filter)) = filter_assets.get(filter) {
-                    text_image.slice_all_mut().for_each_mut(|_, _, pixel| {
-                        if let Some(pixel) = pixel {
-                            *pixel = filter.pixel(IVec2::new(*pixel as i32, 0));
-                        }
-                    });
-                }
-            }
-
-            layer_image.slice_mut(rect).draw(&text_image);
-        }
-
-        // This is where I draw the line! /j
-        #[cfg(feature = "line")]
-        for (line, filter, canvas, visibility, animation) in clip_lines {
-            if let Visibility::Visible | Visibility::Inherited = visibility {
-                if let Some(filter) = filter_assets.get(filter) {
-                    draw_line(
-                        line,
-                        filter,
-                        &mut layer_image.slice_all_mut(),
-                        *canvas,
-                        copy_animation_params(animation, &time),
-                        *camera,
-                    );
-                }
-            }
-        }
-
-        for (filter, animation) in clip_filters {
-            if let Some(filter) = filter_assets.get(filter) {
-                draw_filter(
-                    filter,
-                    copy_animation_params(animation, &time),
-                    &mut layer_image.slice_all_mut(),
-                );
-            }
-        }
-
-        image_slice.draw(&layer_image);
-
-        #[cfg(feature = "line")]
-        for (line, filter, canvas, visibility, animation) in over_lines {
-            if let Visibility::Visible | Visibility::Inherited = visibility {
-                if let Some(filter) = filter_assets.get(filter) {
-                    draw_line(
-                        line,
-                        filter,
-                        &mut image_slice,
-                        *canvas,
-                        copy_animation_params(animation, &time),
-                        *camera,
-                    );
-                }
-            }
-        }
-
-        for (filter, animation) in over_filters {
-            if let Some(filter) = filter_assets.get(filter) {
-                draw_filter(
-                    filter,
-                    copy_animation_params(animation, &time),
-                    &mut image_slice,
-                );
-            }
-        }
     }
 }
 

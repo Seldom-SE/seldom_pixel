@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{math::RectExt, palette::Palette, pixel::Pixel, prelude::*};
 
-#[derive(Serialize, Deserialize, Reflect, Debug)]
+#[derive(Serialize, Deserialize, Clone, Reflect, Debug)]
 pub(crate) struct PxImage<P: Pixel> {
     image: Vec<P>,
     width: usize,

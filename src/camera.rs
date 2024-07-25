@@ -1,11 +1,14 @@
+use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+
 use crate::prelude::*;
 
 pub(crate) fn plug(app: &mut App) {
-    app.init_resource::<PxCamera>();
+    app.add_plugins(ExtractResourcePlugin::<PxCamera>::default())
+        .init_resource::<PxCamera>();
 }
 
 /// Resource that represents the camera's position
-#[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Resource)]
+#[derive(ExtractResource, Resource, Deref, DerefMut, Clone, Copy, Default, Debug)]
 pub struct PxCamera(pub IVec2);
 
 /// Determines whether the entity is locked to the camera

@@ -22,7 +22,7 @@ pub(crate) fn plug(app: &mut App) {
             PostUpdate,
             (
                 change_cursor.before(PxSet::DrawCursor),
-                draw_cursor.in_set(PxSet::DrawCursor),
+                // draw_cursor.in_set(PxSet::DrawCursor),
             ),
         );
 }
