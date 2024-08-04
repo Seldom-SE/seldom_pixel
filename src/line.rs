@@ -1,17 +1,23 @@
 use std::time::Duration;
 
+use bevy::render::{Extract, RenderApp};
 use line_drawing::Bresenham;
 
 use crate::{
-    animation::{draw_animation, Animation},
+    animation::{draw_animation, Animation, AnimationComponents},
     image::PxImageSliceMut,
     pixel::Pixel,
     position::{PxLayer, Spatial},
     prelude::*,
 };
 
+pub(crate) fn plug<L: PxLayer>(app: &mut App) {
+    app.sub_app_mut(RenderApp)
+        .add_systems(ExtractSchedule, extract_lines::<L>);
+}
+
 /// Point list for a line
-#[derive(Component, Debug, Default, Deref, DerefMut)]
+#[derive(Component, Deref, DerefMut, Clone, Default, Debug)]
 pub struct PxLine(pub Vec<IVec2>);
 
 impl Spatial for PxLine {
@@ -84,6 +90,33 @@ pub struct PxLineBundle<L: PxLayer> {
     pub canvas: PxCanvas,
     /// A [`Visibility`] component
     pub visibility: Visibility,
+    /// An [`InheritedVisibility`] component
+    pub inherited_visibility: InheritedVisibility,
+}
+
+pub(crate) type LineComponents<L> = (
+    &'static PxLine,
+    &'static Handle<PxFilter>,
+    &'static PxFilterLayers<L>,
+    &'static PxCanvas,
+    Option<AnimationComponents>,
+);
+
+fn extract_lines<L: PxLayer>(
+    lines: Extract<Query<(LineComponents<L>, &InheritedVisibility)>>,
+    mut cmd: Commands,
+) {
+    for ((line, filter, layers, &canvas, animation), visibility) in &lines {
+        if !visibility.get() {
+            continue;
+        }
+
+        let mut line = cmd.spawn((line.clone(), filter.clone(), layers.clone(), canvas));
+
+        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
+            line.insert((direction, duration, on_finish, frame_transition, start));
+        }
+    }
 }
 
 pub(crate) fn draw_line(

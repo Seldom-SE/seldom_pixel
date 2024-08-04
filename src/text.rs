@@ -2,26 +2,32 @@ use anyhow::{anyhow, Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
         texture::{ImageLoader, ImageLoaderSettings},
+        Extract, RenderApp,
     },
     utils::HashMap,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    animation::AnimationAsset, image::PxImage, palette::asset_palette, position::PxLayer,
+    animation::{AnimationAsset, AnimationComponents},
+    image::PxImage,
+    palette::asset_palette,
+    position::PxLayer,
     prelude::*,
 };
 
-pub(crate) fn plug(app: &mut App) {
+pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.add_plugins(RenderAssetPlugin::<PxTypeface>::default())
         .init_asset::<PxTypeface>()
-        .init_asset_loader::<PxTypefaceLoader>();
+        .init_asset_loader::<PxTypefaceLoader>()
+        .sub_app_mut(RenderApp)
+        .add_systems(ExtractSchedule, extract_texts::<L>);
 }
 
 /// Text to be drawn on the screen
-#[derive(Component, Debug, Default, Deref, DerefMut)]
+#[derive(Component, Clone, Deref, DerefMut, Default, Debug)]
 pub struct PxText(pub String);
 
 impl<T: Into<String>> From<T> for PxText {
@@ -167,10 +173,6 @@ impl RenderAsset for PxTypeface {
     type SourceAsset = Self;
     type Param = ();
 
-    fn asset_usage(_: &Self) -> RenderAssetUsages {
-        RenderAssetUsages::RENDER_WORLD
-    }
-
     fn prepare_asset(
         source_asset: Self,
         &mut (): &mut (),
@@ -202,4 +204,47 @@ pub struct PxTextBundle<L: PxLayer> {
     pub canvas: PxCanvas,
     /// A [`Visibility`] component
     pub visibility: Visibility,
+    /// An [`InheritedVisibility`] component
+    pub inherited_visibility: InheritedVisibility,
+}
+
+pub(crate) type TextComponents<L> = (
+    &'static PxText,
+    &'static Handle<PxTypeface>,
+    &'static PxRect,
+    &'static PxAnchor,
+    &'static L,
+    &'static PxCanvas,
+    Option<AnimationComponents>,
+    Option<&'static Handle<PxFilter>>,
+);
+
+fn extract_texts<L: PxLayer>(
+    texts: Extract<Query<(TextComponents<L>, &InheritedVisibility)>>,
+    mut cmd: Commands,
+) {
+    for ((text, typeface, &rect, &alignment, layer, &canvas, animation, filter), visibility) in
+        &texts
+    {
+        if !visibility.get() {
+            continue;
+        }
+
+        let mut text = cmd.spawn((
+            text.clone(),
+            typeface.clone(),
+            rect,
+            alignment,
+            layer.clone(),
+            canvas,
+        ));
+
+        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
+            text.insert((direction, duration, on_finish, frame_transition, start));
+        }
+
+        if let Some(filter) = filter {
+            text.insert(filter.clone());
+        }
+    }
 }

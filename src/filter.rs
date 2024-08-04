@@ -6,13 +6,14 @@ use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
         texture::{ImageLoader, ImageLoaderSettings},
+        Extract, RenderApp,
     },
 };
 
 use crate::{
-    animation::{draw_animation, Animation, AnimationAsset},
+    animation::{draw_animation, Animation, AnimationAsset, AnimationComponents},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
     pixel::Pixel,
@@ -20,10 +21,12 @@ use crate::{
     prelude::*,
 };
 
-pub(crate) fn plug(app: &mut App) {
+pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.add_plugins(RenderAssetPlugin::<PxFilter>::default())
         .init_asset::<PxFilter>()
-        .init_asset_loader::<PxFilterLoader>();
+        .init_asset_loader::<PxFilterLoader>()
+        .sub_app_mut(RenderApp)
+        .add_systems(ExtractSchedule, extract_filters::<L>);
 }
 
 struct PxFilterLoader(ImageLoader);
@@ -114,10 +117,6 @@ impl RenderAsset for PxFilter {
     type SourceAsset = Self;
     type Param = ();
 
-    fn asset_usage(_: &Self) -> RenderAssetUsages {
-        RenderAssetUsages::RENDER_WORLD
-    }
-
     fn prepare_asset(
         source_asset: Self,
         &mut (): &mut (),
@@ -168,8 +167,27 @@ impl PxFilter {
     }
 }
 
+/// Function that can be used as a layer selection function in `PxFilterLayers`. Automatically
+/// implemented for types with the bounds and `Clone`.
+pub trait SelectLayerFn<L: PxLayer>: 'static + Fn(&L) -> bool + Send + Sync {
+    /// Clones into a trait object
+    fn clone(&self) -> Box<dyn SelectLayerFn<L>>;
+}
+
+impl<L: PxLayer, T: 'static + Fn(&L) -> bool + Clone + Send + Sync> SelectLayerFn<L> for T {
+    fn clone(&self) -> Box<dyn SelectLayerFn<L>> {
+        Box::new(Clone::clone(self))
+    }
+}
+
+impl<L: PxLayer> Clone for Box<dyn SelectLayerFn<L>> {
+    fn clone(&self) -> Self {
+        SelectLayerFn::clone(&**self)
+    }
+}
+
 /// Determines which layers a filter appies to
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub enum PxFilterLayers<L: PxLayer> {
     /// Filter applies to a single layer
     Single {
@@ -183,7 +201,7 @@ pub enum PxFilterLayers<L: PxLayer> {
     /// Filter applies to a set list of layers
     Many(Vec<L>),
     /// Filter applies to layers selected by the given function
-    Select(Box<dyn Fn(&L) -> bool + Send + Sync>),
+    Select(Box<dyn SelectLayerFn<L>>),
 }
 
 impl<L: PxLayer> Default for PxFilterLayers<L> {
@@ -192,7 +210,7 @@ impl<L: PxLayer> Default for PxFilterLayers<L> {
     }
 }
 
-impl<L: PxLayer, T: 'static + Fn(&L) -> bool + Send + Sync> From<T> for PxFilterLayers<L> {
+impl<L: PxLayer, T: 'static + Fn(&L) -> bool + Clone + Send + Sync> From<T> for PxFilterLayers<L> {
     fn from(t: T) -> Self {
         Self::Select(Box::new(t))
     }
@@ -219,6 +237,31 @@ pub struct PxFilterBundle<L: PxLayer> {
     pub layers: PxFilterLayers<L>,
     /// A [`Visibility`] component
     pub visibility: Visibility,
+    /// An [`InheritedVisibility`] component
+    pub inherited_visibility: InheritedVisibility,
+}
+
+pub(crate) type FilterComponents<L> = (
+    &'static Handle<PxFilter>,
+    &'static PxFilterLayers<L>,
+    Option<AnimationComponents>,
+);
+
+fn extract_filters<L: PxLayer>(
+    filters: Extract<Query<(FilterComponents<L>, &InheritedVisibility), Without<PxCanvas>>>,
+    mut cmd: Commands,
+) {
+    for ((filter, layers, animation), visibility) in &filters {
+        if !visibility.get() {
+            continue;
+        }
+
+        let mut filter = cmd.spawn((filter.clone(), layers.clone()));
+
+        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
+            filter.insert((direction, duration, on_finish, frame_transition, start));
+        }
+    }
 }
 
 pub(crate) fn draw_filter(

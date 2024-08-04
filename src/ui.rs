@@ -1,7 +1,7 @@
 use crate::{position::Spatial, prelude::*};
 
 /// UI is displayed within these bounds
-#[derive(Component, Debug, Default, Deref, DerefMut)]
+#[derive(Component, Deref, DerefMut, Clone, Copy, Default, Debug)]
 pub struct PxRect(pub IRect);
 
 impl From<IRect> for PxRect {

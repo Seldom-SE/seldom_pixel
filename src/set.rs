@@ -1,8 +1,9 @@
-//! Stages used by this crate
+//! Sets used by this crate
 
 use crate::prelude::*;
 
-/// Stages used by this crate
+// TODO Many of these aren't necessary anymore
+/// Sets used by this crate
 #[derive(Clone, Debug, Eq, Hash, PartialEq, SystemSet)]
 pub enum PxSet {
     // `PreUpdate`
@@ -12,8 +13,6 @@ pub enum PxSet {
     UpdateCursorPosition,
 
     // `PostUpdate`
-    /// `seldom_pixel` assets are loaded. In [`CoreSet::PostUpdate`].
-    LoadAssets,
     /// New buttons have assets added to them. In [`CoreSet::PostUpdate`].
     AddButtonAssets,
     /// Button assets are updated. In [`CoreSet::PostUpdate`].
@@ -23,8 +22,4 @@ pub enum PxSet {
     /// Update particle emitters. In [`CoreSet::PostUpdate`].
     #[cfg(feature = "particle")]
     UpdateEmitters,
-    /// The screen is drawn. In [`CoreSet::PostUpdate`].
-    Draw,
-    /// The cursor is drawn. In [`CoreSet::PostUpdate`].
-    DrawCursor,
 }

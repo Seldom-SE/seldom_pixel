@@ -1,10 +1,10 @@
 [package]
 name = "seldom_pixel_macros"
-version = "0.1.0"
+version = "0.2.0-dev"
 edition = "2021"
-categories = [ "game-development" ]
+categories = ["game-development"]
 description = "Macros for `seldom_pixel`"
-keywords = [ "gamedev", "bevy", "graphics", "gui", "2d" ]
+keywords = ["gamedev", "bevy", "graphics", "gui", "2d"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Seldom-SE/seldom_pixel"
 

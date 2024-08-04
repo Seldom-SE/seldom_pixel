@@ -3,26 +3,28 @@ use std::mem::replace;
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
-    ecs::system::SystemParamItem,
     render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
         texture::{ImageLoader, ImageLoaderSettings},
+        Extract, RenderApp,
     },
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    animation::AnimationAsset,
+    animation::{AnimationAsset, AnimationComponents},
     image::PxImage,
     palette::asset_palette,
     position::{PxLayer, Spatial},
     prelude::*,
 };
 
-pub(crate) fn plug(app: &mut App) {
+pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.add_plugins(RenderAssetPlugin::<PxTileset>::default())
         .init_asset::<PxTileset>()
-        .init_asset_loader::<PxTilesetLoader>();
+        .init_asset_loader::<PxTilesetLoader>()
+        .sub_app_mut(RenderApp)
+        .add_systems(ExtractSchedule, (extract_maps::<L>, extract_tiles));
 }
 
 #[derive(Serialize, Deserialize)]
@@ -142,10 +144,6 @@ impl RenderAsset for PxTileset {
     type SourceAsset = Self;
     type Param = ();
 
-    fn asset_usage(_: &Self) -> RenderAssetUsages {
-        RenderAssetUsages::RENDER_WORLD
-    }
-
     fn prepare_asset(
         source_asset: Self,
         &mut (): &mut (),
@@ -243,10 +241,12 @@ pub struct PxMapBundle<L: PxLayer> {
     pub canvas: PxCanvas,
     /// A [`Visibility`] component
     pub visibility: Visibility,
+    /// An [`InheritedVisibility`] component
+    pub inherited_visibility: InheritedVisibility,
 }
 
 /// A tile. Must be added to tiles added to [`PxMap`].
-#[derive(Component, Default, Debug)]
+#[derive(Component, Clone, Default, Debug)]
 pub struct PxTile {
     /// The index to the tile texture in the tileset
     pub texture: u32,
@@ -265,4 +265,63 @@ pub struct PxTileBundle {
     pub tile: PxTile,
     /// A [`Visibility`] component
     pub visibility: Visibility,
+    /// An [`InheritedVisibility`] component
+    pub inherited_visibility: InheritedVisibility,
+}
+
+pub(crate) type MapComponents<L> = (
+    &'static PxMap,
+    &'static Handle<PxTileset>,
+    &'static PxPosition,
+    &'static L,
+    &'static PxCanvas,
+    Option<AnimationComponents>,
+    Option<&'static Handle<PxFilter>>,
+);
+
+fn extract_maps<L: PxLayer>(
+    maps: Extract<Query<(MapComponents<L>, &InheritedVisibility)>>,
+    mut cmd: Commands,
+) {
+    for ((map, tileset, &position, layer, &canvas, animation, filter), visibility) in &maps {
+        if !visibility.get() {
+            continue;
+        }
+
+        let mut map = cmd.spawn((
+            map.clone(),
+            tileset.clone(),
+            position,
+            layer.clone(),
+            canvas,
+        ));
+
+        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
+            map.insert((direction, duration, on_finish, frame_transition, start));
+        }
+
+        if let Some(filter) = filter {
+            map.insert(filter.clone());
+        }
+    }
+}
+
+pub(crate) type TileComponents = (&'static PxTile, Option<&'static Handle<PxFilter>>);
+
+fn extract_tiles(
+    tiles: Extract<Query<(TileComponents, &InheritedVisibility, Entity)>>,
+    mut cmd: Commands,
+) {
+    for ((tile, filter), visibility, entity) in &tiles {
+        if !visibility.get() {
+            continue;
+        }
+
+        let mut entity = cmd.get_or_spawn(entity);
+        entity.insert(tile.clone());
+
+        if let Some(filter) = filter {
+            entity.insert(filter.clone());
+        }
+    }
 }

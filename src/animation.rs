@@ -15,12 +15,6 @@ use crate::{
 
 pub(crate) fn plug(app: &mut App) {
     app.add_plugins(ExtractResourcePlugin::<LastUpdate>::default())
-        .configure_sets(
-            PostUpdate,
-            PxSet::FinishAnimations
-                .after(PxSet::LoadAssets)
-                .before(PxSet::Draw),
-        )
         .add_systems(
             PostUpdate,
             (
@@ -144,6 +138,14 @@ pub(crate) trait Animation {
 pub(crate) trait AnimationAsset: Asset {
     fn max_frame_count(&self) -> usize;
 }
+
+pub(crate) type AnimationComponents = (
+    &'static PxAnimationDirection,
+    &'static PxAnimationDuration,
+    &'static PxAnimationFinishBehavior,
+    &'static PxAnimationFrameTransition,
+    &'static PxAnimationStart,
+);
 
 static DITHERING: &[u16] = &[
     0b0000_0000_0000_0000,

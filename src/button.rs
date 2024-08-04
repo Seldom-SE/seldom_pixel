@@ -22,9 +22,7 @@ pub(crate) fn plug(app: &mut App) {
                 apply_deferred
                     .after(PxSet::AddButtonAssets)
                     .before(PxSet::UpdateButtonAssets),
-                (update_button_sprites, update_button_filters)
-                    .before(PxSet::Draw)
-                    .in_set(PxSet::UpdateButtonAssets),
+                (update_button_sprites, update_button_filters).in_set(PxSet::UpdateButtonAssets),
                 disable_buttons
                     .run_if(resource_changed::<PxEnableButtons>)
                     .run_if(resource_equals(PxEnableButtons(false))),

@@ -7,7 +7,7 @@ use quote::quote;
 use syn::{Error, Meta};
 
 /// Derives required traits for a layer. Use as `#[px_layer]` on an item. Equivalent to
-/// `#[derive(Clone, Component, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]`.
+/// `#[derive(ExtractComponent, Component, Ord, PartialOrd, Eq, PartialEq, Clone, Default, Debug)]`.
 #[proc_macro_attribute]
 pub fn px_layer(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut output = TokenStream::from(if !args.is_empty() {
@@ -23,14 +23,15 @@ pub fn px_layer(args: TokenStream, input: TokenStream) -> TokenStream {
     } else {
         quote! {
             #[derive(
-                ::std::clone::Clone,
+                ::bevy::render::extract_component::ExtractComponent,
                 ::bevy::prelude::Component,
-                ::std::fmt::Debug,
-                ::std::default::Default,
-                ::std::cmp::Eq,
                 ::std::cmp::Ord,
+                ::std::cmp::PartialOrd,
+                ::std::cmp::Eq,
                 ::std::cmp::PartialEq,
-                ::std::cmp::PartialOrd
+                ::std::clone::Clone,
+                ::std::default::Default,
+                ::std::fmt::Debug,
             )]
         }
     });

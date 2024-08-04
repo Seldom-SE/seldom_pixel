@@ -3,44 +3,43 @@
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use bevy::{
-    core_pipeline::{
-        core_2d::graph::{Core2d, Node2d},
-        fullscreen_vertex_shader::fullscreen_shader_vertex_state,
-    },
+    core_pipeline::core_2d::graph::{Core2d, Node2d},
     render::{
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
         },
         render_resource::{
-            binding_types::{sampler, texture_2d},
-            AsBindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
-            CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d, FragmentState,
+            binding_types::{texture_2d, uniform_buffer},
+            BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
+            ColorTargetState, ColorWrites, DynamicUniformBuffer, Extent3d, FragmentState,
             ImageDataLayout, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
-            RenderPipelineDescriptor, Sampler, SamplerBindingType, ShaderRef, ShaderStages,
-            TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-            TextureViewDescriptor, TextureViewDimension,
+            RenderPipelineDescriptor, ShaderStages, ShaderType, TextureDimension, TextureFormat,
+            TextureSampleType, TextureViewDescriptor, TextureViewDimension, VertexState,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{BevyDefault, TextureFormatPixelInfo},
-        view::{RenderLayers, ViewTarget},
-        RenderApp,
+        view::ViewTarget,
+        Render, RenderApp, RenderSet,
     },
-    sprite::{Material2d, MaterialMesh2dBundle},
     window::{PrimaryWindow, WindowResized},
 };
 
 #[cfg(feature = "line")]
-use crate::line::draw_line;
+use crate::line::{draw_line, LineComponents};
 use crate::{
-    animation::{copy_animation_params, draw_spatial, LastUpdate, PxAnimationStart},
-    filter::draw_filter,
+    animation::{copy_animation_params, draw_spatial, LastUpdate},
+    cursor::{CursorState, PxCursorPosition},
+    filter::{draw_filter, FilterComponents},
     image::{PxImage, PxImageSliceMut},
-    map::PxTile,
+    map::{MapComponents, PxTile, TileComponents},
     math::RectExt,
     palette::{PaletteHandle, PaletteParam},
     position::PxLayer,
     prelude::*,
+    sprite::SpriteComponents,
+    text::TextComponents,
 };
 
 const SCREEN_SHADER_HANDLE: Handle<Shader> =
@@ -48,15 +47,13 @@ const SCREEN_SHADER_HANDLE: Handle<Shader> =
 
 pub(crate) struct Plug<L: PxLayer> {
     size: ScreenSize,
-    layers: RenderLayers,
     _l: PhantomData<L>,
 }
 
 impl<L: PxLayer> Plug<L> {
-    pub(crate) fn new(size: ScreenSize, layers: RenderLayers) -> Self {
+    pub(crate) fn new(size: ScreenSize) -> Self {
         Self {
             size,
-            layers,
             _l: PhantomData,
         }
     }
@@ -64,21 +61,19 @@ impl<L: PxLayer> Plug<L> {
 
 impl<L: PxLayer> Plugin for Plug<L> {
     fn build(&self, app: &mut App) {
-        app.world_mut().resource_mut::<Assets<Shader>>().insert(
-            SCREEN_SHADER_HANDLE.id(),
-            Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
-        );
-        app.add_systems(Startup, insert_screen(self.size))
-            .add_systems(Update, init_screen(self.layers.clone()))
-            .add_systems(
-                PostUpdate,
-                (
-                    (update_screen, (clear_screen, resize_screen)).chain(),
-                    update_screen_palette,
-                ),
-            )
-            .sub_app_mut(RenderApp)
-            .add_render_graph_node::<ViewNodeRunner<PxNode<L>>>(Core2d, PxRender)
+        app.add_plugins(ExtractResourcePlugin::<Screen>::default())
+            .add_systems(Startup, insert_screen(self.size))
+            .add_systems(Update, init_screen)
+            .add_systems(PostUpdate, (resize_screen, update_screen_palette))
+            .world_mut()
+            .resource_mut::<Assets<Shader>>()
+            .insert(
+                SCREEN_SHADER_HANDLE.id(),
+                Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
+            );
+
+        app.sub_app_mut(RenderApp)
+            .add_render_graph_node::<ViewNodeRunner<PxRenderNode<L>>>(Core2d, PxRender)
             .add_render_graph_edges(
                 Core2d,
                 (
@@ -86,7 +81,9 @@ impl<L: PxLayer> Plugin for Plug<L> {
                     PxRender,
                     Node2d::EndMainPassPostProcessing,
                 ),
-            );
+            )
+            .init_resource::<PxUniformBuffer>()
+            .add_systems(Render, prepare_uniform.in_set(RenderSet::Prepare));
     }
 
     fn finish(&self, app: &mut App) {
@@ -128,12 +125,13 @@ impl ScreenSize {
     }
 }
 
-/// The image that `seldom_pixel` draws to
-#[derive(Clone, Resource)]
+/// Metadata for the image that `seldom_pixel` draws to
+#[derive(ExtractResource, Resource, Clone, Debug)]
 pub struct Screen {
-    pub(crate) image: Handle<Image>,
     pub(crate) size: ScreenSize,
     pub(crate) computed_size: UVec2,
+    window_aspect_ratio: f32,
+    pub(crate) palette: [Vec3; 256],
 }
 
 impl Screen {
@@ -143,24 +141,7 @@ impl Screen {
     }
 }
 
-#[derive(Component)]
-pub(crate) struct ScreenMarker;
-
-#[derive(AsBindGroup, Asset, Clone, Reflect)]
-struct ScreenMaterial {
-    #[uniform(0)]
-    palette: [Vec3; 256],
-    #[texture(1, sample_type = "u_int")]
-    image: Handle<Image>,
-}
-
-impl Material2d for ScreenMaterial {
-    fn fragment_shader() -> ShaderRef {
-        SCREEN_SHADER_HANDLE.into()
-    }
-}
-
-fn screen_scale(screen_size: UVec2, window_size: Vec2) -> Vec2 {
+pub(crate) fn screen_scale(screen_size: UVec2, window_size: Vec2) -> Vec2 {
     let aspect = screen_size.y as f32 / screen_size.x as f32;
 
     Vec2::from(match window_size.y > aspect * window_size.x {
@@ -169,145 +150,82 @@ fn screen_scale(screen_size: UVec2, window_size: Vec2) -> Vec2 {
     })
 }
 
-fn insert_screen(
-    size: ScreenSize,
-) -> impl Fn(ResMut<Assets<Image>>, Query<&Window, With<PrimaryWindow>>, Commands) {
-    move |mut images, windows, mut commands| {
+fn insert_screen(size: ScreenSize) -> impl Fn(Query<&Window, With<PrimaryWindow>>, Commands) {
+    move |windows, mut commands| {
         let window = windows.single();
-        let computed_size = size.compute(Vec2::new(window.width(), window.height()));
 
         commands.insert_resource(Screen {
-            image: images.add(Image {
-                data: vec![0; (computed_size.x * computed_size.y) as usize],
-                texture_descriptor: TextureDescriptor {
-                    label: None,
-                    size: Extent3d {
-                        width: computed_size.x,
-                        height: computed_size.y,
-                        ..default()
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: TextureDimension::D2,
-                    format: TextureFormat::R8Uint,
-                    usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
-                    view_formats: &[TextureFormat::R8Uint],
-                },
-                ..default()
-            }),
             size,
-            computed_size,
+            computed_size: size.compute(Vec2::new(window.width(), window.height())),
+            window_aspect_ratio: window.width() / window.height(),
+            palette: [Vec3::ZERO; 256],
         });
     }
 }
 
-fn init_screen(
-    layers: RenderLayers,
-) -> impl Fn(
-    PaletteParam,
-    ResMut<Assets<ScreenMaterial>>,
-    Query<(), With<ScreenMarker>>,
-    Res<Screen>,
-    ResMut<Assets<Mesh>>,
-    Query<(Entity, &Window), With<PrimaryWindow>>,
-    EventWriter<WindowResized>,
-    Commands,
-) {
-    move |palette,
-          mut screen_materials,
-          screens,
-          screen,
-          mut meshes,
-          windows,
-          mut window_resized,
-          mut commands| {
-        if screens.iter().next().is_some() {
-            return;
-        }
-
-        let Some(palette) = palette.get() else {
-            return;
-        };
-
-        let mut screen_palette = [Vec3::ZERO; 256];
-
-        for (i, [r, g, b]) in palette.colors.iter().enumerate() {
-            screen_palette[i] = Color::srgb_u8(*r, *g, *b).to_linear().to_vec3();
-        }
-
-        let (entity, window) = windows.single();
-        let calculated_screen_scale = screen_scale(
-            screen.computed_size,
-            Vec2::new(window.width(), window.height()),
-        )
-        .extend(1.);
-
-        commands.spawn((
-            ScreenMarker,
-            layers.clone(),
-            MaterialMesh2dBundle {
-                mesh: meshes.add(Rectangle::default()).into(),
-                material: screen_materials.add(ScreenMaterial {
-                    image: screen.image.clone(),
-                    palette: screen_palette,
-                }),
-                transform: Transform::from_scale(calculated_screen_scale),
-                // Ensure transform matches global_transform to ensure correct rendering for WASM
-                global_transform: GlobalTransform::from_scale(calculated_screen_scale),
-                ..default()
-            },
-            Name::new("Screen"),
-        ));
-
-        // I do not know why, but the screen does not display unless the window has been resized
-        window_resized.send(WindowResized {
-            window: entity,
-            width: window.width(),
-            height: window.height(),
-        });
+fn init_screen(mut initialized: Local<bool>, palette: PaletteParam, mut screen: ResMut<Screen>) {
+    if *initialized {
+        return;
     }
+
+    let Some(palette) = palette.get() else {
+        return;
+    };
+
+    let mut screen_palette = [Vec3::ZERO; 256];
+
+    for (i, [r, g, b]) in palette.colors.iter().enumerate() {
+        screen_palette[i] = Color::srgb_u8(*r, *g, *b).to_linear().to_vec3();
+    }
+
+    screen.palette = screen_palette;
+
+    *initialized = false;
 }
 
-fn resize_screen(
-    mut window_resized: EventReader<WindowResized>,
-    mut screens: Query<&mut Transform, With<ScreenMarker>>,
-    mut screen: ResMut<Screen>,
-    mut images: ResMut<Assets<Image>>,
-) {
+fn resize_screen(mut window_resized: EventReader<WindowResized>, mut screen: ResMut<Screen>) {
     if let Some(window_resized) = window_resized.read().last() {
-        let window_size = Vec2::new(window_resized.width, window_resized.height);
-        let computed_size = screen.size.compute(window_size);
-
-        if computed_size != screen.computed_size {
-            images.get_mut(&screen.image).unwrap().resize(Extent3d {
-                width: computed_size.x,
-                height: computed_size.y,
-                ..default()
-            });
-        }
-
-        screen.computed_size = computed_size;
-
-        let mut transform = screens.single_mut();
-
-        transform.scale = screen_scale(
-            computed_size,
-            Vec2::new(window_resized.width, window_resized.height),
-        )
-        .extend(1.);
+        screen.computed_size = screen
+            .size
+            .compute(Vec2::new(window_resized.width, window_resized.height));
+        screen.window_aspect_ratio = window_resized.width / window_resized.height;
     }
 }
 
-fn clear_screen(screen: Res<Screen>, mut images: ResMut<Assets<Image>>) {
-    for pixel in images.get_mut(&screen.image).unwrap().data.iter_mut() {
-        *pixel = 0;
-    }
+#[derive(ShaderType)]
+struct PxUniform {
+    palette: [Vec3; 256],
+    fit_factor: Vec2,
+}
+
+#[derive(Resource, Deref, DerefMut, Default)]
+struct PxUniformBuffer(DynamicUniformBuffer<PxUniform>);
+
+fn prepare_uniform(
+    mut buffer: ResMut<PxUniformBuffer>,
+    screen: Res<Screen>,
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+) {
+    let Some(mut writer) = buffer.get_writer(1, &device, &queue) else {
+        return;
+    };
+
+    let aspect_ratio_ratio =
+        screen.computed_size.x as f32 / screen.computed_size.y as f32 / screen.window_aspect_ratio;
+    writer.write(&PxUniform {
+        palette: screen.palette,
+        fit_factor: if aspect_ratio_ratio > 1. {
+            Vec2::new(1., 1. / aspect_ratio_ratio)
+        } else {
+            Vec2::new(aspect_ratio_ratio, 1.)
+        },
+    });
 }
 
 #[derive(Resource)]
 struct PxPipeline {
     layout: BindGroupLayout,
-    sampler: Sampler,
     id: CachedRenderPipelineId,
 }
 
@@ -320,20 +238,23 @@ impl FromWorld for PxPipeline {
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
                 (
-                    texture_2d(TextureSampleType::Float { filterable: true }),
-                    sampler(SamplerBindingType::Filtering),
                     texture_2d(TextureSampleType::Uint),
+                    uniform_buffer::<PxUniform>(false).visibility(ShaderStages::VERTEX_FRAGMENT),
                 ),
             ),
         );
 
         Self {
-            sampler: render_device.create_sampler(&default()),
             id: world.resource_mut::<PipelineCache>().queue_render_pipeline(
                 RenderPipelineDescriptor {
                     label: Some("px_pipeline".into()),
                     layout: vec![layout.clone()],
-                    vertex: fullscreen_shader_vertex_state(),
+                    vertex: VertexState {
+                        shader: SCREEN_SHADER_HANDLE,
+                        shader_defs: Vec::new(),
+                        entry_point: "vertex".into(),
+                        buffers: Vec::new(),
+                    },
                     fragment: Some(FragmentState {
                         shader: SCREEN_SHADER_HANDLE,
                         shader_defs: Vec::new(),
@@ -358,94 +279,17 @@ impl FromWorld for PxPipeline {
 #[derive(RenderLabel, Hash, Eq, PartialEq, Clone, Debug)]
 struct PxRender;
 
-struct PxNode<L: PxLayer> {
-    maps: QueryState<(
-        &'static PxMap,
-        &'static Handle<PxTileset>,
-        &'static PxPosition,
-        &'static L,
-        &'static PxCanvas,
-        &'static Visibility,
-        Option<(
-            &'static PxAnimationDirection,
-            &'static PxAnimationDuration,
-            &'static PxAnimationFinishBehavior,
-            &'static PxAnimationFrameTransition,
-            &'static PxAnimationStart,
-        )>,
-        Option<&'static Handle<PxFilter>>,
-    )>,
-    tiles: QueryState<(
-        &'static PxTile,
-        &'static Visibility,
-        Option<&'static Handle<PxFilter>>,
-    )>,
-    sprites: QueryState<(
-        &'static Handle<PxSprite>,
-        &'static PxPosition,
-        &'static PxAnchor,
-        &'static L,
-        &'static PxCanvas,
-        &'static Visibility,
-        Option<(
-            &'static PxAnimationDirection,
-            &'static PxAnimationDuration,
-            &'static PxAnimationFinishBehavior,
-            &'static PxAnimationFrameTransition,
-            &'static PxAnimationStart,
-        )>,
-        Option<&'static Handle<PxFilter>>,
-    )>,
-    texts: QueryState<(
-        &'static PxText,
-        &'static Handle<PxTypeface>,
-        &'static PxRect,
-        &'static PxAnchor,
-        &'static L,
-        &'static PxCanvas,
-        &'static Visibility,
-        Option<(
-            &'static PxAnimationDirection,
-            &'static PxAnimationDuration,
-            &'static PxAnimationFinishBehavior,
-            &'static PxAnimationFrameTransition,
-            &'static PxAnimationStart,
-        )>,
-        Option<&'static Handle<PxFilter>>,
-    )>,
+struct PxRenderNode<L: PxLayer> {
+    maps: QueryState<MapComponents<L>>,
+    tiles: QueryState<TileComponents>,
+    sprites: QueryState<SpriteComponents<L>>,
+    texts: QueryState<TextComponents<L>>,
     #[cfg(feature = "line")]
-    lines: QueryState<(
-        &PxLine,
-        &Handle<PxFilter>,
-        &PxFilterLayers<L>,
-        &PxCanvas,
-        &Visibility,
-        Option<(
-            &PxAnimationDirection,
-            &PxAnimationDuration,
-            &PxAnimationFinishBehavior,
-            &PxAnimationFrameTransition,
-            &PxAnimationStart,
-        )>,
-    )>,
-    filters: QueryState<
-        (
-            &'static Handle<PxFilter>,
-            &'static PxFilterLayers<L>,
-            &'static Visibility,
-            Option<(
-                &'static PxAnimationDirection,
-                &'static PxAnimationDuration,
-                &'static PxAnimationFinishBehavior,
-                &'static PxAnimationFrameTransition,
-                &'static PxAnimationStart,
-            )>,
-        ),
-        Without<PxCanvas>,
-    >,
+    lines: QueryState<LineComponents<L>>,
+    filters: QueryState<FilterComponents<L>, Without<PxCanvas>>,
 }
 
-impl<L: PxLayer> FromWorld for PxNode<L> {
+impl<L: PxLayer> FromWorld for PxRenderNode<L> {
     fn from_world(world: &mut World) -> Self {
         Self {
             maps: world.query(),
@@ -459,7 +303,7 @@ impl<L: PxLayer> FromWorld for PxNode<L> {
     }
 }
 
-impl<L: PxLayer> ViewNode for PxNode<L> {
+impl<L: PxLayer> ViewNode for PxRenderNode<L> {
     type ViewQuery = &'static ViewTarget;
 
     fn update(&mut self, world: &mut World) {
@@ -481,16 +325,17 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
     ) -> Result<(), NodeRunError> {
         let &camera = world.resource::<PxCamera>();
         let &LastUpdate(last_update) = world.resource::<LastUpdate>();
+        let screen = world.resource::<Screen>();
 
         let mut image = Image::new_fill(
             Extent3d {
-                width: 1,
-                height: 1,
+                width: screen.computed_size.x,
+                height: screen.computed_size.y,
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
-            &[255, 0, 255, 255],
-            TextureFormat::Rgba8Uint,
+            &[0],
+            TextureFormat::R8Uint,
             default(),
         );
 
@@ -501,13 +346,9 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
         let mut layer_contents =
             BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
 
-        for (map, tileset, position, layer, canvas, visibility, animation, filter) in
+        for (map, tileset, position, layer, canvas, animation, filter) in
             self.maps.iter_manual(world)
         {
-            if let Visibility::Hidden = visibility {
-                continue;
-            }
-
             if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
                 maps.push((map, tileset, position, canvas, animation, filter));
             } else {
@@ -526,13 +367,9 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
             }
         }
 
-        for (sprite, position, anchor, layer, canvas, visibility, animation, filter) in
+        for (sprite, position, anchor, layer, canvas, animation, filter) in
             self.sprites.iter_manual(world)
         {
-            if let Visibility::Hidden = visibility {
-                continue;
-            }
-
             if let Some((_, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
                 sprites.push((sprite, position, anchor, canvas, animation, filter));
             } else {
@@ -551,13 +388,9 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
             }
         }
 
-        for (text, typeface, rect, alignment, layer, canvas, visibility, animation, filter) in
+        for (text, typeface, rect, alignment, layer, canvas, animation, filter) in
             self.texts.iter_manual(world)
         {
-            if let Visibility::Hidden = visibility {
-                continue;
-            }
-
             if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
                 texts.push((text, typeface, rect, alignment, canvas, animation, filter));
             } else {
@@ -577,7 +410,7 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
         }
 
         #[cfg(feature = "line")]
-        for (line, filter, layers, canvas, visibility, animation) in self.lines.iter_manual(world) {
+        for (line, filter, layers, canvas, animation) in self.lines.iter_manual(world) {
             for (layer, clip) in match layers {
                 PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
                 PxFilterLayers::Many(layers) => {
@@ -595,9 +428,9 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
                     layer_contents.get_mut(&layer)
                 {
                     if clip { clip_lines } else { over_lines }
-                        .push((line, filter, canvas, visibility, animation));
+                        .push((line, filter, canvas, animation));
                 } else {
-                    let lines = vec![(line, filter, canvas, visibility, animation)];
+                    let lines = vec![(line, filter, canvas, animation)];
 
                     layer_contents.insert(
                         layer,
@@ -632,11 +465,7 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
         let typefaces = world.resource::<RenderAssets<PxTypeface>>();
         let filters = world.resource::<RenderAssets<PxFilter>>();
 
-        for (filter, layers, visibility, animation) in self.filters.iter_manual(world) {
-            if let Visibility::Hidden = visibility {
-                continue;
-            }
-
+        for (filter, layers, animation) in self.filters.iter_manual(world) {
             for (layer, clip) in match layers {
                 PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
                 PxFilterLayers::Many(layers) => {
@@ -709,14 +538,11 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
                             continue;
                         };
 
-                        let (&PxTile { texture }, visibility, tile_filter) = self
-                            .tiles
-                            .get_manual(world, tile)
-                            .expect("entity in map is not a valid tile");
-
-                        if let Visibility::Hidden = visibility {
+                        let Ok((&PxTile { texture }, tile_filter)) =
+                            self.tiles.get_manual(world, tile)
+                        else {
                             continue;
-                        }
+                        };
 
                         let Some(tile) = tileset.tileset.get(texture as usize) else {
                             error!("tile texture index out of bounds: the len is {}, but the index is {texture}", tileset.tileset.len());
@@ -928,18 +754,16 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
 
             // This is where I draw the line! /j
             #[cfg(feature = "line")]
-            for (line, filter, canvas, visibility, animation) in clip_lines {
-                if let Visibility::Visible | Visibility::Inherited = visibility {
-                    if let Some(filter) = filters.get(filter) {
-                        draw_line(
-                            line,
-                            filter,
-                            &mut layer_image.slice_all_mut(),
-                            *canvas,
-                            copy_animation_params(animation, &time),
-                            *camera,
-                        );
-                    }
+            for (line, filter, canvas, animation) in clip_lines {
+                if let Some(filter) = filters.get(filter) {
+                    draw_line(
+                        line,
+                        filter,
+                        &mut layer_image.slice_all_mut(),
+                        *canvas,
+                        copy_animation_params(animation, last_update),
+                        camera,
+                    );
                 }
             }
 
@@ -956,18 +780,16 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
             image_slice.draw(&layer_image);
 
             #[cfg(feature = "line")]
-            for (line, filter, canvas, visibility, animation) in over_lines {
-                if let Visibility::Visible | Visibility::Inherited = visibility {
-                    if let Some(filter) = filterns.get(filter) {
-                        draw_line(
-                            line,
-                            filter,
-                            &mut image_slice,
-                            *canvas,
-                            copy_animation_params(animation, &time),
-                            *camera,
-                        );
-                    }
+            for (line, filter, canvas, animation) in over_lines {
+                if let Some(filter) = filters.get(filter) {
+                    draw_line(
+                        line,
+                        filter,
+                        &mut image_slice,
+                        *canvas,
+                        copy_animation_params(animation, last_update),
+                        camera,
+                    );
                 }
             }
 
@@ -981,6 +803,38 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
                 }
             }
         }
+
+        let cursor = world.resource::<CursorState>();
+
+        if let PxCursor::Filter {
+            idle,
+            left_click,
+            right_click,
+        } = world.resource()
+        {
+            if let Some(cursor_pos) = **world.resource::<PxCursorPosition>() {
+                if let Some(PxFilter(filter)) = filters.get(match cursor {
+                    CursorState::Idle => idle,
+                    CursorState::Left => left_click,
+                    CursorState::Right => right_click,
+                }) {
+                    let mut image = PxImageSliceMut::from_image_mut(&mut image);
+
+                    if let Some(pixel) = image.get_pixel_mut(IVec2::new(
+                        cursor_pos.x as i32,
+                        image.height() as i32 - 1 - cursor_pos.y as i32,
+                    )) {
+                        *pixel = filter
+                            .get_pixel(IVec2::new(*pixel as i32, 0))
+                            .expect("filter is incorrect size");
+                    }
+                }
+            }
+        }
+
+        let Some(uniform_binding) = world.resource::<PxUniformBuffer>().binding() else {
+            return Ok(());
+        };
 
         let texture = render_context
             .render_device()
@@ -1019,11 +873,7 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
         let bind_group = render_context.render_device().create_bind_group(
             "px_bind_group",
             &px_pipeline.layout,
-            &BindGroupEntries::sequential((
-                post_process.source,
-                &px_pipeline.sampler,
-                &texture_view,
-            )),
+            &BindGroupEntries::sequential((&texture_view, uniform_binding.clone())),
         );
 
         let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
@@ -1040,27 +890,17 @@ impl<L: PxLayer> ViewNode for PxNode<L> {
 
         render_pass.set_render_pipeline(pipeline);
         render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.draw(0..3, 0..1);
+        render_pass.draw(0..6, 0..1);
 
         Ok(())
     }
 }
 
-fn update_screen(
-    screen_materials: Query<&Handle<ScreenMaterial>>,
-    mut asset_events: EventWriter<AssetEvent<ScreenMaterial>>,
-) {
-    for handle in &screen_materials {
-        asset_events.send(AssetEvent::Modified { id: handle.id() });
-    }
-}
-
 fn update_screen_palette(
     mut waiting_for_load: Local<bool>,
-    screen_materials: Query<&Handle<ScreenMaterial>>,
     palette_handle: Res<PaletteHandle>,
+    mut screen: ResMut<Screen>,
     palette: PaletteParam,
-    mut screen_material_assets: ResMut<Assets<ScreenMaterial>>,
 ) {
     if !palette_handle.is_changed() && !*waiting_for_load {
         return;
@@ -1077,12 +917,7 @@ fn update_screen_palette(
         screen_palette[i] = Color::srgb_u8(*r, *g, *b).to_linear().to_vec3();
     }
 
-    for screen_material in &screen_materials {
-        screen_material_assets
-            .get_mut(screen_material)
-            .unwrap()
-            .palette = screen_palette;
-    }
+    screen.palette = screen_palette;
 
     *waiting_for_load = false;
 }

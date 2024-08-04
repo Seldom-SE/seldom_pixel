@@ -1,4 +1,7 @@
-use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+use bevy::render::{
+    extract_component::ExtractComponent,
+    extract_resource::{ExtractResource, ExtractResourcePlugin},
+};
 
 use crate::prelude::*;
 
@@ -12,7 +15,7 @@ pub(crate) fn plug(app: &mut App) {
 pub struct PxCamera(pub IVec2);
 
 /// Determines whether the entity is locked to the camera
-#[derive(Clone, Component, Copy, Debug, Default)]
+#[derive(ExtractComponent, Component, Clone, Copy, Default, Debug)]
 pub enum PxCanvas {
     /// The entity is drawn relative to the world, like terrain
     #[default]

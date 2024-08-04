@@ -2,6 +2,8 @@
 
 use std::fmt::Debug;
 
+use bevy::render::extract_component::ExtractComponent;
+
 use crate::{math::Diagonal, prelude::*, screen::Screen, set::PxSet};
 
 // TODO Try to use traits instead of macros when we get the new solver
@@ -38,29 +40,28 @@ pub(crate) fn plug(app: &mut App) {
             update_position_to_sub.in_set(PxSet::UpdatePosToSubPos),
         )
             .chain(),
+    )
+    .add_systems(
+        PostUpdate,
+        (
+            align_to_screen!(
+                (&PxMap, &Handle<PxTileset>),
+                Res<Assets<PxTileset>>,
+                |(map, tileset), tilesets: &Res<Assets<PxTileset>>| {
+                    Some((map, tilesets.get(tileset)?).frame_size())
+                }
+            ),
+            align_to_screen!(&Handle<PxSprite>, Res<Assets<PxSprite>>, |sprite,
+                                                                        sprites: &Res<
+                Assets<PxSprite>,
+            >| {
+                Some(sprites.get(sprite)?.frame_size())
+            }),
+            align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
+            #[cfg(feature = "line")]
+            align_to_screen!(&PxLine, (), |line: &PxLine, &()| Some(line.frame_size())),
+        ),
     );
-    // .add_systems(
-    //     PostUpdate,
-    //     (
-    //         align_to_screen!(
-    //             (&PxMap, &Handle<PxTileset>),
-    //             Res<Assets<PxTileset>>,
-    //             |(map, tileset), tilesets: &Res<Assets<PxTileset>>| {
-    //                 Some((map, tilesets.get(tileset)?).frame_size())
-    //             }
-    //         ),
-    //         align_to_screen!(&Handle<PxSprite>, Res<Assets<PxSprite>>, |sprite,
-    //                                                                     sprites: &Res<
-    //             Assets<PxSprite>,
-    //         >| {
-    //             Some(sprites.get(sprite)?.frame_size())
-    //         }),
-    //         align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
-    //         #[cfg(feature = "line")]
-    //         align_to_screen!(&PxLine, (), |line: &PxLine, &()| Some(line.frame_size())),
-    //     )
-    //         .before(PxSet::Draw),
-    // );
 }
 
 pub(crate) trait Spatial {
@@ -74,7 +75,7 @@ impl<T: Spatial> Spatial for &'_ T {
 }
 
 /// The position of an entity
-#[derive(Clone, Component, Copy, Debug, Default, Deref, DerefMut)]
+#[derive(ExtractComponent, Component, Deref, DerefMut, Clone, Copy, Default, Debug)]
 pub struct PxPosition(pub IVec2);
 
 impl From<IVec2> for PxPosition {
@@ -87,12 +88,12 @@ impl From<IVec2> for PxPosition {
 /// or derive/implement the required traits manually. The layers will be rendered in the order
 /// defined by the [`PartialOrd`] implementation. So, lower values will be in the back
 /// and vice versa.
-pub trait PxLayer: Clone + Component + Debug + Default + Ord {}
+pub trait PxLayer: ExtractComponent + Component + Ord + Clone + Default + Debug {}
 
-impl<L: Clone + Component + Debug + Default + Ord> PxLayer for L {}
+impl<L: ExtractComponent + Component + Ord + Clone + Default + Debug> PxLayer for L {}
 
 /// How a sprite is positioned relative to its [`PxPosition`]. It defaults to [`PxAnchor::Center`].
-#[derive(Clone, Component, Copy, Debug, Default)]
+#[derive(ExtractComponent, Component, Clone, Copy, Default, Debug)]
 pub enum PxAnchor {
     /// Center
     #[default]

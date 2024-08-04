@@ -4,8 +4,9 @@ use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
         texture::{ImageLoader, ImageLoaderSettings},
+        Extract, RenderApp,
     },
     tasks::{ComputeTaskPool, ParallelSliceMut},
 };
@@ -13,20 +14,21 @@ use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    animation::{Animation, AnimationAsset},
+    animation::{Animation, AnimationAsset, AnimationComponents},
     image::{PxImage, PxImageSliceMut},
     palette::{asset_palette, PaletteParam},
     pixel::Pixel,
     position::{PxLayer, Spatial},
     prelude::*,
-    set::PxSet,
 };
 
-pub(crate) fn plug(app: &mut App) {
+pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.add_plugins(RenderAssetPlugin::<PxSprite>::default())
         .init_asset::<PxSprite>()
         .init_asset_loader::<PxSpriteLoader>()
-        .add_systems(PostUpdate, image_to_sprite.before(PxSet::Draw));
+        .add_systems(PostUpdate, image_to_sprite)
+        .sub_app_mut(RenderApp)
+        .add_systems(ExtractSchedule, extract_sprites::<L>);
 }
 
 #[derive(Serialize, Deserialize)]
@@ -94,10 +96,6 @@ pub struct PxSprite {
 impl RenderAsset for PxSprite {
     type SourceAsset = Self;
     type Param = ();
-
-    fn asset_usage(_: &Self) -> RenderAssetUsages {
-        RenderAssetUsages::RENDER_WORLD
-    }
 
     fn prepare_asset(
         source_asset: Self,
@@ -169,6 +167,8 @@ pub struct PxSpriteBundle<L: PxLayer> {
     pub canvas: PxCanvas,
     /// A [`Visibility`] component
     pub visibility: Visibility,
+    /// An [`InheritedVisibility`] component
+    pub inherited_visibility: InheritedVisibility,
 }
 
 fn srgb_to_linear(c: f32) -> f32 {
@@ -516,4 +516,35 @@ fn image_to_sprite(
             }
         });
     });
+}
+
+pub(crate) type SpriteComponents<L> = (
+    &'static Handle<PxSprite>,
+    &'static PxPosition,
+    &'static PxAnchor,
+    &'static L,
+    &'static PxCanvas,
+    Option<AnimationComponents>,
+    Option<&'static Handle<PxFilter>>,
+);
+
+fn extract_sprites<L: PxLayer>(
+    sprites: Extract<Query<(SpriteComponents<L>, &InheritedVisibility)>>,
+    mut cmd: Commands,
+) {
+    for ((sprite, &position, &anchor, layer, &canvas, animation, filter), visibility) in &sprites {
+        if !visibility.get() {
+            continue;
+        }
+
+        let mut sprite = cmd.spawn((sprite.clone(), position, anchor, layer.clone(), canvas));
+
+        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
+            sprite.insert((direction, duration, on_finish, frame_transition, start));
+        }
+
+        if let Some(filter) = filter {
+            sprite.insert(filter.clone());
+        }
+    }
 }

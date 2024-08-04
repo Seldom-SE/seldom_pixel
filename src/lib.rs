@@ -32,7 +32,6 @@ mod ui;
 
 use std::{marker::PhantomData, path::PathBuf};
 
-use bevy::render::view::RenderLayers;
 use position::PxLayer;
 use prelude::*;
 
@@ -42,7 +41,6 @@ use prelude::*;
 pub struct PxPlugin<L: PxLayer> {
     screen_size: ScreenSize,
     palette_path: PathBuf,
-    layers: RenderLayers,
     _l: PhantomData<L>,
 }
 
@@ -54,15 +52,8 @@ impl<L: PxLayer> PxPlugin<L> {
         Self {
             screen_size: screen_size.into(),
             palette_path: palette_path.into(),
-            layers: RenderLayers::default(),
             _l: PhantomData,
         }
-    }
-
-    /// Sets the render layers that `seldom_pixel` will draw to
-    pub fn with_render_layers(mut self, layers: RenderLayers) -> Self {
-        self.layers = layers;
-        self
     }
 }
 
@@ -73,13 +64,15 @@ impl<L: PxLayer> Plugin for PxPlugin<L> {
             button::plug,
             camera::plug,
             cursor::plug,
-            filter::plug,
-            map::plug,
+            filter::plug::<L>,
+            #[cfg(feature = "line")]
+            line::plug::<L>,
+            map::plug::<L>,
             palette::plug(self.palette_path.clone()),
             position::plug,
-            screen::Plug::<L>::new(self.screen_size, self.layers.clone()),
-            sprite::plug,
-            text::plug,
+            screen::Plug::<L>::new(self.screen_size),
+            sprite::plug::<L>,
+            text::plug::<L>,
             #[cfg(feature = "particle")]
             (RngPlugin::default(), particle::plug::<L>),
         ));
