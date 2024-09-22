@@ -73,6 +73,15 @@ impl<T: Spatial> Spatial for &'_ T {
         (*self).frame_size()
     }
 }
+// The offset of an entity
+#[derive(Clone, Component, Copy, Debug, Default, Deref, DerefMut)]
+pub struct PxOffset(pub UVec2);
+
+impl From<UVec2> for PxOffset {
+    fn from(offset: UVec2) -> Self {
+        Self(offset)
+    }
+}
 
 /// The position of an entity
 #[derive(ExtractComponent, Component, Deref, DerefMut, Clone, Copy, Default, Debug)]
@@ -81,6 +90,16 @@ pub struct PxPosition(pub IVec2);
 impl From<IVec2> for PxPosition {
     fn from(position: IVec2) -> Self {
         Self(position)
+    }
+}
+
+// The size of an entity
+#[derive(Clone, Component, Copy, Debug, Default, Deref, DerefMut)]
+pub struct PxSize(pub UVec2);
+
+impl From<UVec2> for PxSize {
+    fn from(size: UVec2) -> Self {
+        Self(size)
     }
 }
 

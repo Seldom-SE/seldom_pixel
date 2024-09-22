@@ -13,6 +13,7 @@ mod button;
 mod camera;
 pub mod cursor;
 pub mod filter;
+pub mod frame;
 mod image;
 #[cfg(feature = "line")]
 mod line;
@@ -65,6 +66,7 @@ impl<L: PxLayer> Plugin for PxPlugin<L> {
             camera::plug,
             cursor::plug,
             filter::plug::<L>,
+            frame::plug::<L>,
             #[cfg(feature = "line")]
             line::plug::<L>,
             map::plug::<L>,

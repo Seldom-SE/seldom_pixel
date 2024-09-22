@@ -5,7 +5,7 @@ use std::time::Duration;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::utils::Instant;
 
-use crate::position::Spatial;
+use crate::position::{PxOffset, PxSize, Spatial};
 use crate::{
     image::{PxImage, PxImageSliceMut},
     pixel::Pixel,
@@ -135,6 +135,19 @@ pub(crate) trait Animation {
     );
 }
 
+pub(crate) trait Drawable {
+    type Param;
+
+    fn draw(
+        &self,
+        param: Self::Param,
+        image: &mut PxImageSliceMut<impl Pixel>,
+        offset: UVec2,
+        size: UVec2,
+        filter: impl Fn(u8) -> u8,
+    );
+}
+
 pub(crate) trait AnimationAsset: Asset {
     fn max_frame_count(&self) -> usize;
 }
@@ -257,6 +270,40 @@ pub(crate) fn draw_animation<'a, A: Animation>(
             animation.draw(param, image, frame, filter);
         }
     }
+}
+
+pub(crate) fn draw_frame<'a, D: Drawable>(
+    drawable: &D,
+    param: <D as Drawable>::Param,
+    image: &mut PxImage<impl Pixel>,
+    position: PxPosition,
+    PxOffset(offset): PxOffset,
+    PxSize(size): PxSize,
+    anchor: PxAnchor,
+    canvas: PxCanvas,
+    filters: impl IntoIterator<Item = &'a PxFilter>,
+    camera: PxCamera,
+) {
+    // let size = spatial.frame_size();
+    let position = *position - anchor.pos(size).as_ivec2();
+    let position = match canvas {
+        PxCanvas::World => position - *camera,
+        PxCanvas::Camera => position,
+    };
+
+    let mut image_slice = image.slice_mut(IRect {
+        min: position,
+        max: position + size.as_ivec2(),
+    });
+
+    let mut filter: Box<dyn Fn(u8) -> u8> = Box::new(|pixel| pixel);
+    for filter_part in filters {
+        let filter_part = filter_part.as_fn();
+        filter = Box::new(move |pixel| filter_part(filter(pixel)));
+    }
+
+    // drawable.draw(param, &mut image_slice, |_| 0, filter);
+    drawable.draw(param, &mut image_slice, offset, size, filter);
 }
 
 pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(

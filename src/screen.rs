@@ -29,14 +29,15 @@ use bevy::{
 #[cfg(feature = "line")]
 use crate::line::{draw_line, LineComponents};
 use crate::{
-    animation::{copy_animation_params, draw_spatial, LastUpdate},
+    animation::{copy_animation_params, draw_frame, draw_spatial, LastUpdate},
     cursor::{CursorState, PxCursorPosition},
     filter::{draw_filter, FilterComponents},
+    frame::{FrameComponents, PxFrame},
     image::{PxImage, PxImageSliceMut},
     map::{MapComponents, PxTile, TileComponents},
     math::RectExt,
     palette::{PaletteHandle, PaletteParam},
-    position::PxLayer,
+    position::{PxLayer, PxSize},
     prelude::*,
     sprite::SpriteComponents,
     text::TextComponents,
@@ -282,6 +283,7 @@ struct PxRender;
 struct PxRenderNode<L: PxLayer> {
     maps: QueryState<MapComponents<L>>,
     tiles: QueryState<TileComponents>,
+    frames: QueryState<FrameComponents<L>>,
     sprites: QueryState<SpriteComponents<L>>,
     texts: QueryState<TextComponents<L>>,
     #[cfg(feature = "line")]
@@ -294,6 +296,7 @@ impl<L: PxLayer> FromWorld for PxRenderNode<L> {
         Self {
             maps: world.query(),
             tiles: world.query(),
+            frames: world.query(),
             sprites: world.query(),
             texts: world.query(),
             #[cfg(feature = "line")]
@@ -309,6 +312,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
     fn update(&mut self, world: &mut World) {
         self.maps.update_archetypes(world);
         self.tiles.update_archetypes(world);
+        self.frames.update_archetypes(world);
         self.sprites.update_archetypes(world);
         self.texts.update_archetypes(world);
         #[cfg(feature = "line")]
@@ -340,22 +344,34 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         );
 
         #[cfg(feature = "line")]
-        let mut layer_contents =
-            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>::default();
+        let mut layer_contents = BTreeMap::<
+            _,
+            (
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+            ),
+        >::default();
         #[cfg(not(feature = "line"))]
         let mut layer_contents =
-            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
+            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
 
         for (map, tileset, position, layer, canvas, animation, filter) in
             self.maps.iter_manual(world)
         {
-            if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+            if let Some((maps, _, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
                 maps.push((map, tileset, position, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
                         vec![(map, tileset, position, canvas, animation, filter)],
+                        default(),
                         default(),
                         default(),
                         default(),
@@ -370,7 +386,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         for (sprite, position, anchor, layer, canvas, animation, filter) in
             self.sprites.iter_manual(world)
         {
-            if let Some((_, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+            if let Some((_, sprites, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
                 sprites.push((sprite, position, anchor, canvas, animation, filter));
             } else {
                 layer_contents.insert(
@@ -378,6 +394,29 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                     (
                         default(),
                         vec![(sprite, position, anchor, canvas, animation, filter)],
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                        default(),
+                    ),
+                );
+            }
+        }
+
+        for (frame, position, offset, size, anchor, layer, canvas, filter) in
+            self.frames.iter_manual(world)
+        {
+            if let Some((_, _, frames, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+                frames.push((frame, position, offset, size, anchor, canvas, filter));
+            } else {
+                layer_contents.insert(
+                    layer.clone(),
+                    (
+                        default(),
+                        default(),
+                        vec![(frame, position, offset, size, anchor, canvas, filter)],
                         default(),
                         default(),
                         default(),
@@ -391,12 +430,13 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         for (text, typeface, rect, alignment, layer, canvas, animation, filter) in
             self.texts.iter_manual(world)
         {
-            if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
+            if let Some((_, _, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
                 texts.push((text, typeface, rect, alignment, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
+                        default(),
                         default(),
                         default(),
                         vec![(text, typeface, rect, alignment, canvas, animation, filter)],
@@ -439,6 +479,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                                 default(),
                                 default(),
                                 default(),
+                                default(),
                                 lines,
                                 default(),
                                 default(),
@@ -446,6 +487,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                             )
                         } else {
                             (
+                                default(),
                                 default(),
                                 default(),
                                 default(),
@@ -461,6 +503,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         }
 
         let tilesets = world.resource::<RenderAssets<PxTileset>>();
+        let frame_assets = world.resource::<RenderAssets<PxFrame>>();
         let sprite_assets = world.resource::<RenderAssets<PxSprite>>();
         let typefaces = world.resource::<RenderAssets<PxTypeface>>();
         let filters = world.resource::<RenderAssets<PxFilter>>();
@@ -479,7 +522,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
             .into_iter()
             {
-                if let Some((_, _, _, _, clip_filters, _, over_filters)) =
+                if let Some((_, _, _, _, _, clip_filters, _, over_filters)) =
                     layer_contents.get_mut(&layer)
                 {
                     if clip { clip_filters } else { over_filters }.push((filter, animation));
@@ -494,12 +537,14 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                                 default(),
                                 default(),
                                 default(),
+                                default(),
                                 filters,
                                 default(),
                                 default(),
                             )
                         } else {
                             (
+                                default(),
                                 default(),
                                 default(),
                                 default(),
@@ -518,8 +563,10 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         let mut image_slice = PxImageSliceMut::from_image_mut(&mut image);
 
         #[allow(unused_variables)]
-        for (_, (maps, sprites, texts, clip_lines, clip_filters, over_lines, over_filters)) in
-            layer_contents.into_iter()
+        for (
+            _,
+            (maps, sprites, frames, texts, clip_lines, clip_filters, over_lines, over_filters),
+        ) in layer_contents.into_iter()
         {
             layer_image.clear();
 
@@ -567,6 +614,25 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         );
                     }
                 }
+            }
+
+            for (frame, position, offset, size, anchor, canvas, filter) in frames {
+                let Some(frame) = frame_assets.get(frame) else {
+                    continue;
+                };
+
+                draw_frame(
+                    frame,
+                    (),
+                    &mut layer_image,
+                    *position,
+                    *offset,
+                    *size,
+                    *anchor,
+                    *canvas,
+                    filter.and_then(|filter| filters.get(filter)),
+                    camera,
+                );
             }
 
             for (sprite, position, anchor, canvas, animation, filter) in sprites {
