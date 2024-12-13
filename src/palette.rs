@@ -63,7 +63,7 @@ impl AssetLoader for PaletteLoader {
 
 /// A palette. Palettes are loaded from images containing pixels
 /// that represent what colors the game may display. You may use up to 255 colors.
-/// The bottom-left pixel in the palette is used as the background color.
+/// The top-left pixel in the palette is used as the background color.
 #[derive(Asset, Clone, TypePath, Debug)]
 pub struct Palette {
     pub(crate) size: UVec2,
@@ -89,7 +89,7 @@ type LoadingAssetPaletteParam<'w> = AssetSingleton<'w, LoadingAssetPaletteHandle
 impl Palette {
     /// Create a palette from an [`Image`]
     pub fn new(palette: &Image) -> Palette {
-        let colors = palette
+        let (colors, _, _) = palette
             .convert(TextureFormat::Rgba8UnormSrgb)
             .unwrap()
             .data
@@ -109,8 +109,7 @@ impl Palette {
                         (colors, color, i + 1)
                     }
                 },
-            )
-            .0;
+            );
 
         Palette {
             size: UVec2::new(

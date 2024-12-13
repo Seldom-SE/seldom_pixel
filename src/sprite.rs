@@ -8,7 +8,6 @@ use bevy::{
         texture::{ImageLoader, ImageLoaderSettings},
         Extract, RenderApp,
     },
-    tasks::{ComputeTaskPool, ParallelSliceMut},
 };
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use serde::{Deserialize, Serialize};
@@ -16,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     animation::{Animation, AnimationAsset, AnimationComponents},
     image::{PxImage, PxImageSliceMut},
-    palette::{asset_palette, PaletteParam},
+    palette::asset_palette,
     pixel::Pixel,
     position::{PxLayer, Spatial},
     prelude::*,
@@ -26,9 +25,11 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.add_plugins(RenderAssetPlugin::<PxSprite>::default())
         .init_asset::<PxSprite>()
         .init_asset_loader::<PxSpriteLoader>()
-        .add_systems(PostUpdate, image_to_sprite)
         .sub_app_mut(RenderApp)
-        .add_systems(ExtractSchedule, extract_sprites::<L>);
+        .add_systems(
+            ExtractSchedule,
+            (extract_sprites::<L>, extract_image_to_sprites::<L>),
+        );
 }
 
 #[derive(Serialize, Deserialize)]
@@ -171,39 +172,10 @@ pub struct PxSpriteBundle<L: PxLayer> {
     pub inherited_visibility: InheritedVisibility,
 }
 
-fn srgb_to_linear(c: f32) -> f32 {
-    if c >= 0.04045 {
-        ((c + 0.055) / (1. + 0.055)).powf(2.4)
-    } else {
-        c / 12.92
-    }
-}
-
-#[allow(clippy::excessive_precision)]
-fn srgb_to_oklab(rd: f32, gn: f32, bu: f32) -> (f32, f32, f32) {
-    let rd = srgb_to_linear(rd);
-    let gn = srgb_to_linear(gn);
-    let bu = srgb_to_linear(bu);
-
-    let l = 0.4122214708 * rd + 0.5363325363 * gn + 0.0514459929 * bu;
-    let m = 0.2119034982 * rd + 0.6806995451 * gn + 0.1073969566 * bu;
-    let s = 0.0883024619 * rd + 0.2817188376 * gn + 0.6299787005 * bu;
-
-    let lp = l.cbrt();
-    let mp = m.cbrt();
-    let sp = s.cbrt();
-
-    (
-        0.2104542553 * lp + 0.7936177850 * mp - 0.0040720468 * sp,
-        1.9779984951 * lp - 2.4285922050 * mp + 0.4505937099 * sp,
-        0.0259040371 * lp + 0.7827717662 * mp - 0.8086757660 * sp,
-    )
-}
-
 /// Size of threshold map to use for dithering. The image is tiled with dithering according to this
 /// map, so smaller sizes will have more visible repetition and worse color approximation, but
 /// larger sizes are much, much slower with pattern dithering.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ThresholdMap {
     /// 2x2
     X2_2,
@@ -215,7 +187,7 @@ pub enum ThresholdMap {
 
 /// Dithering algorithm. Perf measurements are for 10,000 pixels with a 4x4 threshold map on a
 /// pretty old machine.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DitherAlgorithm {
     /// Almost as fast as undithered. 16.0 ms in debug mode and 1.23 ms in release mode. Doesn't
     /// make very good use of the color palette.
@@ -226,6 +198,7 @@ pub enum DitherAlgorithm {
 }
 
 /// Info needed to dither an image
+#[derive(Clone, Debug)]
 pub struct Dither {
     /// Dithering algorithm
     pub algorithm: DitherAlgorithm,
@@ -235,9 +208,10 @@ pub struct Dither {
     pub threshold_map: ThresholdMap,
 }
 
+// TODO Example
 /// Renders the contents of an image to a sprite every tick. The image is interpreted as
 /// `Rgba8UnormSrgb`.
-#[derive(Component)]
+#[derive(Component, Clone, Default, Debug)]
 pub struct ImageToSprite {
     /// Image to render
     pub image: Handle<Image>,
@@ -245,7 +219,26 @@ pub struct ImageToSprite {
     pub dither: Option<Dither>,
 }
 
-trait MapSize<const SIZE: usize> {
+/// Spawns a sprite generated from an [`Image`]
+#[derive(Bundle, Debug, Default)]
+pub struct ImageToSpriteBundle<L: PxLayer> {
+    /// A [`Handle<PxSprite>`] component
+    pub image: ImageToSprite,
+    /// A [`PxPosition`] component
+    pub position: PxPosition,
+    /// A [`PxAnchor`] component
+    pub anchor: PxAnchor,
+    /// A layer component
+    pub layer: L,
+    /// A [`PxCanvas`] component
+    pub canvas: PxCanvas,
+    /// A [`Visibility`] component
+    pub visibility: Visibility,
+    /// An [`InheritedVisibility`] component
+    pub inherited_visibility: InheritedVisibility,
+}
+
+pub(crate) trait MapSize<const SIZE: usize> {
     const WIDTH: usize;
     const MAP: [usize; SIZE];
 }
@@ -290,7 +283,7 @@ impl MapSize<64> for () {
     ];
 }
 
-trait Algorithm<const MAP_SIZE: usize> {
+pub(crate) trait Algorithm<const MAP_SIZE: usize> {
     fn compute(
         color: Vec3,
         threshold: Vec3,
@@ -301,7 +294,7 @@ trait Algorithm<const MAP_SIZE: usize> {
     ) -> u8;
 }
 
-enum ClosestAlg {}
+pub(crate) enum ClosestAlg {}
 
 impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for ClosestAlg {
     fn compute(
@@ -318,7 +311,7 @@ impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for ClosestAlg {
     }
 }
 
-enum OrderedAlg {}
+pub(crate) enum OrderedAlg {}
 
 impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for OrderedAlg {
     fn compute(
@@ -337,7 +330,7 @@ impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for OrderedAlg {
     }
 }
 
-enum PatternAlg {}
+pub(crate) enum PatternAlg {}
 
 impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for PatternAlg {
     fn compute(
@@ -367,7 +360,7 @@ impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for PatternAlg {
     }
 }
 
-fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
+pub(crate) fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
     pixels: &mut [(usize, (&[u8], &mut Option<u8>))],
     threshold: f32,
     size: UVec2,
@@ -388,11 +381,7 @@ fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
         }
 
         **pixel = Some(A::compute(
-            Vec3::from(srgb_to_oklab(
-                color[0] as f32 / 255.,
-                color[1] as f32 / 255.,
-                color[2] as f32 / 255.,
-            )),
+            Oklaba::from(Srgba::rgb_u8(color[0], color[1], color[2])).to_vec3(),
             Vec3::splat(threshold),
             <() as MapSize<MAP_SIZE>>::MAP[pos.x as usize % <() as MapSize<MAP_SIZE>>::WIDTH
                 * <() as MapSize<MAP_SIZE>>::WIDTH
@@ -402,120 +391,6 @@ fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
             palette,
         ));
     }
-}
-
-// TODO Use more helpers
-// TODO Feature gate
-// TODO Immediate function version
-fn image_to_sprite(
-    mut to_sprites: Query<(&ImageToSprite, &mut Handle<PxSprite>)>,
-    images: Res<Assets<Image>>,
-    palette: PaletteParam,
-    mut sprites: ResMut<Assets<PxSprite>>,
-) {
-    if to_sprites.iter().next().is_none() {
-        return;
-    }
-
-    let Some(palette) = palette.get() else {
-        return;
-    };
-
-    let palette = palette
-        .colors
-        .iter()
-        .map(|&[r, g, b]| srgb_to_oklab(r as f32 / 255., g as f32 / 255., b as f32 / 255.).into())
-        .collect::<Vec<Vec3>>();
-
-    let palette_tree = ImmutableKdTree::from(
-        &palette
-            .iter()
-            .map(|&color| color.into())
-            .collect::<Vec<[f32; 3]>>()[..],
-    );
-
-    to_sprites.iter_mut().for_each(|(image, mut sprite)| {
-        let dither = &image.dither;
-        let image = images.get(&image.image).unwrap();
-
-        if *sprite == Handle::default() {
-            let data = PxImage::empty_from_image(image);
-
-            *sprite = sprites.add(PxSprite {
-                frame_size: data.area(),
-                data,
-            });
-        }
-
-        let sprite = sprites.get_mut(&*sprite).unwrap();
-
-        let size = image.texture_descriptor.size;
-        let size = UVec2::new(size.width, size.height);
-        if sprite.data.size() != size {
-            let data = PxImage::empty_from_image(image);
-
-            sprite.frame_size = data.area();
-            sprite.data = data;
-        }
-
-        let mut pixels = image
-            .data
-            .chunks_exact(4)
-            .zip(sprite.data.iter_mut())
-            .enumerate()
-            .collect::<Vec<_>>();
-
-        pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |_, pixels| {
-            use DitherAlgorithm::*;
-            use ThresholdMap::*;
-
-            match *dither {
-                None => dither_slice::<ClosestAlg, 1>(pixels, 0., size, &palette_tree, &palette),
-                Some(Dither {
-                    algorithm: Ordered,
-                    threshold,
-                    threshold_map: X2_2,
-                }) => {
-                    dither_slice::<OrderedAlg, 4>(pixels, threshold, size, &palette_tree, &palette)
-                }
-                Some(Dither {
-                    algorithm: Ordered,
-                    threshold,
-                    threshold_map: X4_4,
-                }) => {
-                    dither_slice::<OrderedAlg, 16>(pixels, threshold, size, &palette_tree, &palette)
-                }
-                Some(Dither {
-                    algorithm: Ordered,
-                    threshold,
-                    threshold_map: X8_8,
-                }) => {
-                    dither_slice::<OrderedAlg, 64>(pixels, threshold, size, &palette_tree, &palette)
-                }
-                Some(Dither {
-                    algorithm: Pattern,
-                    threshold,
-                    threshold_map: X2_2,
-                }) => {
-                    dither_slice::<PatternAlg, 4>(pixels, threshold, size, &palette_tree, &palette)
-                }
-                Some(Dither {
-                    algorithm: Pattern,
-                    threshold,
-                    threshold_map: X4_4,
-                }) => {
-                    dither_slice::<PatternAlg, 16>(pixels, threshold, size, &palette_tree, &palette)
-                }
-                Some(Dither {
-                    algorithm: Pattern,
-                    threshold,
-                    threshold_map: X8_8,
-                }) => {
-                    dither_slice::<PatternAlg, 64>(pixels, threshold, size, &palette_tree, &palette)
-                }
-            }
-        });
-    });
 }
 
 pub(crate) type SpriteComponents<L> = (
@@ -545,6 +420,40 @@ fn extract_sprites<L: PxLayer>(
 
         if let Some(filter) = filter {
             sprite.insert(filter.clone());
+        }
+    }
+}
+
+pub(crate) type ImageToSpriteComponents<L> = (
+    &'static ImageToSprite,
+    &'static PxPosition,
+    &'static PxAnchor,
+    &'static L,
+    &'static PxCanvas,
+    Option<&'static Handle<PxFilter>>,
+);
+
+fn extract_image_to_sprites<L: PxLayer>(
+    image_to_sprites: Extract<Query<(ImageToSpriteComponents<L>, &InheritedVisibility)>>,
+    mut cmd: Commands,
+) {
+    for ((image_to_sprite, &position, &anchor, layer, &canvas, filter), visibility) in
+        &image_to_sprites
+    {
+        if !visibility.get() {
+            continue;
+        }
+
+        let mut image_to_sprite = cmd.spawn((
+            image_to_sprite.clone(),
+            position,
+            anchor,
+            layer.clone(),
+            canvas,
+        ));
+
+        if let Some(filter) = filter {
+            image_to_sprite.insert(filter.clone());
         }
     }
 }
