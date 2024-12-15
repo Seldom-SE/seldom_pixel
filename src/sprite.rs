@@ -9,7 +9,6 @@ use bevy::{
         Extract, RenderApp,
     },
 };
-use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -28,7 +27,10 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
         .sub_app_mut(RenderApp)
         .add_systems(
             ExtractSchedule,
-            (extract_sprites::<L>, extract_image_to_sprites::<L>),
+            (
+                extract_sprites::<L>,
+                // extract_image_to_sprites::<L>
+            ),
         );
 }
 
@@ -208,190 +210,190 @@ pub struct Dither {
     pub threshold_map: ThresholdMap,
 }
 
-// TODO Example
-/// Renders the contents of an image to a sprite every tick. The image is interpreted as
-/// `Rgba8UnormSrgb`.
-#[derive(Component, Clone, Default, Debug)]
-pub struct ImageToSprite {
-    /// Image to render
-    pub image: Handle<Image>,
-    /// Dithering
-    pub dither: Option<Dither>,
-}
+// // TODO Example
+// /// Renders the contents of an image to a sprite every tick. The image is interpreted as
+// /// `Rgba8UnormSrgb`.
+// #[derive(Component, Clone, Default, Debug)]
+// pub struct ImageToSprite {
+//     /// Image to render
+//     pub image: Handle<Image>,
+//     /// Dithering
+//     pub dither: Option<Dither>,
+// }
 
-/// Spawns a sprite generated from an [`Image`]
-#[derive(Bundle, Debug, Default)]
-pub struct ImageToSpriteBundle<L: PxLayer> {
-    /// A [`Handle<PxSprite>`] component
-    pub image: ImageToSprite,
-    /// A [`PxPosition`] component
-    pub position: PxPosition,
-    /// A [`PxAnchor`] component
-    pub anchor: PxAnchor,
-    /// A layer component
-    pub layer: L,
-    /// A [`PxCanvas`] component
-    pub canvas: PxCanvas,
-    /// A [`Visibility`] component
-    pub visibility: Visibility,
-    /// An [`InheritedVisibility`] component
-    pub inherited_visibility: InheritedVisibility,
-}
+// /// Spawns a sprite generated from an [`Image`]
+// #[derive(Bundle, Debug, Default)]
+// pub struct ImageToSpriteBundle<L: PxLayer> {
+//     /// A [`Handle<PxSprite>`] component
+//     pub image: ImageToSprite,
+//     /// A [`PxPosition`] component
+//     pub position: PxPosition,
+//     /// A [`PxAnchor`] component
+//     pub anchor: PxAnchor,
+//     /// A layer component
+//     pub layer: L,
+//     /// A [`PxCanvas`] component
+//     pub canvas: PxCanvas,
+//     /// A [`Visibility`] component
+//     pub visibility: Visibility,
+//     /// An [`InheritedVisibility`] component
+//     pub inherited_visibility: InheritedVisibility,
+// }
 
-pub(crate) trait MapSize<const SIZE: usize> {
-    const WIDTH: usize;
-    const MAP: [usize; SIZE];
-}
-
-impl MapSize<1> for () {
-    const WIDTH: usize = 1;
-    const MAP: [usize; 1] = [0];
-}
-
-impl MapSize<4> for () {
-    const WIDTH: usize = 2;
-    #[rustfmt::skip]
-    const MAP: [usize; 4] = [
-        0, 2,
-        3, 1,
-    ];
-}
-
-impl MapSize<16> for () {
-    const WIDTH: usize = 4;
-    #[rustfmt::skip]
-    const MAP: [usize; 16] = [
-        0, 8, 2, 10,
-        12, 4, 14, 6,
-        3, 11, 1, 9,
-        15, 7, 13, 5,
-    ];
-}
-
-impl MapSize<64> for () {
-    const WIDTH: usize = 8;
-    #[rustfmt::skip]
-    const MAP: [usize; 64] = [
-        0, 48, 12, 60, 3, 51, 15, 63,
-        32, 16, 44, 28, 35, 19, 47, 31,
-        8, 56, 4, 52, 11, 59, 7, 55,
-        40, 24, 36, 20, 43, 27, 39, 23,
-        2, 50, 14, 62, 1, 49, 13, 61,
-        34, 18, 46, 30, 33, 17, 45, 29,
-        10, 58, 6, 54, 9, 57, 5, 53,
-        42, 26, 38, 22, 41, 25, 37, 21,
-    ];
-}
-
-pub(crate) trait Algorithm<const MAP_SIZE: usize> {
-    fn compute(
-        color: Vec3,
-        threshold: Vec3,
-        threshold_index: usize,
-        candidates: &mut [usize; MAP_SIZE],
-        palette_tree: &ImmutableKdTree<f32, 3>,
-        palette: &[Vec3],
-    ) -> u8;
-}
-
-pub(crate) enum ClosestAlg {}
-
-impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for ClosestAlg {
-    fn compute(
-        color: Vec3,
-        _: Vec3,
-        _: usize,
-        _: &mut [usize; MAP_SIZE],
-        palette_tree: &ImmutableKdTree<f32, 3>,
-        _: &[Vec3],
-    ) -> u8 {
-        palette_tree
-            .approx_nearest_one::<SquaredEuclidean>(&color.into())
-            .item as usize as u8
-    }
-}
-
-pub(crate) enum OrderedAlg {}
-
-impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for OrderedAlg {
-    fn compute(
-        color: Vec3,
-        threshold: Vec3,
-        threshold_index: usize,
-        _: &mut [usize; MAP_SIZE],
-        palette_tree: &ImmutableKdTree<f32, 3>,
-        _: &[Vec3],
-    ) -> u8 {
-        palette_tree
-            .approx_nearest_one::<SquaredEuclidean>(
-                &(color + threshold * (threshold_index as f32 / MAP_SIZE as f32 - 0.5)).into(),
-            )
-            .item as u8
-    }
-}
-
-pub(crate) enum PatternAlg {}
-
-impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for PatternAlg {
-    fn compute(
-        color: Vec3,
-        threshold: Vec3,
-        threshold_index: usize,
-        candidates: &mut [usize; MAP_SIZE],
-        palette_tree: &ImmutableKdTree<f32, 3>,
-        palette: &[Vec3],
-    ) -> u8 {
-        let mut error = Vec3::ZERO;
-        for candidate_ref in &mut *candidates {
-            let sample = color + error * threshold;
-            let candidate = palette_tree
-                .approx_nearest_one::<SquaredEuclidean>(&sample.into())
-                .item as usize;
-
-            *candidate_ref = candidate;
-            error += color - palette[candidate];
-        }
-
-        candidates.sort_unstable_by(|&candidate_1, &candidate_2| {
-            palette[candidate_1][0].total_cmp(&palette[candidate_2][0])
-        });
-
-        candidates[threshold_index] as u8
-    }
-}
-
-pub(crate) fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
-    pixels: &mut [(usize, (&[u8], &mut Option<u8>))],
-    threshold: f32,
-    size: UVec2,
-    palette_tree: &ImmutableKdTree<f32, 3>,
-    palette: &[Vec3],
-) where
-    (): MapSize<MAP_SIZE>,
-{
-    let mut candidates = [0; MAP_SIZE];
-
-    for &mut (i, (color, ref mut pixel)) in pixels {
-        let i = i as u32;
-        let pos = UVec2::new(i % size.x, i / size.x);
-
-        if color[3] == 0 {
-            **pixel = None;
-            continue;
-        }
-
-        **pixel = Some(A::compute(
-            Oklaba::from(Srgba::rgb_u8(color[0], color[1], color[2])).to_vec3(),
-            Vec3::splat(threshold),
-            <() as MapSize<MAP_SIZE>>::MAP[pos.x as usize % <() as MapSize<MAP_SIZE>>::WIDTH
-                * <() as MapSize<MAP_SIZE>>::WIDTH
-                + pos.y as usize % <() as MapSize<MAP_SIZE>>::WIDTH],
-            &mut candidates,
-            palette_tree,
-            palette,
-        ));
-    }
-}
+// pub(crate) trait MapSize<const SIZE: usize> {
+//     const WIDTH: usize;
+//     const MAP: [usize; SIZE];
+// }
+//
+// impl MapSize<1> for () {
+//     const WIDTH: usize = 1;
+//     const MAP: [usize; 1] = [0];
+// }
+//
+// impl MapSize<4> for () {
+//     const WIDTH: usize = 2;
+//     #[rustfmt::skip]
+//     const MAP: [usize; 4] = [
+//         0, 2,
+//         3, 1,
+//     ];
+// }
+//
+// impl MapSize<16> for () {
+//     const WIDTH: usize = 4;
+//     #[rustfmt::skip]
+//     const MAP: [usize; 16] = [
+//         0, 8, 2, 10,
+//         12, 4, 14, 6,
+//         3, 11, 1, 9,
+//         15, 7, 13, 5,
+//     ];
+// }
+//
+// impl MapSize<64> for () {
+//     const WIDTH: usize = 8;
+//     #[rustfmt::skip]
+//     const MAP: [usize; 64] = [
+//         0, 48, 12, 60, 3, 51, 15, 63,
+//         32, 16, 44, 28, 35, 19, 47, 31,
+//         8, 56, 4, 52, 11, 59, 7, 55,
+//         40, 24, 36, 20, 43, 27, 39, 23,
+//         2, 50, 14, 62, 1, 49, 13, 61,
+//         34, 18, 46, 30, 33, 17, 45, 29,
+//         10, 58, 6, 54, 9, 57, 5, 53,
+//         42, 26, 38, 22, 41, 25, 37, 21,
+//     ];
+// }
+//
+// pub(crate) trait Algorithm<const MAP_SIZE: usize> {
+//     fn compute(
+//         color: Vec3,
+//         threshold: Vec3,
+//         threshold_index: usize,
+//         candidates: &mut [usize; MAP_SIZE],
+//         palette_tree: &ImmutableKdTree<f32, 3>,
+//         palette: &[Vec3],
+//     ) -> u8;
+// }
+//
+// pub(crate) enum ClosestAlg {}
+//
+// impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for ClosestAlg {
+//     fn compute(
+//         color: Vec3,
+//         _: Vec3,
+//         _: usize,
+//         _: &mut [usize; MAP_SIZE],
+//         palette_tree: &ImmutableKdTree<f32, 3>,
+//         _: &[Vec3],
+//     ) -> u8 {
+//         palette_tree
+//             .approx_nearest_one::<SquaredEuclidean>(&color.into())
+//             .item as usize as u8
+//     }
+// }
+//
+// pub(crate) enum OrderedAlg {}
+//
+// impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for OrderedAlg {
+//     fn compute(
+//         color: Vec3,
+//         threshold: Vec3,
+//         threshold_index: usize,
+//         _: &mut [usize; MAP_SIZE],
+//         palette_tree: &ImmutableKdTree<f32, 3>,
+//         _: &[Vec3],
+//     ) -> u8 {
+//         palette_tree
+//             .approx_nearest_one::<SquaredEuclidean>(
+//                 &(color + threshold * (threshold_index as f32 / MAP_SIZE as f32 - 0.5)).into(),
+//             )
+//             .item as u8
+//     }
+// }
+//
+// pub(crate) enum PatternAlg {}
+//
+// impl<const MAP_SIZE: usize> Algorithm<MAP_SIZE> for PatternAlg {
+//     fn compute(
+//         color: Vec3,
+//         threshold: Vec3,
+//         threshold_index: usize,
+//         candidates: &mut [usize; MAP_SIZE],
+//         palette_tree: &ImmutableKdTree<f32, 3>,
+//         palette: &[Vec3],
+//     ) -> u8 {
+//         let mut error = Vec3::ZERO;
+//         for candidate_ref in &mut *candidates {
+//             let sample = color + error * threshold;
+//             let candidate = palette_tree
+//                 .approx_nearest_one::<SquaredEuclidean>(&sample.into())
+//                 .item as usize;
+//
+//             *candidate_ref = candidate;
+//             error += color - palette[candidate];
+//         }
+//
+//         candidates.sort_unstable_by(|&candidate_1, &candidate_2| {
+//             palette[candidate_1][0].total_cmp(&palette[candidate_2][0])
+//         });
+//
+//         candidates[threshold_index] as u8
+//     }
+// }
+//
+// pub(crate) fn dither_slice<A: Algorithm<MAP_SIZE>, const MAP_SIZE: usize>(
+//     pixels: &mut [(usize, (&[u8], &mut Option<u8>))],
+//     threshold: f32,
+//     size: UVec2,
+//     palette_tree: &ImmutableKdTree<f32, 3>,
+//     palette: &[Vec3],
+// ) where
+//     (): MapSize<MAP_SIZE>,
+// {
+//     let mut candidates = [0; MAP_SIZE];
+//
+//     for &mut (i, (color, ref mut pixel)) in pixels {
+//         let i = i as u32;
+//         let pos = UVec2::new(i % size.x, i / size.x);
+//
+//         if color[3] == 0 {
+//             **pixel = None;
+//             continue;
+//         }
+//
+//         **pixel = Some(A::compute(
+//             Oklaba::from(Srgba::rgb_u8(color[0], color[1], color[2])).to_vec3(),
+//             Vec3::splat(threshold),
+//             <() as MapSize<MAP_SIZE>>::MAP[pos.x as usize % <() as MapSize<MAP_SIZE>>::WIDTH
+//                 * <() as MapSize<MAP_SIZE>>::WIDTH
+//                 + pos.y as usize % <() as MapSize<MAP_SIZE>>::WIDTH],
+//             &mut candidates,
+//             palette_tree,
+//             palette,
+//         ));
+//     }
+// }
 
 pub(crate) type SpriteComponents<L> = (
     &'static Handle<PxSprite>,
@@ -424,36 +426,36 @@ fn extract_sprites<L: PxLayer>(
     }
 }
 
-pub(crate) type ImageToSpriteComponents<L> = (
-    &'static ImageToSprite,
-    &'static PxPosition,
-    &'static PxAnchor,
-    &'static L,
-    &'static PxCanvas,
-    Option<&'static Handle<PxFilter>>,
-);
-
-fn extract_image_to_sprites<L: PxLayer>(
-    image_to_sprites: Extract<Query<(ImageToSpriteComponents<L>, &InheritedVisibility)>>,
-    mut cmd: Commands,
-) {
-    for ((image_to_sprite, &position, &anchor, layer, &canvas, filter), visibility) in
-        &image_to_sprites
-    {
-        if !visibility.get() {
-            continue;
-        }
-
-        let mut image_to_sprite = cmd.spawn((
-            image_to_sprite.clone(),
-            position,
-            anchor,
-            layer.clone(),
-            canvas,
-        ));
-
-        if let Some(filter) = filter {
-            image_to_sprite.insert(filter.clone());
-        }
-    }
-}
+// pub(crate) type ImageToSpriteComponents<L> = (
+//     &'static ImageToSprite,
+//     &'static PxPosition,
+//     &'static PxAnchor,
+//     &'static L,
+//     &'static PxCanvas,
+//     Option<&'static Handle<PxFilter>>,
+// );
+//
+// fn extract_image_to_sprites<L: PxLayer>(
+//     image_to_sprites: Extract<Query<(ImageToSpriteComponents<L>, &InheritedVisibility)>>,
+//     mut cmd: Commands,
+// ) {
+//     for ((image_to_sprite, &position, &anchor, layer, &canvas, filter), visibility) in
+//         &image_to_sprites
+//     {
+//         if !visibility.get() {
+//             continue;
+//         }
+//
+//         let mut image_to_sprite = cmd.spawn((
+//             image_to_sprite.clone(),
+//             position,
+//             anchor,
+//             layer.clone(),
+//             canvas,
+//         ));
+//
+//         if let Some(filter) = filter {
+//             image_to_sprite.insert(filter.clone());
+//         }
+//     }
+// }

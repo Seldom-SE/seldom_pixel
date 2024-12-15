@@ -56,6 +56,7 @@ impl<P: Pixel> PxImage<P> {
         self.image.len()
     }
 
+    #[allow(unused)]
     pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut P> {
         self.image.iter_mut()
     }
@@ -178,7 +179,7 @@ pub(crate) struct PxImageSliceMut<'a, P: Pixel> {
     slice: IRect,
 }
 
-impl<'a, P: Pixel> PxImageSliceMut<'a, P> {
+impl<P: Pixel> PxImageSliceMut<'_, P> {
     /// First `usize` is the index in the slice. Second `usize` is the index in the image.
     pub(crate) fn for_each_mut(&mut self, f: impl Fn(usize, usize, &mut P)) {
         let row_min = self.slice.min.x.clamp(0, self.width as i32) as usize;

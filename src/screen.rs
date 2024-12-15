@@ -19,14 +19,12 @@ use bevy::{
             TextureSampleType, TextureViewDescriptor, TextureViewDimension, VertexState,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
-        texture::{BevyDefault, GpuImage, TextureFormatPixelInfo},
+        texture::{BevyDefault, TextureFormatPixelInfo},
         view::ViewTarget,
         Render, RenderApp, RenderSet,
     },
-    tasks::{ComputeTaskPool, ParallelSliceMut},
     window::{PrimaryWindow, WindowResized},
 };
-use kiddo::ImmutableKdTree;
 
 #[cfg(feature = "line")]
 use crate::line::{draw_line, LineComponents};
@@ -40,10 +38,7 @@ use crate::{
     palette::{PaletteHandle, PaletteParam},
     position::PxLayer,
     prelude::*,
-    sprite::{
-        dither_slice, ClosestAlg, Dither, DitherAlgorithm, ImageToSpriteComponents, OrderedAlg,
-        PatternAlg, SpriteComponents, ThresholdMap,
-    },
+    sprite::SpriteComponents,
     text::TextComponents,
 };
 
@@ -137,7 +132,7 @@ pub struct Screen {
     pub(crate) computed_size: UVec2,
     window_aspect_ratio: f32,
     pub(crate) palette: [Vec3; 256],
-    pub(crate) palette_tree: ImmutableKdTree<f32, 3>,
+    // pub(crate) palette_tree: ImmutableKdTree<f32, 3>,
 }
 
 impl Screen {
@@ -165,7 +160,7 @@ fn insert_screen(size: ScreenSize) -> impl Fn(Query<&Window, With<PrimaryWindow>
             computed_size: size.compute(Vec2::new(window.width(), window.height())),
             window_aspect_ratio: window.width() / window.height(),
             palette: [Vec3::ZERO; 256],
-            palette_tree: ImmutableKdTree::from(&[][..]),
+            // palette_tree: ImmutableKdTree::from(&[][..]),
         });
     }
 }
@@ -289,7 +284,7 @@ struct PxRender;
 struct PxRenderNode<L: PxLayer> {
     maps: QueryState<MapComponents<L>>,
     tiles: QueryState<TileComponents>,
-    image_to_sprites: QueryState<ImageToSpriteComponents<L>>,
+    // image_to_sprites: QueryState<ImageToSpriteComponents<L>>,
     sprites: QueryState<SpriteComponents<L>>,
     texts: QueryState<TextComponents<L>>,
     #[cfg(feature = "line")]
@@ -302,7 +297,7 @@ impl<L: PxLayer> FromWorld for PxRenderNode<L> {
         Self {
             maps: world.query(),
             tiles: world.query(),
-            image_to_sprites: world.query(),
+            // image_to_sprites: world.query(),
             sprites: world.query(),
             texts: world.query(),
             #[cfg(feature = "line")]
@@ -318,7 +313,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
     fn update(&mut self, world: &mut World) {
         self.maps.update_archetypes(world);
         self.tiles.update_archetypes(world);
-        self.image_to_sprites.update_archetypes(world);
+        // self.image_to_sprites.update_archetypes(world);
         self.sprites.update_archetypes(world);
         self.texts.update_archetypes(world);
         #[cfg(feature = "line")]
@@ -350,34 +345,23 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         );
 
         #[cfg(feature = "line")]
-        let mut layer_contents = BTreeMap::<
-            _,
-            (
-                Vec<_>,
-                Vec<_>,
-                Vec<_>,
-                Vec<_>,
-                Vec<_>,
-                Vec<_>,
-                Vec<_>,
-                Vec<_>,
-            ),
-        >::default();
+        let mut layer_contents =
+            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>::default();
         #[cfg(not(feature = "line"))]
         let mut layer_contents =
-            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
+            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
 
         for (map, tileset, position, layer, canvas, animation, filter) in
             self.maps.iter_manual(world)
         {
-            if let Some((maps, _, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+            if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
                 maps.push((map, tileset, position, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
                         vec![(map, tileset, position, canvas, animation, filter)],
-                        default(),
+                        // default(),
                         default(),
                         default(),
                         default(),
@@ -389,38 +373,37 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
         }
 
-        for (image, position, anchor, layer, canvas, filter) in
-            self.image_to_sprites.iter_manual(world)
-        {
-            if let Some((_, image_to_sprites, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-                image_to_sprites.push((image, position, anchor, canvas, filter));
-            } else {
-                layer_contents.insert(
-                    layer.clone(),
-                    (
-                        default(),
-                        vec![(image, position, anchor, canvas, filter)],
-                        default(),
-                        default(),
-                        default(),
-                        default(),
-                        default(),
-                        default(),
-                    ),
-                );
-            }
-        }
+        // for (image, position, anchor, layer, canvas, filter) in
+        //     self.image_to_sprites.iter_manual(world)
+        // {
+        //     if let Some((_, image_to_sprites, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+        //         image_to_sprites.push((image, position, anchor, canvas, filter));
+        //     } else {
+        //         layer_contents.insert(
+        //             layer.clone(),
+        //             (
+        //                 default(),
+        //                 vec![(image, position, anchor, canvas, filter)],
+        //                 default(),
+        //                 default(),
+        //                 default(),
+        //                 default(),
+        //                 default(),
+        //                 default(),
+        //             ),
+        //         );
+        //     }
+        // }
 
         for (sprite, position, anchor, layer, canvas, animation, filter) in
             self.sprites.iter_manual(world)
         {
-            if let Some((_, _, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+            if let Some((_, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
                 sprites.push((sprite, position, anchor, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
-                        default(),
                         default(),
                         vec![(sprite, position, anchor, canvas, animation, filter)],
                         default(),
@@ -436,13 +419,12 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         for (text, typeface, rect, alignment, layer, canvas, animation, filter) in
             self.texts.iter_manual(world)
         {
-            if let Some((_, _, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
+            if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
                 texts.push((text, typeface, rect, alignment, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
-                        default(),
                         default(),
                         default(),
                         vec![(text, typeface, rect, alignment, canvas, animation, filter)],
@@ -470,7 +452,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
             .into_iter()
             {
-                if let Some((_, _, _, _, clip_lines, _, over_lines, _)) =
+                if let Some((_, _, _, clip_lines, _, over_lines, _)) =
                     layer_contents.get_mut(&layer)
                 {
                     if clip { clip_lines } else { over_lines }
@@ -485,7 +467,6 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                                 default(),
                                 default(),
                                 default(),
-                                default(),
                                 lines,
                                 default(),
                                 default(),
@@ -493,7 +474,6 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                             )
                         } else {
                             (
-                                default(),
                                 default(),
                                 default(),
                                 default(),
@@ -522,7 +502,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
             .into_iter()
             {
-                if let Some((_, _, _, _, _, clip_filters, _, over_filters)) =
+                if let Some((_, _, _, _, clip_filters, _, over_filters)) =
                     layer_contents.get_mut(&layer)
                 {
                     if clip { clip_filters } else { over_filters }.push((filter, animation));
@@ -533,7 +513,6 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         layer,
                         if clip {
                             (
-                                default(),
                                 default(),
                                 default(),
                                 default(),
@@ -550,7 +529,6 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                                 default(),
                                 default(),
                                 default(),
-                                default(),
                                 filters,
                             )
                         },
@@ -560,7 +538,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         }
 
         let tilesets = world.resource::<RenderAssets<PxTileset>>();
-        let images = world.resource::<RenderAssets<GpuImage>>();
+        // let images = world.resource::<RenderAssets<GpuImage>>();
         let sprite_assets = world.resource::<RenderAssets<PxSprite>>();
         let typefaces = world.resource::<RenderAssets<PxTypeface>>();
         let filters = world.resource::<RenderAssets<PxFilter>>();
@@ -573,7 +551,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             _,
             (
                 maps,
-                image_to_sprites,
+                // image_to_sprites,
                 sprites,
                 texts,
                 clip_lines,
@@ -631,141 +609,144 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 }
             }
 
-            // TODO Use more helpers
-            // TODO Feature gate
-            // TODO Immediate function version
-            for (image, position, anchor, canvas, filter) in image_to_sprites {
-                // let palette = screen.palette
-                //     .colors
-                //     .iter()
-                //     .map(|&color| Oklaba::from(Srgba::from_u8_array_no_alpha(color)).to_vec3())
-                //     .collect::<Vec<Vec3>>();
+            // I was trying to make `ImageToSprite` work without 1-frame lag, but this
+            // fundamentally needs GPU readback or something bc you can't just get image data
+            // from a `GpuImage`. I think those represent images that're actually on the GPU. So
+            // here's where I left off with that. I don't need `ImageToSprite` at the moment, so
+            // this will be left incomplete until I need it, if I ever do.
 
-                let palette_tree = ImmutableKdTree::from(
-                    &screen
-                        .palette
-                        .iter()
-                        .map(|&color| color.into())
-                        .collect::<Vec<[f32; 3]>>()[..],
-                );
+            // // TODO Use more helpers
+            // // TODO Feature gate
+            // // TODO Immediate function version
+            // for (image, position, anchor, canvas, filter) in image_to_sprites {
+            //     // let palette = screen.palette
+            //     //     .colors
+            //     //     .iter()
+            //     //     .map(|&color| Oklaba::from(Srgba::from_u8_array_no_alpha(color)).to_vec3())
+            //     //     .collect::<Vec<Vec3>>();
 
-                let dither = &image.dither;
-                let Some(image) = images.get(&image.image) else {
-                    info!("temp");
-                    continue;
-                };
+            //     let palette_tree = ImmutableKdTree::from(
+            //         &screen
+            //             .palette
+            //             .iter()
+            //             .map(|&color| color.into())
+            //             .collect::<Vec<[f32; 3]>>()[..],
+            //     );
 
-                // TODO https://github.com/bevyengine/bevy/blob/v0.14.1/examples/app/headless_renderer.rs
-                let size = image.texture_descriptor.size;
-                let size = UVec2::new(size.width, size.height);
+            //     let dither = &image.dither;
+            //     let Some(image) = images.get(&image.image) else {
+            //         continue;
+            //     };
 
-                let data = PxImage::empty_from_image(image);
+            //     // TODO https://github.com/bevyengine/bevy/blob/v0.14.1/examples/app/headless_renderer.rs
+            //     let size = image.size;
+            //     let data = PxImage::empty(size);
 
-                let mut sprite = PxSprite {
-                    frame_size: data.area(),
-                    data,
-                };
+            //     let mut sprite = PxSprite {
+            //         frame_size: data.area(),
+            //         data,
+            //     };
 
-                let mut pixels = image
-                    .data
-                    .chunks_exact(4)
-                    .zip(sprite.data.iter_mut())
-                    .enumerate()
-                    .collect::<Vec<_>>();
+            //     let mut pixels = image
+            //         .data
+            //         .chunks_exact(4)
+            //         .zip(sprite.data.iter_mut())
+            //         .enumerate()
+            //         .collect::<Vec<_>>();
 
-                pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |_, pixels| {
-                    use DitherAlgorithm::*;
-                    use ThresholdMap::*;
+            //     pixels.par_chunk_map_mut(ComputeTaskPool::get(), 20, |_, pixels| {
+            //         use DitherAlgorithm::*;
+            //         use ThresholdMap::*;
 
-                    match *dither {
-                        None => dither_slice::<ClosestAlg, 1>(
-                            pixels,
-                            0.,
-                            size,
-                            &screen.palette_tree,
-                            &screen.palette,
-                        ),
-                        Some(Dither {
-                            algorithm: Ordered,
-                            threshold,
-                            threshold_map: X2_2,
-                        }) => dither_slice::<OrderedAlg, 4>(
-                            pixels,
-                            threshold,
-                            size,
-                            &screen.palette_tree,
-                            &screen.palette,
-                        ),
-                        Some(Dither {
-                            algorithm: Ordered,
-                            threshold,
-                            threshold_map: X4_4,
-                        }) => dither_slice::<OrderedAlg, 16>(
-                            pixels,
-                            threshold,
-                            size,
-                            &screen.palette_tree,
-                            &screen.palette,
-                        ),
-                        Some(Dither {
-                            algorithm: Ordered,
-                            threshold,
-                            threshold_map: X8_8,
-                        }) => dither_slice::<OrderedAlg, 64>(
-                            pixels,
-                            threshold,
-                            size,
-                            &screen.palette_tree,
-                            &screen.palette,
-                        ),
-                        Some(Dither {
-                            algorithm: Pattern,
-                            threshold,
-                            threshold_map: X2_2,
-                        }) => dither_slice::<PatternAlg, 4>(
-                            pixels,
-                            threshold,
-                            size,
-                            &screen.palette_tree,
-                            &screen.palette,
-                        ),
-                        Some(Dither {
-                            algorithm: Pattern,
-                            threshold,
-                            threshold_map: X4_4,
-                        }) => dither_slice::<PatternAlg, 16>(
-                            pixels,
-                            threshold,
-                            size,
-                            &screen.palette_tree,
-                            &screen.palette,
-                        ),
-                        Some(Dither {
-                            algorithm: Pattern,
-                            threshold,
-                            threshold_map: X8_8,
-                        }) => dither_slice::<PatternAlg, 64>(
-                            pixels,
-                            threshold,
-                            size,
-                            &screen.palette_tree,
-                            &screen.palette,
-                        ),
-                    }
-                });
+            //         match *dither {
+            //             None => dither_slice::<ClosestAlg, 1>(
+            //                 pixels,
+            //                 0.,
+            //                 size,
+            //                 &screen.palette_tree,
+            //                 &screen.palette,
+            //             ),
+            //             Some(Dither {
+            //                 algorithm: Ordered,
+            //                 threshold,
+            //                 threshold_map: X2_2,
+            //             }) => dither_slice::<OrderedAlg, 4>(
+            //                 pixels,
+            //                 threshold,
+            //                 size,
+            //                 &screen.palette_tree,
+            //                 &screen.palette,
+            //             ),
+            //             Some(Dither {
+            //                 algorithm: Ordered,
+            //                 threshold,
+            //                 threshold_map: X4_4,
+            //             }) => dither_slice::<OrderedAlg, 16>(
+            //                 pixels,
+            //                 threshold,
+            //                 size,
+            //                 &screen.palette_tree,
+            //                 &screen.palette,
+            //             ),
+            //             Some(Dither {
+            //                 algorithm: Ordered,
+            //                 threshold,
+            //                 threshold_map: X8_8,
+            //             }) => dither_slice::<OrderedAlg, 64>(
+            //                 pixels,
+            //                 threshold,
+            //                 size,
+            //                 &screen.palette_tree,
+            //                 &screen.palette,
+            //             ),
+            //             Some(Dither {
+            //                 algorithm: Pattern,
+            //                 threshold,
+            //                 threshold_map: X2_2,
+            //             }) => dither_slice::<PatternAlg, 4>(
+            //                 pixels,
+            //                 threshold,
+            //                 size,
+            //                 &screen.palette_tree,
+            //                 &screen.palette,
+            //             ),
+            //             Some(Dither {
+            //                 algorithm: Pattern,
+            //                 threshold,
+            //                 threshold_map: X4_4,
+            //             }) => dither_slice::<PatternAlg, 16>(
+            //                 pixels,
+            //                 threshold,
+            //                 size,
+            //                 &screen.palette_tree,
+            //                 &screen.palette,
+            //             ),
+            //             Some(Dither {
+            //                 algorithm: Pattern,
+            //                 threshold,
+            //                 threshold_map: X8_8,
+            //             }) => dither_slice::<PatternAlg, 64>(
+            //                 pixels,
+            //                 threshold,
+            //                 size,
+            //                 &screen.palette_tree,
+            //                 &screen.palette,
+            //             ),
+            //         }
+            //     });
 
-                draw_spatial(
-                    &sprite,
-                    (),
-                    &mut layer_image,
-                    *position,
-                    *anchor,
-                    *canvas,
-                    None,
-                    filter.and_then(|filter| filters.get(filter)),
-                    camera,
-                );
-            }
+            //     draw_spatial(
+            //         &sprite,
+            //         (),
+            //         &mut layer_image,
+            //         *position,
+            //         *anchor,
+            //         *canvas,
+            //         None,
+            //         filter.and_then(|filter| filters.get(filter)),
+            //         camera,
+            //     );
+            // }
 
             for (sprite, position, anchor, canvas, animation, filter) in sprites {
                 let Some(sprite) = sprite_assets.get(sprite) else {

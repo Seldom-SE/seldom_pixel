@@ -12,20 +12,19 @@ use crate::{position::PxLayer, prelude::*, set::PxSet};
 const TIME_OFFSET: Duration = Duration::from_secs(60 * 60 * 24);
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
-    app.configure_sets(PostUpdate, PxSet::UpdateEmitters.before(PxSet::Draw))
-        .add_systems(
-            PostUpdate,
+    app.add_systems(
+        PostUpdate,
+        (
             (
-                (
-                    (simulate_emitters::<L>, insert_emitter_time),
-                    (apply_deferred, update_emitters::<L>)
-                        .chain()
-                        .in_set(PxSet::UpdateEmitters),
-                )
-                    .chain(),
-                despawn_particles.before(PxSet::Draw),
-            ),
-        );
+                (simulate_emitters::<L>, insert_emitter_time),
+                (apply_deferred, update_emitters::<L>)
+                    .chain()
+                    .in_set(PxSet::UpdateEmitters),
+            )
+                .chain(),
+            despawn_particles,
+        ),
+    );
 }
 
 /// Possible sprites for an emitter's particles
