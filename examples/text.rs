@@ -21,15 +21,16 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     // Spawn text
-    commands.spawn(PxTextBundle::<Layer> {
-        text: "THE MITOCHONDRIA IS THE POWERHOUSE OF THE CELL".into(),
-        typeface: assets.load("typeface/typeface.px_typeface.png"),
-        rect: IRect::new(0, 0, 64, 64).into(),
-        ..default()
-    });
+    commands.spawn((
+        PxText {
+            value: "THE MITOCHONDRIA IS THE POWERHOUSE OF THE CELL".to_string(),
+            typeface: assets.load("typeface/typeface.px_typeface.png"),
+        },
+        PxRect(IRect::new(0, 0, 64, 64)),
+    ));
 }
 
 #[px_layer]

@@ -22,24 +22,23 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
-    let mut map = PxMap::new(UVec2::splat(4));
-    let dim = assets.load::<PxFilter>("filter/dim.px_filter.png");
+    let mut tiles = PxTiles::new(UVec2::splat(4));
+    let dim = assets.load("filter/dim.px_filter.png");
     let mut rng = thread_rng();
 
     for x in 0..4 {
         for y in 0..4 {
             // Each tile must be added to the `TileStorage`
-            map.set(
+            tiles.set(
                 Some(
                     commands
-                        .spawn(PxTileBundle {
-                            tile: rng.gen_range(0..4).into(),
-                            ..default()
-                        })
-                        // Insert a filter on the tile
-                        .insert(dim.clone())
+                        .spawn((
+                            PxTile::from(rng.gen_range(0..4)),
+                            // Insert a filter on the tile
+                            PxFilter(dim.clone()),
+                        ))
                         .id(),
                 ),
                 UVec2::new(x, y),
@@ -48,14 +47,14 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
     }
 
     // Spawn the map
-    commands
-        .spawn(PxMapBundle::<Layer> {
-            map,
+    commands.spawn((
+        PxMap {
+            tiles,
             tileset: assets.load("tileset/tileset.px_tileset.png"),
-            ..default()
-        })
+        },
         // Insert a filter on the map. This filter applies to all tiles in the map.
-        .insert(assets.load::<PxFilter>("filter/invert.px_filter.png"));
+        PxFilter(assets.load("filter/invert.px_filter.png")),
+    ));
 }
 
 #[px_layer]

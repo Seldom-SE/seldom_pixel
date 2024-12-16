@@ -3,35 +3,40 @@
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
+    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
     render::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
-        texture::{ImageLoader, ImageLoaderSettings},
+        sync_component::SyncComponentPlugin,
+        sync_world::RenderEntity,
         Extract, RenderApp,
     },
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    animation::{Animation, AnimationAsset, AnimationComponents},
+    animation::{AnimatedAssetComponent, Animation},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
     pixel::Pixel,
-    position::{PxLayer, Spatial},
+    position::{DefaultLayer, PxLayer, Spatial},
     prelude::*,
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
-    app.add_plugins(RenderAssetPlugin::<PxSprite>::default())
-        .init_asset::<PxSprite>()
-        .init_asset_loader::<PxSpriteLoader>()
-        .sub_app_mut(RenderApp)
-        .add_systems(
-            ExtractSchedule,
-            (
-                extract_sprites::<L>,
-                // extract_image_to_sprites::<L>
-            ),
-        );
+    app.add_plugins((
+        RenderAssetPlugin::<PxSpriteAsset>::default(),
+        SyncComponentPlugin::<PxSprite>::default(),
+    ))
+    .init_asset::<PxSpriteAsset>()
+    .init_asset_loader::<PxSpriteLoader>()
+    .sub_app_mut(RenderApp)
+    .add_systems(
+        ExtractSchedule,
+        (
+            extract_sprites::<L>,
+            // extract_image_to_sprites::<L>
+        ),
+    );
 }
 
 #[derive(Serialize, Deserialize)]
@@ -49,33 +54,27 @@ impl Default for PxSpriteLoaderSettings {
     }
 }
 
-struct PxSpriteLoader(ImageLoader);
-
-impl FromWorld for PxSpriteLoader {
-    fn from_world(world: &mut World) -> Self {
-        Self(ImageLoader::from_world(world))
-    }
-}
+#[derive(Default)]
+struct PxSpriteLoader;
 
 impl AssetLoader for PxSpriteLoader {
-    type Asset = PxSprite;
+    type Asset = PxSpriteAsset;
     type Settings = PxSpriteLoaderSettings;
     type Error = Error;
 
-    async fn load<'a>(
-        &'a self,
-        reader: &'a mut Reader<'_>,
-        settings: &'a PxSpriteLoaderSettings,
-        load_context: &'a mut LoadContext<'_>,
-    ) -> Result<PxSprite> {
-        let Self(image_loader) = self;
-        let image = image_loader
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        settings: &PxSpriteLoaderSettings,
+        load_context: &mut LoadContext<'_>,
+    ) -> Result<PxSpriteAsset> {
+        let image = ImageLoader::new(CompressedImageFormats::NONE)
             .load(reader, &settings.image_loader_settings, load_context)
             .await?;
         let palette = asset_palette().await;
         let data = PxImage::palette_indices(palette, &image)?;
 
-        Ok(PxSprite {
+        Ok(PxSpriteAsset {
             frame_size: data.area() / settings.frame_count,
             data,
         })
@@ -86,17 +85,17 @@ impl AssetLoader for PxSpriteLoader {
     }
 }
 
-/// A sprite. Create a [`Handle<PxSprite>`] with a [`PxAssets<PxSprite>`] and an image.
-/// If the sprite is animated, the frames should be laid out from bottom to top.
+/// A sprite. Create a [`Handle<PxSpriteAsset>`] with a [`PxAssets<PxSprite>`] and an image.
+/// If the sprite is animated, the frames should be laid out from top to bottom.
 /// See `assets/sprite/runner.png` for an example of an animated sprite.
 #[derive(Asset, Serialize, Deserialize, Clone, Reflect, Debug)]
-pub struct PxSprite {
+pub struct PxSpriteAsset {
     // TODO Use 0 for transparency
     pub(crate) data: PxImage<Option<u8>>,
     pub(crate) frame_size: usize,
 }
 
-impl RenderAsset for PxSprite {
+impl RenderAsset for PxSpriteAsset {
     type SourceAsset = Self;
     type Param = ();
 
@@ -108,7 +107,7 @@ impl RenderAsset for PxSprite {
     }
 }
 
-impl Animation for PxSprite {
+impl Animation for PxSpriteAsset {
     type Param = ();
 
     fn frame_count(&self) -> usize {
@@ -140,7 +139,7 @@ impl Animation for PxSprite {
     }
 }
 
-impl Spatial for PxSprite {
+impl Spatial for PxSpriteAsset {
     fn frame_size(&self) -> UVec2 {
         UVec2::new(
             self.data.width() as u32,
@@ -149,29 +148,27 @@ impl Spatial for PxSprite {
     }
 }
 
-impl AnimationAsset for PxSprite {
-    fn max_frame_count(&self) -> usize {
-        self.frame_count()
+/// A sprite
+#[derive(Component, Deref, DerefMut, Default, Clone, Debug)]
+#[require(PxPosition, PxAnchor, DefaultLayer, PxCanvas, Visibility)]
+pub struct PxSprite(pub Handle<PxSpriteAsset>);
+
+impl From<Handle<PxSpriteAsset>> for PxSprite {
+    fn from(value: Handle<PxSpriteAsset>) -> Self {
+        Self(value)
     }
 }
 
-/// Spawns a sprite
-#[derive(Bundle, Debug, Default)]
-pub struct PxSpriteBundle<L: PxLayer> {
-    /// A [`Handle<PxSprite>`] component
-    pub sprite: Handle<PxSprite>,
-    /// A [`PxPosition`] component
-    pub position: PxPosition,
-    /// A [`PxAnchor`] component
-    pub anchor: PxAnchor,
-    /// A layer component
-    pub layer: L,
-    /// A [`PxCanvas`] component
-    pub canvas: PxCanvas,
-    /// A [`Visibility`] component
-    pub visibility: Visibility,
-    /// An [`InheritedVisibility`] component
-    pub inherited_visibility: InheritedVisibility,
+impl AnimatedAssetComponent for PxSprite {
+    type Asset = PxSpriteAsset;
+
+    fn handle(&self) -> &Handle<Self::Asset> {
+        self
+    }
+
+    fn max_frame_count(sprite: &PxSpriteAsset) -> usize {
+        sprite.frame_count()
+    }
 }
 
 /// Size of threshold map to use for dithering. The image is tiled with dithering according to this
@@ -396,32 +393,40 @@ pub struct Dither {
 // }
 
 pub(crate) type SpriteComponents<L> = (
-    &'static Handle<PxSprite>,
+    &'static PxSprite,
     &'static PxPosition,
     &'static PxAnchor,
     &'static L,
     &'static PxCanvas,
-    Option<AnimationComponents>,
-    Option<&'static Handle<PxFilter>>,
+    Option<&'static PxAnimation>,
+    Option<&'static PxFilter>,
 );
 
 fn extract_sprites<L: PxLayer>(
-    sprites: Extract<Query<(SpriteComponents<L>, &InheritedVisibility)>>,
+    // TODO Maybe calculate `ViewVisibility`
+    sprites: Extract<Query<(SpriteComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((sprite, &position, &anchor, layer, &canvas, animation, filter), visibility) in &sprites {
+    for ((sprite, &position, &anchor, layer, &canvas, animation, filter), visibility, id) in
+        &sprites
+    {
         if !visibility.get() {
             continue;
         }
 
-        let mut sprite = cmd.spawn((sprite.clone(), position, anchor, layer.clone(), canvas));
+        let mut entity = cmd.entity(id);
+        entity.insert((sprite.clone(), position, anchor, layer.clone(), canvas));
 
-        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
-            sprite.insert((direction, duration, on_finish, frame_transition, start));
+        if let Some(animation) = animation {
+            entity.insert(*animation);
+        } else {
+            entity.remove::<PxAnimation>();
         }
 
         if let Some(filter) = filter {
-            sprite.insert(filter.clone());
+            entity.insert(filter.clone());
+        } else {
+            entity.remove::<PxFilter>();
         }
     }
 }

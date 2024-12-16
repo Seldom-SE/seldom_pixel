@@ -21,20 +21,19 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     let typeface = assets.load("typeface/animated_typeface.px_typeface.png");
 
     // Spawn text
     commands.spawn((
-        PxTextBundle::<Layer> {
-            text: "LOOPED ANIMATION ⭐🙂⭐".into(),
+        PxText {
+            value: "LOOPED ANIMATION ⭐🙂⭐".to_string(),
             typeface: typeface.clone(),
-            rect: IRect::new(0, 0, 64, 64).into(),
-            alignment: PxAnchor::TopCenter,
-            ..default()
         },
-        PxAnimationBundle {
+        PxRect(IRect::new(0, 0, 64, 64)),
+        PxAnchor::TopCenter,
+        PxAnimation {
             // Use millis_per_animation to have each character loop at the same time
             duration: PxAnimationDuration::millis_per_frame(333),
             on_finish: PxAnimationFinishBehavior::Loop,
@@ -43,14 +42,13 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
     ));
 
     commands.spawn((
-        PxTextBundle::<Layer> {
-            text: "DITHERED ANIMATION 🙂⭐🙂".into(),
+        PxText {
+            value: "DITHERED ANIMATION 🙂⭐🙂".to_string(),
             typeface,
-            rect: IRect::new(0, 0, 64, 64).into(),
-            alignment: PxAnchor::BottomCenter,
-            ..default()
         },
-        PxAnimationBundle {
+        PxRect(IRect::new(0, 0, 64, 64)),
+        PxAnchor::BottomCenter,
+        PxAnimation {
             // Use millis_per_animation to have each character loop at the same time
             duration: PxAnimationDuration::millis_per_frame(333),
             on_finish: PxAnimationFinishBehavior::Loop,

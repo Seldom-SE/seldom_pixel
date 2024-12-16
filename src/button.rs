@@ -1,4 +1,7 @@
-use crate::{cursor::PxCursorPosition, math::RectExt, prelude::*, set::PxSet};
+use crate::{
+    cursor::PxCursorPosition, filter::PxFilterAsset, math::RectExt, prelude::*, set::PxSet,
+    sprite::PxSpriteAsset,
+};
 
 pub(crate) fn plug(app: &mut App) {
     app.init_resource::<PxEnableButtons>()
@@ -55,100 +58,48 @@ impl From<UVec2> for PxInteractBounds {
     }
 }
 
-/// Sprite to use when the button is not being interacted
-#[derive(Component, Debug, Default, Deref, DerefMut)]
-pub struct PxIdleSprite(pub Handle<PxSprite>);
-
-impl From<Handle<PxSprite>> for PxIdleSprite {
-    fn from(image: Handle<PxSprite>) -> Self {
-        Self(image)
-    }
-}
-
-/// Sprite to use when the button is hovered
-#[derive(Component, Debug, Default, Deref, DerefMut)]
-pub struct PxHoverSprite(pub Handle<PxSprite>);
-
-impl From<Handle<PxSprite>> for PxHoverSprite {
-    fn from(image: Handle<PxSprite>) -> Self {
-        Self(image)
-    }
-}
-
-/// Sprite to use when the button is clicked
-#[derive(Component, Debug, Default, Deref, DerefMut)]
-pub struct PxClickSprite(pub Handle<PxSprite>);
-
-impl From<Handle<PxSprite>> for PxClickSprite {
-    fn from(image: Handle<PxSprite>) -> Self {
-        Self(image)
-    }
-}
-
 /// Makes a sprite a button that changes sprite based on interaction
-#[derive(Bundle, Debug, Default)]
-pub struct PxButtonSpriteBundle {
-    /// A [`PxInteractBounds`] component
-    pub bounds: PxInteractBounds,
-    /// A [`PxIdleSprite`] component
-    pub idle: PxIdleSprite,
-    /// A [`PxHoverSprite`] component
-    pub hover: PxHoverSprite,
-    /// A [`PxClickSprite`] component
-    pub click: PxClickSprite,
-}
-
-/// Filter to use when the button is not being interacted
-#[derive(Component, Debug, Deref, DerefMut)]
-pub struct PxIdleFilter(pub Handle<PxFilter>);
-
-impl From<Handle<PxFilter>> for PxIdleFilter {
-    fn from(image: Handle<PxFilter>) -> Self {
-        Self(image)
-    }
-}
-
-/// Filter to use when the button is hovered
-#[derive(Component, Debug, Deref, DerefMut)]
-pub struct PxHoverFilter(pub Handle<PxFilter>);
-
-impl From<Handle<PxFilter>> for PxHoverFilter {
-    fn from(image: Handle<PxFilter>) -> Self {
-        Self(image)
-    }
-}
-
-/// Filter to use when the button is clicked
-#[derive(Component, Debug, Deref, DerefMut)]
-pub struct PxClickFilter(pub Handle<PxFilter>);
-
-impl From<Handle<PxFilter>> for PxClickFilter {
-    fn from(image: Handle<PxFilter>) -> Self {
-        Self(image)
-    }
+#[derive(Component, Debug)]
+#[require(PxSprite, PxInteractBounds)]
+pub struct PxButtonSprite {
+    /// Sprite to use when the button is not being interacted
+    pub idle: Handle<PxSpriteAsset>,
+    /// Sprite to use when the button is hovered
+    pub hover: Handle<PxSpriteAsset>,
+    /// Sprite to use when the button is clicked
+    pub click: Handle<PxSpriteAsset>,
 }
 
 /// Makes a sprite a button that changes filter based on interaction
-#[derive(Bundle, Debug)]
-pub struct PxButtonFilterBundle {
-    /// A [`PxInteractBounds`] component
-    pub bounds: PxInteractBounds,
-    /// A [`PxIdleFilter`] component
-    pub idle: PxIdleFilter,
-    /// A [`PxHoverFilter`] component
-    pub hover: PxHoverFilter,
-    /// A [`PxClickFilter`] component
-    pub click: PxClickFilter,
+#[derive(Component, Debug)]
+#[require(PxSprite, PxInteractBounds)]
+pub struct PxButtonFilter {
+    /// Filter to use when the button is not being interacted
+    pub idle: Handle<PxFilterAsset>,
+    /// Filter to use when the button is hovered
+    pub hover: Handle<PxFilterAsset>,
+    /// Filter to use when the button is clicked
+    pub click: Handle<PxFilterAsset>,
 }
+
+impl Default for PxButtonFilter {
+    fn default() -> Self {
+        Self {
+            idle: default(),
+            hover: default(),
+            click: default(),
+        }
+    }
+}
+
+// TODO Migrate to observers
 
 /// Marks a button that is being hovered
 #[derive(Component, Debug)]
-#[component(storage = "SparseSet")]
 pub struct PxHover;
 
 /// Marks a button that is being clicked. Always appears with [`PxHover`]
 #[derive(Component, Debug)]
-#[component(storage = "SparseSet")]
 pub struct PxClick;
 
 /// Resource that determines whether buttons are enabled
@@ -231,74 +182,54 @@ fn disable_buttons(
 
 fn add_button_sprites(
     mut commands: Commands,
-    buttons: Query<(Entity, &PxIdleSprite), Added<PxIdleSprite>>,
+    buttons: Query<(Entity, &PxButtonSprite), Added<PxButtonSprite>>,
 ) {
-    for (button, idle) in &buttons {
-        // `PxIdleSprite` derefs to a `Handle<PxSprite>`
-        commands.entity(button).insert((**idle).clone());
+    for (id, button) in &buttons {
+        commands.entity(id).insert(PxSprite(button.idle.clone()));
     }
 }
 
 fn update_button_sprites(
-    mut idle_buttons: Query<
-        (&mut Handle<PxSprite>, &PxIdleSprite),
-        (Without<PxHover>, Without<PxClick>),
-    >,
-    mut hovered_buttons: Query<
-        (&mut Handle<PxSprite>, &PxHoverSprite),
-        (With<PxHover>, Without<PxClick>),
-    >,
-    mut clicked_buttons: Query<
-        (&mut Handle<PxSprite>, &PxClickSprite),
-        (With<PxHover>, With<PxClick>),
-    >,
+    mut idle_buttons: Query<(&mut PxSprite, &PxButtonSprite), (Without<PxHover>, Without<PxClick>)>,
+    mut hovered_buttons: Query<(&mut PxSprite, &PxButtonSprite), (With<PxHover>, Without<PxClick>)>,
+    mut clicked_buttons: Query<(&mut PxSprite, &PxButtonSprite), (With<PxHover>, With<PxClick>)>,
 ) {
-    for (mut sprite, idle_sprite) in &mut idle_buttons {
-        *sprite = (*idle_sprite).clone();
+    for (mut sprite, button) in &mut idle_buttons {
+        **sprite = button.idle.clone();
     }
 
-    for (mut sprite, hovered_sprite) in &mut hovered_buttons {
-        *sprite = (*hovered_sprite).clone();
+    for (mut sprite, button) in &mut hovered_buttons {
+        **sprite = button.hover.clone();
     }
 
-    for (mut sprite, clicked_sprite) in &mut clicked_buttons {
-        *sprite = (*clicked_sprite).clone();
+    for (mut sprite, button) in &mut clicked_buttons {
+        **sprite = button.click.clone();
     }
 }
 
 fn add_button_filters(
     mut commands: Commands,
-    buttons: Query<(Entity, &PxIdleFilter), Added<PxIdleFilter>>,
+    buttons: Query<(Entity, &PxButtonFilter), Added<PxButtonFilter>>,
 ) {
-    for (button, idle) in &buttons {
-        // `PxIdleFilter` derefs to a `Handle<PxFilter>`
-        commands.entity(button).insert((**idle).clone());
+    for (id, button) in &buttons {
+        commands.entity(id).insert(PxFilter(button.idle.clone()));
     }
 }
 
 fn update_button_filters(
-    mut idle_buttons: Query<
-        (&mut Handle<PxFilter>, &PxIdleFilter),
-        (Without<PxHover>, Without<PxClick>),
-    >,
-    mut hovered_buttons: Query<
-        (&mut Handle<PxFilter>, &PxHoverFilter),
-        (With<PxHover>, Without<PxClick>),
-    >,
-    mut clicked_buttons: Query<
-        (&mut Handle<PxFilter>, &PxClickFilter),
-        (With<PxHover>, With<PxClick>),
-    >,
+    mut idle_buttons: Query<(&mut PxFilter, &PxButtonFilter), (Without<PxHover>, Without<PxClick>)>,
+    mut hovered_buttons: Query<(&mut PxFilter, &PxButtonFilter), (With<PxHover>, Without<PxClick>)>,
+    mut clicked_buttons: Query<(&mut PxFilter, &PxButtonFilter), (With<PxHover>, With<PxClick>)>,
 ) {
-    for (mut filter, idle_filter) in &mut idle_buttons {
-        *filter = (*idle_filter).clone();
+    for (mut filter, button) in &mut idle_buttons {
+        **filter = button.idle.clone();
     }
 
-    for (mut filter, hovered_filter) in &mut hovered_buttons {
-        *filter = (*hovered_filter).clone();
+    for (mut filter, button) in &mut hovered_buttons {
+        **filter = button.hover.clone();
     }
 
-    for (mut filter, clicked_filter) in &mut clicked_buttons {
-        *filter = (*clicked_filter).clone();
+    for (mut filter, button) in &mut clicked_buttons {
+        **filter = button.click.clone();
     }
 }

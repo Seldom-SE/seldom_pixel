@@ -1,9 +1,11 @@
 use anyhow::{anyhow, Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
+    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
     render::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
-        texture::{ImageLoader, ImageLoaderSettings},
+        sync_component::SyncComponentPlugin,
+        sync_world::RenderEntity,
         Extract, RenderApp,
     },
     utils::HashMap,
@@ -11,29 +13,19 @@ use bevy::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    animation::{AnimationAsset, AnimationComponents},
-    image::PxImage,
-    palette::asset_palette,
-    position::PxLayer,
-    prelude::*,
+    animation::AnimatedAssetComponent, image::PxImage, palette::asset_palette,
+    position::DefaultLayer, position::PxLayer, prelude::*,
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
-    app.add_plugins(RenderAssetPlugin::<PxTypeface>::default())
-        .init_asset::<PxTypeface>()
-        .init_asset_loader::<PxTypefaceLoader>()
-        .sub_app_mut(RenderApp)
-        .add_systems(ExtractSchedule, extract_texts::<L>);
-}
-
-/// Text to be drawn on the screen
-#[derive(Component, Clone, Deref, DerefMut, Default, Debug)]
-pub struct PxText(pub String);
-
-impl<T: Into<String>> From<T> for PxText {
-    fn from(t: T) -> Self {
-        Self(t.into())
-    }
+    app.add_plugins((
+        RenderAssetPlugin::<PxTypeface>::default(),
+        SyncComponentPlugin::<PxText>::default(),
+    ))
+    .init_asset::<PxTypeface>()
+    .init_asset_loader::<PxTypefaceLoader>()
+    .sub_app_mut(RenderApp)
+    .add_systems(ExtractSchedule, extract_texts::<L>);
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,27 +49,21 @@ impl Default for PxTypefaceLoaderSettings {
     }
 }
 
-struct PxTypefaceLoader(ImageLoader);
-
-impl FromWorld for PxTypefaceLoader {
-    fn from_world(world: &mut World) -> Self {
-        Self(ImageLoader::from_world(world))
-    }
-}
+#[derive(Default)]
+struct PxTypefaceLoader;
 
 impl AssetLoader for PxTypefaceLoader {
     type Asset = PxTypeface;
     type Settings = PxTypefaceLoaderSettings;
     type Error = Error;
 
-    async fn load<'a>(
-        &'a self,
-        reader: &'a mut Reader<'_>,
-        settings: &'a PxTypefaceLoaderSettings,
-        load_context: &'a mut LoadContext<'_>,
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        settings: &PxTypefaceLoaderSettings,
+        load_context: &mut LoadContext<'_>,
     ) -> Result<PxTypeface> {
-        let Self(image_loader) = self;
-        let image = image_loader
+        let image = ImageLoader::new(CompressedImageFormats::NONE)
             .load(reader, &settings.image_loader_settings, load_context)
             .await?;
         let palette = asset_palette().await;
@@ -105,7 +91,7 @@ impl AssetLoader for PxTypefaceLoader {
 
                     (
                         character,
-                        PxSprite {
+                        PxSpriteAsset {
                             data: PxImage::from_parts_vert(image.split_horz(image_width / frames))
                                 .unwrap(),
                             frame_size: image_area / frames,
@@ -164,7 +150,7 @@ pub(crate) struct PxSeparator {
 #[derive(Asset, Clone, Reflect, Debug)]
 pub struct PxTypeface {
     pub(crate) height: u32,
-    pub(crate) characters: HashMap<char, PxSprite>,
+    pub(crate) characters: HashMap<char, PxSpriteAsset>,
     pub(crate) separators: HashMap<char, PxSeparator>,
     pub(crate) max_frame_count: usize,
 }
@@ -181,70 +167,60 @@ impl RenderAsset for PxTypeface {
     }
 }
 
-impl AnimationAsset for PxTypeface {
-    fn max_frame_count(&self) -> usize {
-        self.max_frame_count
-    }
+/// Spawns text to be rendered on-screen
+#[derive(Component, Default, Clone, Debug)]
+#[require(PxRect, PxAnchor, DefaultLayer, PxCanvas, Visibility)]
+pub struct PxText {
+    /// The contents of the text
+    pub value: String,
+    /// The typeface
+    pub typeface: Handle<PxTypeface>,
 }
 
-/// Spawns text to be rendered on-screen
-#[derive(Bundle, Debug, Default)]
-pub struct PxTextBundle<L: PxLayer> {
-    /// A [`PxText`] component
-    pub text: PxText,
-    /// A [`Handle<PxTypeface>`] component
-    pub typeface: Handle<PxTypeface>,
-    /// A [`PxRect`] component
-    pub rect: PxRect,
-    /// A [`PxAnchor`] component
-    pub alignment: PxAnchor,
-    /// A layer component
-    pub layer: L,
-    /// A [`PxCanvas`] component
-    pub canvas: PxCanvas,
-    /// A [`Visibility`] component
-    pub visibility: Visibility,
-    /// An [`InheritedVisibility`] component
-    pub inherited_visibility: InheritedVisibility,
+impl AnimatedAssetComponent for PxText {
+    type Asset = PxTypeface;
+
+    fn handle(&self) -> &Handle<Self::Asset> {
+        &self.typeface
+    }
+
+    fn max_frame_count(typeface: &PxTypeface) -> usize {
+        typeface.max_frame_count
+    }
 }
 
 pub(crate) type TextComponents<L> = (
     &'static PxText,
-    &'static Handle<PxTypeface>,
     &'static PxRect,
     &'static PxAnchor,
     &'static L,
     &'static PxCanvas,
-    Option<AnimationComponents>,
-    Option<&'static Handle<PxFilter>>,
+    Option<&'static PxAnimation>,
+    Option<&'static PxFilter>,
 );
 
 fn extract_texts<L: PxLayer>(
-    texts: Extract<Query<(TextComponents<L>, &InheritedVisibility)>>,
+    texts: Extract<Query<(TextComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((text, typeface, &rect, &alignment, layer, &canvas, animation, filter), visibility) in
-        &texts
-    {
+    for ((text, &rect, &alignment, layer, &canvas, animation, filter), visibility, id) in &texts {
         if !visibility.get() {
             continue;
         }
 
-        let mut text = cmd.spawn((
-            text.clone(),
-            typeface.clone(),
-            rect,
-            alignment,
-            layer.clone(),
-            canvas,
-        ));
+        let mut entity = cmd.entity(id);
+        entity.insert((text.clone(), rect, alignment, layer.clone(), canvas));
 
-        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
-            text.insert((direction, duration, on_finish, frame_transition, start));
+        if let Some(animation) = animation {
+            entity.insert(*animation);
+        } else {
+            entity.remove::<PxAnimation>();
         }
 
         if let Some(filter) = filter {
-            text.insert(filter.clone());
+            entity.insert(filter.clone());
+        } else {
+            entity.remove::<PxFilter>();
         }
     }
 }

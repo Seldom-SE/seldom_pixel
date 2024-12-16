@@ -2,9 +2,12 @@
 
 use std::fmt::Debug;
 
-use bevy::render::extract_component::ExtractComponent;
+use bevy::{
+    ecs::{component::ComponentId, world::DeferredWorld},
+    render::{extract_component::ExtractComponent, RenderApp},
+};
 
-use crate::{math::Diagonal, prelude::*, screen::Screen, set::PxSet};
+use crate::{math::Diagonal, prelude::*, screen::Screen, set::PxSet, sprite::PxSpriteAsset};
 
 // TODO Try to use traits instead of macros when we get the new solver
 macro_rules! align_to_screen {
@@ -32,36 +35,39 @@ macro_rules! align_to_screen {
     }};
 }
 
-pub(crate) fn plug(app: &mut App) {
-    app.add_systems(
-        PreUpdate,
-        (
-            update_sub_positions,
-            update_position_to_sub.in_set(PxSet::UpdatePosToSubPos),
+pub(crate) fn plug<L: PxLayer>(app: &mut App) {
+    app.insert_resource(InsertDefaultLayer::new::<L>())
+        .add_systems(
+            PreUpdate,
+            (
+                update_sub_positions,
+                update_position_to_sub.in_set(PxSet::UpdatePosToSubPos),
+            )
+                .chain(),
         )
-            .chain(),
-    )
-    .add_systems(
-        PostUpdate,
-        (
-            align_to_screen!(
-                (&PxMap, &Handle<PxTileset>),
-                Res<Assets<PxTileset>>,
-                |(map, tileset), tilesets: &Res<Assets<PxTileset>>| {
-                    Some((map, tilesets.get(tileset)?).frame_size())
-                }
+        .add_systems(
+            PostUpdate,
+            (
+                align_to_screen!(&PxMap, Res<Assets<PxTileset>>, |map: &PxMap,
+                                                                  tilesets: &Res<
+                    Assets<PxTileset>,
+                >| {
+                    Some((&map.tiles, tilesets.get(&map.tileset)?).frame_size())
+                }),
+                align_to_screen!(
+                    &PxSprite,
+                    Res<Assets<PxSpriteAsset>>,
+                    |sprite: &PxSprite, sprites: &Res<Assets<PxSpriteAsset>>| {
+                        Some(sprites.get(&**sprite)?.frame_size())
+                    }
+                ),
+                align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
+                #[cfg(feature = "line")]
+                align_to_screen!(&PxLine, (), |line: &PxLine, &()| Some(line.frame_size())),
             ),
-            align_to_screen!(&Handle<PxSprite>, Res<Assets<PxSprite>>, |sprite,
-                                                                        sprites: &Res<
-                Assets<PxSprite>,
-            >| {
-                Some(sprites.get(sprite)?.frame_size())
-            }),
-            align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
-            #[cfg(feature = "line")]
-            align_to_screen!(&PxLine, (), |line: &PxLine, &()| Some(line.frame_size())),
-        ),
-    );
+        )
+        .sub_app_mut(RenderApp)
+        .insert_resource(InsertDefaultLayer::new::<L>());
 }
 
 pub(crate) trait Spatial {
@@ -91,6 +97,32 @@ impl From<IVec2> for PxPosition {
 pub trait PxLayer: ExtractComponent + Component + Ord + Clone + Default + Debug {}
 
 impl<L: ExtractComponent + Component + Ord + Clone + Default + Debug> PxLayer for L {}
+
+#[derive(Resource, Deref)]
+struct InsertDefaultLayer(Box<dyn Fn(&mut EntityWorldMut) + Send + Sync>);
+
+impl InsertDefaultLayer {
+    fn new<L: PxLayer>() -> Self {
+        Self(Box::new(|entity| {
+            entity.insert_if_new(L::default());
+        }))
+    }
+}
+
+#[derive(Component, Default)]
+#[component(on_add = insert_default_layer)]
+pub(crate) struct DefaultLayer;
+
+fn insert_default_layer(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
+    world.commands().queue(move |world: &mut World| {
+        let insert_default_layer = world.remove_resource::<InsertDefaultLayer>().unwrap();
+        if let Ok(mut entity) = world.get_entity_mut(entity) {
+            insert_default_layer(entity.remove::<DefaultLayer>());
+        }
+        world.insert_resource(insert_default_layer);
+        // That's what it's all about!
+    })
+}
 
 /// How a sprite is positioned relative to its [`PxPosition`]. It defaults to [`PxAnchor::Center`].
 #[derive(ExtractComponent, Component, Clone, Copy, Default, Debug)]
@@ -192,7 +224,7 @@ fn update_sub_positions(mut query: Query<(&mut PxSubPosition, &PxVelocity)>, tim
                 **sub_position = new_position;
             }
         } else {
-            **sub_position += **velocity * time.delta_seconds();
+            **sub_position += **velocity * time.delta_secs();
         }
     }
 }

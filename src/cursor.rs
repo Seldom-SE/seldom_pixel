@@ -6,7 +6,7 @@ use bevy::{
 };
 
 use crate::{
-    filter::PxFilter,
+    filter::PxFilterAsset,
     prelude::*,
     screen::{screen_scale, Screen},
     set::PxSet,
@@ -37,11 +37,11 @@ pub enum PxCursor {
     /// consider using `bevy_framepace`.
     Filter {
         /// Filter to use when not clicking
-        idle: Handle<PxFilter>,
+        idle: Handle<PxFilterAsset>,
         /// Filter to use when left clicking
-        left_click: Handle<PxFilter>,
+        left_click: Handle<PxFilterAsset>,
         /// Filter to use when right clicking
-        right_click: Handle<PxFilter>,
+        right_click: Handle<PxFilterAsset>,
     },
 }
 
@@ -76,7 +76,7 @@ fn update_cursor_position(
         return;
     };
 
-    let Some(new_position) = camera.viewport_to_world_2d(tf, event.position) else {
+    let Ok(new_position) = camera.viewport_to_world_2d(tf, event.position) else {
         **position = None;
         return;
     };
@@ -107,7 +107,7 @@ fn change_cursor(
         return;
     };
 
-    window.cursor.visible = cursor_pos.is_none()
+    window.cursor_options.visible = cursor_pos.is_none()
         || match *cursor {
             PxCursor::Os => true,
             PxCursor::Filter { .. } => false,

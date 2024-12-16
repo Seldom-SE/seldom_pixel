@@ -5,15 +5,17 @@ use std::time::Duration;
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
+    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
     render::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
-        texture::{ImageLoader, ImageLoaderSettings},
+        sync_component::SyncComponentPlugin,
+        sync_world::RenderEntity,
         Extract, RenderApp,
     },
 };
 
 use crate::{
-    animation::{draw_animation, Animation, AnimationAsset, AnimationComponents},
+    animation::{draw_animation, AnimatedAssetComponent, Animation, PxAnimation},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
     pixel::Pixel,
@@ -22,34 +24,33 @@ use crate::{
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
-    app.add_plugins(RenderAssetPlugin::<PxFilter>::default())
-        .init_asset::<PxFilter>()
-        .init_asset_loader::<PxFilterLoader>()
-        .sub_app_mut(RenderApp)
-        .add_systems(ExtractSchedule, extract_filters::<L>);
+    app.add_plugins((
+        RenderAssetPlugin::<PxFilterAsset>::default(),
+        SyncComponentPlugin::<PxFilterLayers<L>>::default(),
+    ))
+    .init_asset::<PxFilterAsset>()
+    .init_asset_loader::<PxFilterLoader>()
+    .sub_app_mut(RenderApp)
+    .add_systems(ExtractSchedule, extract_filters::<L>);
 }
 
-struct PxFilterLoader(ImageLoader);
-
-impl FromWorld for PxFilterLoader {
-    fn from_world(world: &mut World) -> Self {
-        Self(ImageLoader::from_world(world))
-    }
-}
+#[derive(Default)]
+struct PxFilterLoader;
 
 impl AssetLoader for PxFilterLoader {
-    type Asset = PxFilter;
+    type Asset = PxFilterAsset;
     type Settings = ImageLoaderSettings;
     type Error = Error;
 
-    async fn load<'a>(
-        &'a self,
-        reader: &'a mut Reader<'_>,
-        settings: &'a ImageLoaderSettings,
-        load_context: &'a mut LoadContext<'_>,
-    ) -> Result<PxFilter> {
-        let Self(image_loader) = self;
-        let image = image_loader.load(reader, settings, load_context).await?;
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        settings: &ImageLoaderSettings,
+        load_context: &mut LoadContext<'_>,
+    ) -> Result<PxFilterAsset> {
+        let image = ImageLoader::new(CompressedImageFormats::NONE)
+            .load(reader, settings, load_context)
+            .await?;
         let palette = asset_palette().await;
         let indices = PxImage::palette_indices(palette, &image)?;
 
@@ -93,7 +94,7 @@ impl AssetLoader for PxFilterLoader {
             );
         }
 
-        Ok(PxFilter(PxImage::new(filter, frame_area as usize)))
+        Ok(PxFilterAsset(PxImage::new(filter, frame_area as usize)))
     }
 
     fn extensions(&self) -> &[&str] {
@@ -102,8 +103,9 @@ impl AssetLoader for PxFilterLoader {
 }
 
 /// Maps colors of an image to different colors. Filter a single sprite, text, or tilemap
-/// by adding a [`Handle<PxFilter>`] to it, or filter entire layers
-/// by spawning a [`PxFilterBundle`]. Create a [`Handle<PxFilter>`] with a [`PxAssets<PxFilter>`]
+/// by adding a [`PxFilter`] to it, or filter entire layers
+/// by spawning a [`PxFilterLayers`]. Create a [`Handle<PxFilterAsset>`] with a
+/// [`PxAssets<PxFilter>`]
 /// and an image file. The image should have pixels in the same positions as the palette.
 /// The position of each pixel describes the mapping of colors. The image must only contain colors
 /// that are also in the palette. For animated filters, arrange a number of filters
@@ -111,9 +113,9 @@ impl AssetLoader for PxFilterLoader {
 /// of the image. For examples, see the `assets/` directory in this repository. `fade_to_black.png`
 /// is an animated filter.
 #[derive(Asset, Clone, Reflect, Debug)]
-pub struct PxFilter(pub(crate) PxImage<u8>);
+pub struct PxFilterAsset(pub(crate) PxImage<u8>);
 
-impl RenderAsset for PxFilter {
+impl RenderAsset for PxFilterAsset {
     type SourceAsset = Self;
     type Param = ();
 
@@ -125,7 +127,7 @@ impl RenderAsset for PxFilter {
     }
 }
 
-impl Animation for PxFilter {
+impl Animation for PxFilterAsset {
     type Param = ();
 
     fn frame_count(&self) -> usize {
@@ -154,16 +156,26 @@ impl Animation for PxFilter {
     }
 }
 
-impl AnimationAsset for PxFilter {
-    fn max_frame_count(&self) -> usize {
-        self.frame_count()
-    }
-}
-
-impl PxFilter {
+impl PxFilterAsset {
     pub(crate) fn as_fn(&self) -> impl '_ + Fn(u8) -> u8 {
         let Self(filter) = self;
         |pixel| filter.pixel(IVec2::new(pixel as i32, 0))
+    }
+}
+
+/// Applies a [`PxFilterAsset`] to the entity
+#[derive(Component, Deref, DerefMut, Default, Clone, Debug)]
+pub struct PxFilter(pub Handle<PxFilterAsset>);
+
+impl AnimatedAssetComponent for PxFilter {
+    type Asset = PxFilterAsset;
+
+    fn handle(&self) -> &Handle<Self::Asset> {
+        self
+    }
+
+    fn max_frame_count(asset: &PxFilterAsset) -> usize {
+        asset.frame_count()
     }
 }
 
@@ -188,6 +200,7 @@ impl<L: PxLayer> Clone for Box<dyn SelectLayerFn<L>> {
 
 /// Determines which layers a filter appies to
 #[derive(Component, Clone)]
+#[require(PxFilter, Visibility)]
 pub enum PxFilterLayers<L: PxLayer> {
     /// Filter applies to a single layer
     Single {
@@ -228,44 +241,36 @@ impl<L: PxLayer> PxFilterLayers<L> {
     }
 }
 
-/// Makes a filter that applies to entire layers
-#[derive(Bundle, Default)]
-pub struct PxFilterBundle<L: PxLayer> {
-    /// A [`Handle<PxFilter>`] component
-    pub filter: Handle<PxFilter>,
-    /// A [`PxFilterLayers`] component
-    pub layers: PxFilterLayers<L>,
-    /// A [`Visibility`] component
-    pub visibility: Visibility,
-    /// An [`InheritedVisibility`] component
-    pub inherited_visibility: InheritedVisibility,
-}
-
 pub(crate) type FilterComponents<L> = (
-    &'static Handle<PxFilter>,
+    &'static PxFilter,
     &'static PxFilterLayers<L>,
-    Option<AnimationComponents>,
+    Option<&'static PxAnimation>,
 );
 
 fn extract_filters<L: PxLayer>(
-    filters: Extract<Query<(FilterComponents<L>, &InheritedVisibility), Without<PxCanvas>>>,
+    filters: Extract<
+        Query<(FilterComponents<L>, &InheritedVisibility, RenderEntity), Without<PxCanvas>>,
+    >,
     mut cmd: Commands,
 ) {
-    for ((filter, layers, animation), visibility) in &filters {
+    for ((filter, layers, animation), visibility, id) in &filters {
         if !visibility.get() {
             continue;
         }
 
-        let mut filter = cmd.spawn((filter.clone(), layers.clone()));
+        let mut entity = cmd.entity(id);
+        entity.insert((filter.clone(), layers.clone()));
 
-        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
-            filter.insert((direction, duration, on_finish, frame_transition, start));
+        if let Some(animation) = animation {
+            entity.insert(*animation);
+        } else {
+            entity.remove::<PxAnimation>();
         }
     }
 }
 
 pub(crate) fn draw_filter(
-    filter: &PxFilter,
+    filter: &PxFilterAsset,
     animation: Option<(
         PxAnimationDirection,
         PxAnimationDuration,

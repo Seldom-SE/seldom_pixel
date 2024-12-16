@@ -69,7 +69,7 @@ impl<L: PxLayer> Plugin for PxPlugin<L> {
             line::plug::<L>,
             map::plug::<L>,
             palette::plug(self.palette_path.clone()),
-            position::plug,
+            position::plug::<L>,
             screen::Plug::<L>::new(self.screen_size),
             sprite::plug::<L>,
             text::plug::<L>,

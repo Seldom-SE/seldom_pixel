@@ -31,7 +31,7 @@ need improvement, feel free to submit an issue or pr!
 
 ## Philosophies
 
-- Assets are created through images
+- Assets are normal images
 
 All assets, including filters, are loaded from images. `seldom_pixel`'s scope is limited
 to rendered things, so this doesn't apply to things like levels and sounds. I recommend
@@ -41,7 +41,7 @@ about [Aseprite](https://github.com/aseprite/aseprite/), which you can use for f
 can compile it. I've only used this plugin on `.png` files, so I recommend using that format,
 but feel free to try it on other lossless formats.
 
-- It is what it looks like
+- What you see is what you get
 
 This crate's position component, `PxPosition`, uses an `IVec2` (2-dimensional `i32` vector)
 to store positions. This means that entities are located at exact pixel positions.
@@ -52,7 +52,7 @@ which I recommend using when possible. I also recommend resetting the `SubPxPosi
 to `PxPosition`'s value when it stops moving, so moving objects feel consistent to the player.
 This is less of a concern for games with smaller pixels.
 
-- Sacrifice versatility for productivity
+- Trade versatility for productivity
 
 If you are already interested in making a limited color palette pixel art game,
 this is an easy win for you. Filters in `seldom_pixel` are just maps from each color

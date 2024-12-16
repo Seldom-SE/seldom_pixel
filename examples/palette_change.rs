@@ -38,7 +38,7 @@ struct GameAssets {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     commands.insert_resource(GameAssets {
         palette_1: assets.load("palette/palette_1.palette.png"),
@@ -49,15 +49,14 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 fn spawn_mage(keys: Res<ButtonInput<KeyCode>>, assets: Res<AssetServer>, mut commands: Commands) {
     if keys.just_pressed(KeyCode::Space) {
         let mut rng = thread_rng();
-        commands.spawn(PxSpriteBundle::<Layer> {
+        commands.spawn((
             // Usually, this sprite would be added in `init` to avoid duplicating data,
             // but it's here instead to show that loading assets is independent
             // of the current palette
-            sprite: assets.load("sprite/mage.px_sprite.png"),
-            position: IVec2::new(rng.gen_range(0..56), rng.gen_range(0..48)).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        });
+            PxSprite(assets.load("sprite/mage.px_sprite.png")),
+            PxPosition(IVec2::new(rng.gen_range(0..56), rng.gen_range(0..48))),
+            PxAnchor::BottomLeft,
+        ));
     }
 }
 

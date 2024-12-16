@@ -21,19 +21,18 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     let mage = assets.load("sprite/mage.px_sprite.png");
 
     // Spawn a bunch of sprites on different layers
     for layer in 0..8 {
-        commands.spawn(PxSpriteBundle {
-            sprite: mage.clone(),
-            position: IVec2::new(layer % 4 * 13, layer / 4 * 18).into(),
-            anchor: PxAnchor::BottomLeft,
-            layer: Layer(layer),
-            ..default()
-        });
+        commands.spawn((
+            PxSprite(mage.clone()),
+            PxPosition(IVec2::new(layer % 4 * 13, layer / 4 * 18)),
+            PxAnchor::BottomLeft,
+            Layer(layer),
+        ));
     }
 
     // Load the filter
@@ -41,22 +40,16 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Despawn at the end
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black.clone(),
-            layers: PxFilterLayers::single_clip(Layer(0)),
-            ..default()
-        },
-        PxAnimationBundle::default(),
+        PxFilter(fade_to_black.clone()),
+        PxFilterLayers::single_clip(Layer(0)),
+        PxAnimation::default(),
     ));
 
     // Add the `PxAnimationFinished` component at the end
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black.clone(),
-            layers: PxFilterLayers::single_clip(Layer(1)),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxFilter(fade_to_black.clone()),
+        PxFilterLayers::single_clip(Layer(1)),
+        PxAnimation {
             on_finish: PxAnimationFinishBehavior::Mark,
             ..default()
         },
@@ -64,12 +57,9 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Loop
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black.clone(),
-            layers: PxFilterLayers::single_clip(Layer(2)),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxFilter(fade_to_black.clone()),
+        PxFilterLayers::single_clip(Layer(2)),
+        PxAnimation {
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
         },
@@ -77,12 +67,9 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Backward
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black.clone(),
-            layers: PxFilterLayers::single_clip(Layer(3)),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxFilter(fade_to_black.clone()),
+        PxFilterLayers::single_clip(Layer(3)),
+        PxAnimation {
             direction: PxAnimationDirection::Backward,
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -91,12 +78,9 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Faster
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black.clone(),
-            layers: PxFilterLayers::single_clip(Layer(5)),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxFilter(fade_to_black.clone()),
+        PxFilterLayers::single_clip(Layer(5)),
+        PxAnimation {
             duration: PxAnimationDuration::millis_per_animation(500),
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -105,12 +89,9 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Slower
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black.clone(),
-            layers: PxFilterLayers::single_clip(Layer(4)),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxFilter(fade_to_black.clone()),
+        PxFilterLayers::single_clip(Layer(4)),
+        PxAnimation {
             duration: PxAnimationDuration::millis_per_animation(2000),
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -119,12 +100,9 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Duration per frame
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black.clone(),
-            layers: PxFilterLayers::single_clip(Layer(6)),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxFilter(fade_to_black.clone()),
+        PxFilterLayers::single_clip(Layer(6)),
+        PxAnimation {
             duration: PxAnimationDuration::millis_per_frame(1000),
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -133,12 +111,9 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Dither between frames
     commands.spawn((
-        PxFilterBundle {
-            filter: fade_to_black,
-            layers: PxFilterLayers::single_clip(Layer(7)),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxFilter(fade_to_black),
+        PxFilterLayers::single_clip(Layer(7)),
+        PxAnimation {
             on_finish: PxAnimationFinishBehavior::Loop,
             frame_transition: PxAnimationFrameTransition::Dither,
             ..default()

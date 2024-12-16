@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
+    image::TextureFormatPixelInfo,
     render::{
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
@@ -19,7 +20,6 @@ use bevy::{
             TextureSampleType, TextureViewDescriptor, TextureViewDimension, VertexState,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
-        texture::{BevyDefault, TextureFormatPixelInfo},
         view::ViewTarget,
         Render, RenderApp, RenderSet,
     },
@@ -271,6 +271,7 @@ impl FromWorld for PxPipeline {
                     depth_stencil: None,
                     multisample: default(),
                     push_constant_ranges: Vec::new(),
+                    zero_initialize_workgroup_memory: true,
                 },
             ),
             layout,
@@ -351,16 +352,14 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         let mut layer_contents =
             BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
 
-        for (map, tileset, position, layer, canvas, animation, filter) in
-            self.maps.iter_manual(world)
-        {
+        for (map, position, layer, canvas, animation, filter) in self.maps.iter_manual(world) {
             if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-                maps.push((map, tileset, position, canvas, animation, filter));
+                maps.push((map, position, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
-                        vec![(map, tileset, position, canvas, animation, filter)],
+                        vec![(map, position, canvas, animation, filter)],
                         // default(),
                         default(),
                         default(),
@@ -416,18 +415,18 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
         }
 
-        for (text, typeface, rect, alignment, layer, canvas, animation, filter) in
+        for (text, rect, alignment, layer, canvas, animation, filter) in
             self.texts.iter_manual(world)
         {
             if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
-                texts.push((text, typeface, rect, alignment, canvas, animation, filter));
+                texts.push((text, rect, alignment, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
                         default(),
                         default(),
-                        vec![(text, typeface, rect, alignment, canvas, animation, filter)],
+                        vec![(text, rect, alignment, canvas, animation, filter)],
                         default(),
                         default(),
                         default(),
@@ -539,9 +538,9 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
         let tilesets = world.resource::<RenderAssets<PxTileset>>();
         // let images = world.resource::<RenderAssets<GpuImage>>();
-        let sprite_assets = world.resource::<RenderAssets<PxSprite>>();
+        let sprite_assets = world.resource::<RenderAssets<PxSpriteAsset>>();
         let typefaces = world.resource::<RenderAssets<PxTypeface>>();
-        let filters = world.resource::<RenderAssets<PxFilter>>();
+        let filters = world.resource::<RenderAssets<PxFilterAsset>>();
 
         let mut layer_image = PxImage::<Option<u8>>::empty_from_image(&image);
         let mut image_slice = PxImageSliceMut::from_image_mut(&mut image);
@@ -563,18 +562,19 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         {
             layer_image.clear();
 
-            for (map, tileset, position, canvas, animation, map_filter) in maps {
-                let Some(tileset) = tilesets.get(tileset) else {
+            for (map, position, canvas, animation, map_filter) in maps {
+                let Some(tileset) = tilesets.get(&map.tileset) else {
                     continue;
                 };
 
-                let map_filter = map_filter.and_then(|map_filter| filters.get(map_filter));
-                let size = map.size();
+                let map_filter = map_filter.and_then(|map_filter| filters.get(&**map_filter));
+                let size = map.tiles.size();
 
                 for x in 0..size.x {
                     for y in 0..size.y {
                         let pos = UVec2::new(x, y);
-                        let Some(tile) = map.get(pos) else {
+
+                        let Some(tile) = map.tiles.get(pos) else {
                             continue;
                         };
 
@@ -598,7 +598,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                             *canvas,
                             copy_animation_params(animation, last_update),
                             [
-                                tile_filter.and_then(|tile_filter| filters.get(tile_filter)),
+                                tile_filter.and_then(|tile_filter| filters.get(&**tile_filter)),
                                 map_filter,
                             ]
                             .into_iter()
@@ -749,7 +749,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             // }
 
             for (sprite, position, anchor, canvas, animation, filter) in sprites {
-                let Some(sprite) = sprite_assets.get(sprite) else {
+                let Some(sprite) = sprite_assets.get(&**sprite) else {
                     continue;
                 };
 
@@ -761,13 +761,13 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                     *anchor,
                     *canvas,
                     copy_animation_params(animation, last_update),
-                    filter.and_then(|filter| filters.get(filter)),
+                    filter.and_then(|filter| filters.get(&**filter)),
                     camera,
                 );
             }
 
-            for (text, typeface, rect, alignment, canvas, animation, filter) in texts {
-                let Some(typeface) = typefaces.get(typeface) else {
+            for (text, rect, alignment, canvas, animation, filter) in texts {
+                let Some(typeface) = typefaces.get(&text.typeface) else {
                     continue;
                 };
 
@@ -785,7 +785,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 let mut word_width = 0;
                 let mut separator = Vec::default();
                 let mut separator_width = 0;
-                for character in text.chars() {
+                for character in text.value.chars() {
                     let (character_width, is_separator) = typeface
                         .characters
                         .get(&character)
@@ -902,7 +902,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                                 PxAnchor::BottomLeft,
                                 PxCanvas::Camera,
                                 copy_animation_params(animation, last_update),
-                                filter.and_then(|filter| filters.get(filter)),
+                                filter.and_then(|filter| filters.get(&**filter)),
                                 camera,
                             );
 
@@ -919,7 +919,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 }
 
                 if let Some(filter) = filter {
-                    if let Some(PxFilter(filter)) = filters.get(filter) {
+                    if let Some(PxFilterAsset(filter)) = filters.get(&**filter) {
                         text_image.slice_all_mut().for_each_mut(|_, _, pixel| {
                             if let Some(pixel) = pixel {
                                 *pixel = filter.pixel(IVec2::new(*pixel as i32, 0));
@@ -947,7 +947,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
 
             for (filter, animation) in clip_filters {
-                if let Some(filter) = filters.get(filter) {
+                if let Some(filter) = filters.get(&**filter) {
                     draw_filter(
                         filter,
                         copy_animation_params(animation, last_update),
@@ -973,7 +973,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
 
             for (filter, animation) in over_filters {
-                if let Some(filter) = filters.get(filter) {
+                if let Some(filter) = filters.get(&**filter) {
                     draw_filter(
                         filter,
                         copy_animation_params(animation, last_update),
@@ -992,7 +992,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         } = world.resource()
         {
             if let Some(cursor_pos) = **world.resource::<PxCursorPosition>() {
-                if let Some(PxFilter(filter)) = filters.get(match cursor {
+                if let Some(PxFilterAsset(filter)) = filters.get(match cursor {
                     CursorState::Idle => idle,
                     CursorState::Left => left_click,
                     CursorState::Right => right_click,

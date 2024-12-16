@@ -8,10 +8,8 @@ use std::{
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
-    render::{
-        render_resource::TextureFormat,
-        texture::{ImageLoader, ImageLoaderSettings},
-    },
+    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
+    render::render_resource::TextureFormat,
     utils::HashMap,
 };
 use event_listener::Event;
@@ -31,28 +29,24 @@ pub(crate) fn plug(palette_path: PathBuf) -> impl Fn(&mut App) {
     }
 }
 
-struct PaletteLoader(ImageLoader);
-
-impl FromWorld for PaletteLoader {
-    fn from_world(world: &mut World) -> Self {
-        Self(ImageLoader::from_world(world))
-    }
-}
+#[derive(Default)]
+struct PaletteLoader;
 
 impl AssetLoader for PaletteLoader {
     type Asset = Palette;
     type Settings = ImageLoaderSettings;
     type Error = Error;
 
-    async fn load<'a>(
-        &'a self,
-        reader: &'a mut Reader<'_>,
-        settings: &'a ImageLoaderSettings,
-        load_context: &'a mut LoadContext<'_>,
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        settings: &ImageLoaderSettings,
+        load_context: &mut LoadContext<'_>,
     ) -> Result<Palette> {
-        let Self(image_loader) = self;
         Ok(Palette::new(
-            &image_loader.load(reader, settings, load_context).await?,
+            &ImageLoader::new(CompressedImageFormats::NONE)
+                .load(reader, settings, load_context)
+                .await?,
         ))
     }
 

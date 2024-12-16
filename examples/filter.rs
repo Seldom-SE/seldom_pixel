@@ -21,28 +21,20 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     let mage = assets.load("sprite/mage.px_sprite.png");
 
     // Spawn some sprites
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage.clone(),
-        position: IVec2::new(8, 16).into(),
-        ..default()
-    });
+    commands.spawn((PxSprite(mage.clone()), PxPosition(IVec2::new(8, 16))));
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage,
-        position: IVec2::new(24, 16).into(),
-        ..default()
-    });
+    commands.spawn((PxSprite(mage), PxPosition(IVec2::new(24, 16))));
 
     // Spawn a filter
-    commands.spawn(PxFilterBundle::<Layer> {
-        filter: assets.load("filter/invert.px_filter.png"),
-        ..default()
-    });
+    commands.spawn((
+        PxFilterLayers::<Layer>::default(),
+        PxFilter(assets.load("filter/invert.px_filter.png")),
+    ));
 }
 
 #[px_layer]

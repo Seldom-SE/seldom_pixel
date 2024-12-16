@@ -21,37 +21,26 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     let mage = assets.load("sprite/mage.px_sprite.png");
 
     // Spawn some sprites on different layers
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage.clone(),
-        position: IVec2::new(10, 22).into(),
-        ..default()
-    });
+    commands.spawn((PxSprite(mage.clone()), PxPosition(IVec2::new(10, 22))));
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage.clone(),
-        position: IVec2::new(14, 18).into(),
-        layer: Layer::Middle(-1),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(mage.clone()),
+        PxPosition(IVec2::new(14, 18)),
+        Layer::Middle(-1),
+    ));
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage.clone(),
-        position: IVec2::new(18, 14).into(),
-        layer: Layer::Middle(1),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(mage.clone()),
+        PxPosition(IVec2::new(18, 14)),
+        Layer::Middle(1),
+    ));
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage,
-        position: IVec2::new(22, 10).into(),
-        layer: Layer::Front,
-        ..default()
-    });
+    commands.spawn((PxSprite(mage), PxPosition(IVec2::new(22, 10)), Layer::Front));
 }
 
 // Layers are in render order: back to front

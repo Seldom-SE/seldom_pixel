@@ -23,11 +23,11 @@ fn main() {
 
 #[derive(Resource)]
 struct GameAssets {
-    invert: Handle<PxFilter>,
+    invert: Handle<PxFilterAsset>,
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     commands.insert_resource(GameAssets {
         invert: assets.load("filter/invert.px_filter.png"),
@@ -36,32 +36,21 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
     let mage = assets.load("sprite/mage.px_sprite.png");
 
     // Spawn some sprites on different layers
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage.clone(),
-        position: IVec2::new(8, 16).into(),
-        ..default()
-    });
+    commands.spawn((PxSprite(mage.clone()), PxPosition(IVec2::new(8, 16))));
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage.clone(),
-        position: IVec2::new(24, 16).into(),
-        layer: Layer::Middle(-1),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(mage.clone()),
+        PxPosition(IVec2::new(24, 16)),
+        Layer::Middle(-1),
+    ));
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage.clone(),
-        position: IVec2::new(40, 16).into(),
-        layer: Layer::Middle(1),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(mage.clone()),
+        PxPosition(IVec2::new(40, 16)),
+        Layer::Middle(1),
+    ));
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage,
-        position: IVec2::new(56, 16).into(),
-        layer: Layer::Front,
-        ..default()
-    });
+    commands.spawn((PxSprite(mage), PxPosition(IVec2::new(56, 16)), Layer::Front));
 }
 
 #[derive(Deref, DerefMut)]
@@ -76,7 +65,7 @@ impl Default for CurrentFilter {
 fn change_filter(
     mut commands: Commands,
     mut current_filter: Local<CurrentFilter>,
-    filters: Query<Entity, With<Handle<PxFilter>>>,
+    filters: Query<Entity, With<PxFilter>>,
     assets: Res<GameAssets>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
@@ -87,9 +76,9 @@ fn change_filter(
             commands.entity(filter).despawn();
         }
 
-        commands.spawn(PxFilterBundle {
-            filter: assets.invert.clone(),
-            layers: match **current_filter {
+        commands.spawn((
+            PxFilter(assets.invert.clone()),
+            match **current_filter {
                 // Filters the Middle(-1) layer specifically
                 0 => PxFilterLayers::single_clip(Layer::Middle(-1)),
                 // Filters the screen's image after rendering Middle(0)
@@ -101,8 +90,7 @@ fn change_filter(
                 3 => (|layer: &Layer| matches!(layer, Layer::Middle(layer) if *layer >= 0)).into(),
                 _ => unreachable!(),
             },
-            ..default()
-        });
+        ));
     }
 }
 

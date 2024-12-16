@@ -21,14 +21,13 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     // Spawn a sprite
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: assets.load("sprite/mage.px_sprite.png"),
-        position: IVec2::splat(8).into(),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(assets.load("sprite/mage.px_sprite.png")),
+        PxPosition(IVec2::splat(8)),
+    ));
 }
 
 #[px_layer]

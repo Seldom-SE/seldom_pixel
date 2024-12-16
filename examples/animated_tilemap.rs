@@ -22,22 +22,15 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
-    let mut map = PxMap::new(UVec2::new(2, 4));
+    let mut tiles = PxTiles::new(UVec2::new(2, 4));
     let mut rng = thread_rng();
 
     for x in 0..2 {
         for y in 0..4 {
-            map.set(
-                Some(
-                    commands
-                        .spawn(PxTileBundle {
-                            tile: rng.gen_range(0..4).into(),
-                            ..default()
-                        })
-                        .id(),
-                ),
+            tiles.set(
+                Some(commands.spawn(PxTile::from(rng.gen_range(0..4))).id()),
                 UVec2::new(x, y),
             );
         }
@@ -47,12 +40,11 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Spawn the map
     commands.spawn((
-        PxMapBundle::<Layer> {
-            map: map.clone(),
+        PxMap {
+            tiles: tiles.clone(),
             tileset: tileset.clone(),
-            ..default()
         },
-        PxAnimationBundle {
+        PxAnimation {
             // Use millis_per_animation to have each tile loop at the same time
             duration: PxAnimationDuration::millis_per_frame(250),
             on_finish: PxAnimationFinishBehavior::Loop,
@@ -61,13 +53,9 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
     ));
 
     commands.spawn((
-        PxMapBundle::<Layer> {
-            map,
-            tileset,
-            position: IVec2::new(8, 0).into(),
-            ..default()
-        },
-        PxAnimationBundle {
+        PxMap { tiles, tileset },
+        PxPosition(IVec2::new(8, 0)),
+        PxAnimation {
             // Use millis_per_animation to have each tile loop at the same time
             duration: PxAnimationDuration::millis_per_frame(250),
             on_finish: PxAnimationFinishBehavior::Loop,

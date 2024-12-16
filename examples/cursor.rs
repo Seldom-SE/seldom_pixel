@@ -21,7 +21,7 @@ fn main() {
 }
 
 fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     let idle = assets.load("filter/invert.px_filter.png");
 
@@ -34,11 +34,10 @@ fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut commands: Co
     };
 
     // Sprite to show how the cursor's filter applies
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: assets.load("sprite/mage.px_sprite.png"),
-        position: IVec2::new(8, 8).into(),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(assets.load("sprite/mage.px_sprite.png")),
+        PxPosition(IVec2::new(8, 8)),
+    ));
 }
 
 #[px_layer]

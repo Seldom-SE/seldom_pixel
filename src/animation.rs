@@ -20,15 +20,15 @@ pub(crate) fn plug(app: &mut App) {
             (
                 finish_animations::<PxSprite>,
                 finish_animations::<PxFilter>,
-                finish_animations::<PxTypeface>,
-                finish_animations::<PxTileset>,
+                finish_animations::<PxText>,
+                finish_animations::<PxMap>,
             )
                 .in_set(PxSet::FinishAnimations),
         );
 }
 
 /// Direction the animation plays
-#[derive(Clone, Component, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum PxAnimationDirection {
     /// The animation plays foreward
     #[default]
@@ -38,7 +38,7 @@ pub enum PxAnimationDirection {
 }
 
 /// Animation duration
-#[derive(Clone, Component, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum PxAnimationDuration {
     /// Duration of the entire animation. When used on a tilemap, each tile's animation
     /// takes the same amount of time, but their frames may desync
@@ -67,7 +67,7 @@ impl PxAnimationDuration {
 }
 
 /// Specifies what the animation does when it finishes
-#[derive(Clone, Component, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum PxAnimationFinishBehavior {
     /// The entity is despawned when the animation finishes
     #[default]
@@ -82,7 +82,7 @@ pub enum PxAnimationFinishBehavior {
 }
 
 /// Method the animation uses to interpolate between frames
-#[derive(Clone, Component, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum PxAnimationFrameTransition {
     /// Frames are not interpolated
     #[default]
@@ -91,35 +91,36 @@ pub enum PxAnimationFrameTransition {
     Dither,
 }
 
-/// Time when the animation started
-#[derive(Clone, Component, Copy, Debug, Deref, DerefMut)]
-pub struct PxAnimationStart(pub Instant);
-
-impl Default for PxAnimationStart {
-    fn default() -> Self {
-        Self(Instant::now())
-    }
+/// Animates an entity. Works on sprites, filters, text, tilemaps, and lines.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct PxAnimation {
+    /// A [`PxAnimationDirection`]
+    pub direction: PxAnimationDirection,
+    /// A [`PxAnimationDuration`]
+    pub duration: PxAnimationDuration,
+    /// A [`PxAnimationFinishBehavior`]
+    pub on_finish: PxAnimationFinishBehavior,
+    /// A [`PxAnimationFrameTransition`]
+    pub frame_transition: PxAnimationFrameTransition,
+    /// Time when the animation started
+    pub start: Instant,
 }
 
-/// Animates an entity. Works on sprites, filters, text, tilemaps, and lines.
-#[derive(Bundle, Clone, Copy, Debug, Default)]
-pub struct PxAnimationBundle {
-    /// A [`PxAnimationDirection`] component
-    pub direction: PxAnimationDirection,
-    /// A [`PxAnimationDuration`] component
-    pub duration: PxAnimationDuration,
-    /// A [`PxAnimationFinishBehavior`] component
-    pub on_finish: PxAnimationFinishBehavior,
-    /// A [`PxAnimationFrameTransition`] component
-    pub frame_transition: PxAnimationFrameTransition,
-    /// A [`PxAnimationStart`] component
-    pub start: PxAnimationStart,
+impl Default for PxAnimation {
+    fn default() -> Self {
+        Self {
+            direction: default(),
+            duration: default(),
+            on_finish: default(),
+            frame_transition: default(),
+            start: Instant::now(),
+        }
+    }
 }
 
 /// Marks an animation that has finished. Automatically added to animations
 /// with [`PxAnimationFinishBehavior::Mark`]
 #[derive(Component, Debug)]
-#[component(storage = "SparseSet")]
 pub struct PxAnimationFinished;
 
 pub(crate) trait Animation {
@@ -135,17 +136,12 @@ pub(crate) trait Animation {
     );
 }
 
-pub(crate) trait AnimationAsset: Asset {
-    fn max_frame_count(&self) -> usize;
-}
+pub(crate) trait AnimatedAssetComponent: Component {
+    type Asset: Asset;
 
-pub(crate) type AnimationComponents = (
-    &'static PxAnimationDirection,
-    &'static PxAnimationDuration,
-    &'static PxAnimationFinishBehavior,
-    &'static PxAnimationFrameTransition,
-    &'static PxAnimationStart,
-);
+    fn handle(&self) -> &Handle<Self::Asset>;
+    fn max_frame_count(asset: &Self::Asset) -> usize;
+}
 
 static DITHERING: &[u16] = &[
     0b0000_0000_0000_0000,
@@ -230,7 +226,7 @@ pub(crate) fn draw_animation<'a, A: Animation>(
         PxAnimationFrameTransition,
         Duration,
     )>,
-    filters: impl IntoIterator<Item = &'a PxFilter>,
+    filters: impl IntoIterator<Item = &'a PxFilterAsset>,
 ) {
     let mut filter: Box<dyn Fn(u8) -> u8> = Box::new(|pixel| pixel);
     for filter_part in filters {
@@ -273,7 +269,7 @@ pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
         PxAnimationFrameTransition,
         Duration,
     )>,
-    filters: impl IntoIterator<Item = &'a PxFilter>,
+    filters: impl IntoIterator<Item = &'a PxFilterAsset>,
     camera: PxCamera,
 ) {
     let size = spatial.frame_size();
@@ -305,13 +301,7 @@ impl ExtractResource for LastUpdate {
 }
 
 pub(crate) fn copy_animation_params(
-    params: Option<(
-        &PxAnimationDirection,
-        &PxAnimationDuration,
-        &PxAnimationFinishBehavior,
-        &PxAnimationFrameTransition,
-        &PxAnimationStart,
-    )>,
+    animation: Option<&PxAnimation>,
     last_update: Instant,
 ) -> Option<(
     PxAnimationDirection,
@@ -320,8 +310,14 @@ pub(crate) fn copy_animation_params(
     PxAnimationFrameTransition,
     Duration,
 )> {
-    params.map(
-        |(&direction, &duration, &on_finish, &frame_transition, &PxAnimationStart(start))| {
+    animation.map(
+        |&PxAnimation {
+             direction,
+             duration,
+             on_finish,
+             frame_transition,
+             start,
+         }| {
             (
                 direction,
                 duration,
@@ -333,30 +329,23 @@ pub(crate) fn copy_animation_params(
     )
 }
 
-fn finish_animations<A: AnimationAsset>(
+fn finish_animations<A: AnimatedAssetComponent>(
     mut commands: Commands,
-    animations: Query<(
-        Entity,
-        &Handle<A>,
-        &PxAnimationDuration,
-        &PxAnimationFinishBehavior,
-        &PxAnimationStart,
-        Option<&PxAnimationFinished>,
-    )>,
-    assets: Res<Assets<A>>,
+    animations: Query<(Entity, &A, &PxAnimation, Option<&PxAnimationFinished>)>,
+    assets: Res<Assets<A::Asset>>,
     time: Res<Time<Real>>,
 ) {
-    for (entity, animation, duration, on_finish, spawn_time, finished) in &animations {
-        if let Some(animation) = assets.get(animation) {
-            let lifetime = match duration {
-                PxAnimationDuration::PerAnimation(duration) => *duration,
+    for (entity, asset_component, animation, finished) in &animations {
+        if let Some(asset) = assets.get(asset_component.handle()) {
+            let lifetime = match animation.duration {
+                PxAnimationDuration::PerAnimation(duration) => duration,
                 PxAnimationDuration::PerFrame(duration) => {
-                    *duration * animation.max_frame_count() as u32
+                    duration * A::max_frame_count(asset) as u32
                 }
             };
 
-            if time.last_update().unwrap_or_else(|| time.startup()) - **spawn_time >= lifetime {
-                match on_finish {
+            if time.last_update().unwrap_or_else(|| time.startup()) - animation.start >= lifetime {
+                match animation.on_finish {
                     PxAnimationFinishBehavior::Despawn => {
                         commands.entity(entity).despawn();
                     }

@@ -21,30 +21,27 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     // Centered
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: assets.load("sprite/mage.px_sprite.png"),
-        position: IVec2::new(8, 16).into(),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(assets.load("sprite/mage.px_sprite.png")),
+        PxPosition(IVec2::new(8, 16)),
+    ));
 
     // Bottom Left
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: assets.load("sprite/mage.px_sprite.png"),
-        position: IVec2::splat(16).into(),
-        anchor: PxAnchor::BottomLeft,
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(assets.load("sprite/mage.px_sprite.png")),
+        PxPosition(IVec2::splat(16)),
+        PxAnchor::BottomLeft,
+    ));
 
     // Custom. Values range from 0 to 1, with the origin at the bottom left corner.
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: assets.load("sprite/mage.px_sprite.png"),
-        position: IVec2::new(24, 16).into(),
-        anchor: Vec2::new(0.2, 0.8).into(),
-        ..default()
-    });
+    commands.spawn((
+        PxSprite(assets.load("sprite/mage.px_sprite.png")),
+        PxPosition(IVec2::new(24, 16)),
+        PxAnchor::Custom(Vec2::new(0.2, 0.8)),
+    ));
 }
 
 #[px_layer]

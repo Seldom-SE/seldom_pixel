@@ -21,30 +21,24 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     // Load an animated sprite with `add_animated`
     let runner = assets.load("sprite/runner.px_sprite.png");
 
     // Despawn at the end
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner.clone(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle::default(),
+        PxSprite(runner.clone()),
+        PxAnchor::BottomLeft,
+        PxAnimation::default(),
     ));
 
     // Add the `PxAnimationFinished` component at the end
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner.clone(),
-            position: IVec2::new(13, 0).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle {
+        PxSprite(runner.clone()),
+        PxPosition(IVec2::new(13, 0)),
+        PxAnchor::BottomLeft,
+        PxAnimation {
             on_finish: PxAnimationFinishBehavior::Mark,
             ..default()
         },
@@ -52,13 +46,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Loop
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner.clone(),
-            position: IVec2::new(26, 0).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle {
+        PxSprite(runner.clone()),
+        PxPosition(IVec2::new(26, 0)),
+        PxAnchor::BottomLeft,
+        PxAnimation {
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
         },
@@ -66,13 +57,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Backward
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner.clone(),
-            position: IVec2::new(39, 0).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle {
+        PxSprite(runner.clone()),
+        PxPosition(IVec2::new(39, 0)),
+        PxAnchor::BottomLeft,
+        PxAnimation {
             direction: PxAnimationDirection::Backward,
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -81,13 +69,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Faster
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner.clone(),
-            position: IVec2::new(13, 18).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle {
+        PxSprite(runner.clone()),
+        PxPosition(IVec2::new(13, 18)),
+        PxAnchor::BottomLeft,
+        PxAnimation {
             duration: PxAnimationDuration::millis_per_animation(500),
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -96,13 +81,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Slower
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner.clone(),
-            position: IVec2::new(0, 18).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle {
+        PxSprite(runner.clone()),
+        PxPosition(IVec2::new(0, 18)),
+        PxAnchor::BottomLeft,
+        PxAnimation {
             duration: PxAnimationDuration::millis_per_animation(2000),
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -111,13 +93,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Duration per frame
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner.clone(),
-            position: IVec2::new(26, 18).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle {
+        PxSprite(runner.clone()),
+        PxPosition(IVec2::new(26, 18)),
+        PxAnchor::BottomLeft,
+        PxAnimation {
             duration: PxAnimationDuration::millis_per_frame(1000),
             on_finish: PxAnimationFinishBehavior::Loop,
             ..default()
@@ -126,13 +105,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
 
     // Dither between frames
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: runner,
-            position: IVec2::new(39, 18).into(),
-            anchor: PxAnchor::BottomLeft,
-            ..default()
-        },
-        PxAnimationBundle {
+        PxSprite(runner),
+        PxPosition(IVec2::new(39, 18)),
+        PxAnchor::BottomLeft,
+        PxAnimation {
             on_finish: PxAnimationFinishBehavior::Loop,
             frame_transition: PxAnimationFrameTransition::Dither,
             ..default()
