@@ -9,12 +9,9 @@ pub(crate) use seldom_map_nav::prelude::*;
 pub(crate) use seldom_state::prelude::*;
 
 #[cfg(feature = "line")]
-pub use crate::line::{PxLine, PxLineBundle};
+pub use crate::line::PxLine;
 #[cfg(feature = "particle")]
-pub use crate::particle::{
-    PxEmitterBundle, PxEmitterFn, PxEmitterFrequency, PxEmitterRange, PxEmitterSimulation,
-    PxEmitterSprites, PxParticleLifetime,
-};
+pub use crate::particle::{PxEmitter, PxEmitterFrequency, PxEmitterSimulation, PxParticleLifetime};
 pub use crate::{
     animation::{
         PxAnimation, PxAnimationDirection, PxAnimationDuration, PxAnimationFinishBehavior,

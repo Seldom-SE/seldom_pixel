@@ -1,10 +1,11 @@
 use std::time::Duration;
 
-use bevy::render::{Extract, RenderApp};
+use bevy::render::{sync_world::RenderEntity, Extract, RenderApp};
 use line_drawing::Bresenham;
 
 use crate::{
-    animation::{draw_animation, Animation, AnimationComponents},
+    animation::{draw_animation, Animation},
+    filter::DefaultPxFilterLayers,
     image::PxImageSliceMut,
     pixel::Pixel,
     position::{PxLayer, Spatial},
@@ -18,6 +19,7 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
 
 /// Point list for a line
 #[derive(Component, Deref, DerefMut, Clone, Default, Debug)]
+#[require(DefaultPxFilterLayers, PxCanvas)]
 pub struct PxLine(pub Vec<IVec2>);
 
 impl Spatial for PxLine {
@@ -37,11 +39,11 @@ impl Spatial for PxLine {
     }
 }
 
-impl Animation for (&PxLine, &PxFilter) {
+impl Animation for (&PxLine, &PxFilterAsset) {
     type Param = IVec2;
 
     fn frame_count(&self) -> usize {
-        let (_, PxFilter(filter)) = self;
+        let (_, PxFilterAsset(filter)) = self;
         filter.area() / filter.width()
     }
 
@@ -52,7 +54,7 @@ impl Animation for (&PxLine, &PxFilter) {
         frame: impl Fn(UVec2) -> usize,
         _: impl Fn(u8) -> u8,
     ) {
-        let (line, PxFilter(filter)) = self;
+        let (line, PxFilterAsset(filter)) = self;
         for (start, end) in line.iter().zip(line.iter().skip(1)) {
             let start = *start + param;
             let end = *end + param;
@@ -77,51 +79,37 @@ impl<T: IntoIterator<Item = IVec2>> From<T> for PxLine {
     }
 }
 
-/// Makes a line for a given list of points. Pixels are drawn by applying a filter.
-#[derive(Bundle, Default)]
-pub struct PxLineBundle<L: PxLayer> {
-    /// A [`PxLine`] component
-    pub line: PxLine,
-    /// A [`PxFilterLayers`] component
-    pub layers: PxFilterLayers<L>,
-    /// A [`Handle<PxFilter>`] component
-    pub filter: Handle<PxFilter>,
-    /// A [`PxCanvas`] component
-    pub canvas: PxCanvas,
-    /// A [`Visibility`] component
-    pub visibility: Visibility,
-    /// An [`InheritedVisibility`] component
-    pub inherited_visibility: InheritedVisibility,
-}
-
 pub(crate) type LineComponents<L> = (
     &'static PxLine,
-    &'static Handle<PxFilter>,
+    &'static PxFilter,
     &'static PxFilterLayers<L>,
     &'static PxCanvas,
-    Option<AnimationComponents>,
+    Option<&'static PxAnimation>,
 );
 
 fn extract_lines<L: PxLayer>(
-    lines: Extract<Query<(LineComponents<L>, &InheritedVisibility)>>,
+    lines: Extract<Query<(LineComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((line, filter, layers, &canvas, animation), visibility) in &lines {
+    for ((line, filter, layers, &canvas, animation), visibility, id) in &lines {
         if !visibility.get() {
             continue;
         }
 
-        let mut line = cmd.spawn((line.clone(), filter.clone(), layers.clone(), canvas));
+        let mut entity = cmd.entity(id);
+        entity.insert((line.clone(), filter.clone(), layers.clone(), canvas));
 
-        if let Some((&direction, &duration, &on_finish, &frame_transition, &start)) = animation {
-            line.insert((direction, duration, on_finish, frame_transition, start));
+        if let Some(animation) = animation {
+            entity.insert(*animation);
+        } else {
+            entity.remove::<PxAnimation>();
         }
     }
 }
 
 pub(crate) fn draw_line(
     line: &PxLine,
-    filter: &PxFilter,
+    filter: &PxFilterAsset,
     image: &mut PxImageSliceMut<impl Pixel>,
     canvas: PxCanvas,
     animation: Option<(

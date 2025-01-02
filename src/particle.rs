@@ -1,10 +1,17 @@
 //! Particles and particle emitters
 
-use std::time::Duration;
+use std::{
+    fmt::{Debug, Formatter, Result},
+    time::Duration,
+};
 
 use bevy::{ecs::system::EntityCommands, utils::Instant};
 
-use crate::{position::PxLayer, prelude::*, set::PxSet};
+use crate::{
+    position::{DefaultLayer, PxLayer},
+    prelude::*,
+    set::PxSet,
+};
 
 // https://github.com/bevyengine/bevy/issues/8483
 // In wasm, time starts at 0, so it needs an offset to represent an instant before the app started.
@@ -27,26 +34,6 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     );
 }
 
-/// Possible sprites for an emitter's particles
-#[derive(Component, Debug, Default, Deref, DerefMut)]
-pub struct PxEmitterSprites(pub Vec<Handle<PxSprite>>);
-
-impl<T: IntoIterator<Item = Handle<PxSprite>>> From<T> for PxEmitterSprites {
-    fn from(t: T) -> Self {
-        Self(t.into_iter().collect())
-    }
-}
-
-/// Location range for an emitter's particles
-#[derive(Component, Debug, Default, Deref, DerefMut)]
-pub struct PxEmitterRange(pub IRect);
-
-impl From<IRect> for PxEmitterRange {
-    fn from(rect: IRect) -> Self {
-        Self(rect)
-    }
-}
-
 /// A particle's lifetime
 #[derive(Clone, Component, Copy, Debug, Deref, DerefMut)]
 pub struct PxParticleLifetime(pub Duration);
@@ -64,7 +51,7 @@ impl From<Duration> for PxParticleLifetime {
 }
 
 /// Spawn frequency range for an emitter
-#[derive(Component, Debug)]
+#[derive(Debug)]
 pub struct PxEmitterFrequency {
     min: Duration,
     max: Duration,
@@ -115,7 +102,7 @@ impl PxEmitterFrequency {
 }
 
 /// Determines whether the emitter is pre-simulated
-#[derive(Component, Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub enum PxEmitterSimulation {
     /// The emitter is not pre-simulated
     #[default]
@@ -127,46 +114,45 @@ pub enum PxEmitterSimulation {
     Simulate,
 }
 
-/// This function is run on each particle that spawns. It is run
-/// after all of the other components are added, so you can use this to override components.
-#[derive(Component, Deref, DerefMut)]
-pub struct PxEmitterFn(pub Box<dyn Fn(&mut EntityCommands) + Send + Sync>);
-
-impl Default for PxEmitterFn {
-    fn default() -> Self {
-        (|_: &mut EntityCommands| ()).into()
-    }
-}
-
-impl<T: 'static + Fn(&mut EntityCommands) + Send + Sync> From<T> for PxEmitterFn {
-    fn from(t: T) -> Self {
-        Self(Box::new(t))
-    }
-}
-
 /// Creates a particle emitter
-#[derive(Bundle, Default)]
-pub struct PxEmitterBundle<L: PxLayer> {
-    /// A [`PxEmitterSprites`] component
-    pub sprites: PxEmitterSprites,
-    /// A [`PxEmitterRange`] component
-    pub range: PxEmitterRange,
-    /// A [`PxAnchor`] component; added to the particles
-    pub anchor: PxAnchor,
-    /// A layer component; added to the particles
-    pub layer: L,
-    /// A [`PxCanvas`] component; added to the particles
-    pub canvas: PxCanvas,
-    /// A [`PxParticleLifetime`] component; added to the particles
-    pub lifetime: PxParticleLifetime,
-    /// A [`PxVelocity`] component; added to the particles
-    pub velocity: PxVelocity,
-    /// A [`PxEmitterFrequency`] component
+#[derive(Component)]
+#[require(PxAnchor, DefaultLayer, PxCanvas, PxParticleLifetime, PxVelocity)]
+pub struct PxEmitter {
+    /// Possible sprites for an emitter's particles
+    pub sprites: Vec<Handle<PxSpriteAsset>>,
+    /// Location range for an emitter's particles
+    pub range: IRect,
+    /// A [`PxEmitterFrequency`]
     pub frequency: PxEmitterFrequency,
-    /// A [`PxEmitterSimulation`] component
+    /// A [`PxEmitterSimulation`]
     pub simulation: PxEmitterSimulation,
-    /// A [`PxEmitterFn`] component
-    pub on_spawn: PxEmitterFn,
+    /// This function is run on each particle that spawns. It is run
+    /// after all of the other components are added, so you can use this to override components.
+    pub on_spawn: Box<dyn Fn(&mut EntityCommands) + Send + Sync>,
+}
+
+impl Default for PxEmitter {
+    fn default() -> Self {
+        Self {
+            sprites: Vec::new(),
+            range: default(),
+            frequency: default(),
+            simulation: default(),
+            on_spawn: Box::new(|_| ()),
+        }
+    }
+}
+
+impl Debug for PxEmitter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.debug_struct("PxEmitter")
+            .field("sprites", &self.sprites)
+            .field("range", &self.range)
+            .field("frequency", &self.frequency)
+            .field("simulation", &self.simulation)
+            .field("on_spawn", &())
+            .finish()
+    }
 }
 
 #[derive(Component, Debug, Deref, DerefMut)]
@@ -199,36 +185,20 @@ fn simulate_emitters<L: PxLayer>(
     mut commands: Commands,
     emitters: Query<
         (
-            &PxEmitterSprites,
-            &PxEmitterRange,
+            &PxEmitter,
             &PxAnchor,
             &L,
             &PxCanvas,
             &PxParticleLifetime,
             &PxVelocity,
-            &PxEmitterFrequency,
-            &PxEmitterFn,
-            &PxEmitterSimulation,
         ),
-        Added<PxEmitterSimulation>,
+        Added<PxEmitter>,
     >,
     time: Res<Time<Real>>,
     mut rng: ResMut<GlobalRng>,
 ) {
-    for (
-        sprites,
-        range,
-        anchor,
-        layer,
-        canvas,
-        lifetime,
-        velocity,
-        frequency,
-        on_spawn,
-        simulation,
-    ) in &emitters
-    {
-        if *simulation != PxEmitterSimulation::Simulate {
+    for (emitter, anchor, layer, canvas, lifetime, velocity) in &emitters {
+        if emitter.simulation != PxEmitterSimulation::Simulate {
             continue;
         }
 
@@ -237,35 +207,33 @@ fn simulate_emitters<L: PxLayer>(
 
         while simulated_time + **lifetime >= current_time {
             let position = IVec2::new(
-                rng.i32(range.min.x..=range.max.x),
-                rng.i32(range.min.y..=range.max.y),
+                rng.i32(emitter.range.min.x..=emitter.range.max.x),
+                rng.i32(emitter.range.min.y..=emitter.range.max.y),
             )
             .as_vec2()
                 + **velocity * (current_time - simulated_time).as_secs_f32();
 
-            on_spawn(&mut commands.spawn((
-                PxSpriteBundle {
-                    sprite: rng.sample(sprites).unwrap().clone(),
-                    position:
-                        IVec2::new(position.x.round() as i32, position.y.round() as i32).into(),
-                    anchor: *anchor,
-                    layer: layer.clone(),
-                    canvas: *canvas,
-                    ..default()
-                },
-                PxParticleBundle {
-                    position: position.into(),
-                    velocity: *velocity,
-                    start: simulated_time.into(),
-                    lifetime: *lifetime,
-                },
+            (emitter.on_spawn)(&mut commands.spawn((
+                PxSprite(rng.sample(&emitter.sprites).unwrap().clone()),
+                PxPosition::from(IVec2::new(
+                    position.x.round() as i32,
+                    position.y.round() as i32,
+                )),
+                *anchor,
+                layer.clone(),
+                *canvas,
+                PxSubPosition::from(position),
+                *velocity,
+                PxParticleStart::from(simulated_time),
+                *lifetime,
                 Name::new("Particle"),
             )));
 
             // In wasm, the beginning of time is the start of the program, so we `checked_sub`
-            let Some(new_time) = simulated_time
-                .checked_sub((frequency.max - frequency.min).mul_f32(rng.f32()) + frequency.min)
-            else {
+            let Some(new_time) = simulated_time.checked_sub(
+                (emitter.frequency.max - emitter.frequency.min).mul_f32(rng.f32())
+                    + emitter.frequency.min,
+            ) else {
                 break;
             };
             simulated_time = new_time;
@@ -275,78 +243,59 @@ fn simulate_emitters<L: PxLayer>(
 
 fn insert_emitter_time(
     mut commands: Commands,
-    emitters: Query<Entity, Added<PxEmitterFrequency>>,
+    emitters: Query<Entity, Added<PxEmitter>>,
     time: Res<Time<Real>>,
     mut rng: ResMut<GlobalRng>,
 ) {
     for emitter in &emitters {
-        commands
-            .entity(emitter)
-            .insert(PxEmitterStart(
-                time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET,
-            ))
-            .insert(RngComponent::from(&mut rng));
+        commands.entity(emitter).insert((
+            PxEmitterStart(time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET),
+            RngComponent::from(&mut rng),
+        ));
     }
 }
 
 fn update_emitters<L: PxLayer>(
     mut commands: Commands,
     mut emitters: Query<(
-        &PxEmitterSprites,
-        &PxEmitterRange,
+        &mut PxEmitter,
         &PxAnchor,
         &L,
         &PxCanvas,
         &PxParticleLifetime,
         &PxVelocity,
-        &mut PxEmitterFrequency,
-        &PxEmitterFn,
         &mut PxEmitterStart,
         &mut RngComponent,
     )>,
     time: Res<Time<Real>>,
 ) {
-    for (
-        sprites,
-        range,
-        anchor,
-        layer,
-        canvas,
-        lifetime,
-        velocity,
-        mut frequency,
-        on_spawn,
-        mut start,
-        mut rng,
-    ) in &mut emitters
+    for (mut emitter, anchor, layer, canvas, lifetime, velocity, mut start, mut rng) in
+        &mut emitters
     {
         if time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET - **start
-            < frequency.next(rng.get_mut())
+            < emitter.frequency.next(rng.get_mut())
         {
             continue;
         }
 
-        **start += frequency.update_next(rng.get_mut());
+        **start += emitter.frequency.update_next(rng.get_mut());
         let position = IVec2::new(
-            rng.i32(range.min.x..=range.max.x),
-            rng.i32(range.min.y..=range.max.y),
+            rng.i32(emitter.range.min.x..=emitter.range.max.x),
+            rng.i32(emitter.range.min.y..=emitter.range.max.y),
         );
 
-        on_spawn(&mut commands.spawn((
-            PxSpriteBundle {
-                sprite: rng.sample(sprites).unwrap().clone(),
-                position: position.into(),
-                anchor: *anchor,
-                layer: layer.clone(),
-                canvas: *canvas,
-                ..default()
-            },
-            PxParticleBundle {
-                position: position.as_vec2().into(),
-                velocity: *velocity,
-                start: (time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET).into(),
-                lifetime: *lifetime,
-            },
+        (emitter.on_spawn)(&mut commands.spawn((
+            PxSprite(rng.sample(&emitter.sprites).unwrap().clone()),
+            PxPosition::from(position),
+            *anchor,
+            layer.clone(),
+            *canvas,
+            PxSubPosition::from(position.as_vec2()),
+            *velocity,
+            PxParticleStart::from(
+                time.last_update().unwrap_or_else(|| time.startup()) + TIME_OFFSET,
+            ),
+            *lifetime,
             Name::new("Particle"),
         )));
     }

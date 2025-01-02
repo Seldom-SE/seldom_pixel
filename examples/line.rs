@@ -21,23 +21,18 @@ fn main() {
 }
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     let mage = assets.load("sprite/mage.px_sprite.png");
 
-    commands.spawn(PxSpriteBundle::<Layer> {
-        sprite: mage,
-        position: IVec2::splat(16).into(),
-        ..default()
-    });
+    commands.spawn((PxSprite(mage), PxPosition(IVec2::splat(16))));
 
     // Spawn a line. Layering and animation work the same as filters.
-    commands.spawn(PxLineBundle::<Layer> {
-        line: [(3, 22).into(), (31, 10).into()].into(),
-        layers: PxFilterLayers::single_over(Layer),
-        filter: assets.load("filter/invert.px_filter.png"),
-        ..default()
-    });
+    commands.spawn((
+        PxLine::from([(3, 22).into(), (31, 10).into()]),
+        PxFilterLayers::single_over(Layer),
+        PxFilter(assets.load("filter/invert.px_filter.png")),
+    ));
 }
 
 #[px_layer]

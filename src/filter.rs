@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
+    ecs::{component::ComponentId, world::DeferredWorld},
     image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
     render::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
@@ -30,7 +31,9 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     ))
     .init_asset::<PxFilterAsset>()
     .init_asset_loader::<PxFilterLoader>()
+    .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
     .sub_app_mut(RenderApp)
+    .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
     .add_systems(ExtractSchedule, extract_filters::<L>);
 }
 
@@ -239,6 +242,33 @@ impl<L: PxLayer> PxFilterLayers<L> {
     pub fn single_over(layer: L) -> Self {
         Self::Single { layer, clip: false }
     }
+}
+
+#[derive(Resource, Deref)]
+struct InsertDefaultPxFilterLayers(Box<dyn Fn(&mut EntityWorldMut) + Send + Sync>);
+
+impl InsertDefaultPxFilterLayers {
+    fn new<L: PxLayer>() -> Self {
+        Self(Box::new(|entity| {
+            entity.insert_if_new(PxFilterLayers::<L>::default());
+        }))
+    }
+}
+
+#[derive(Component, Default)]
+#[component(on_add = insert_default_px_filter_layers)]
+pub(crate) struct DefaultPxFilterLayers;
+
+fn insert_default_px_filter_layers(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
+    world.commands().queue(move |world: &mut World| {
+        let insert_default_px_filter_layers = world
+            .remove_resource::<InsertDefaultPxFilterLayers>()
+            .unwrap();
+        if let Ok(mut entity) = world.get_entity_mut(entity) {
+            insert_default_px_filter_layers(entity.remove::<DefaultPxFilterLayers>());
+        }
+        world.insert_resource(insert_default_px_filter_layers);
+    })
 }
 
 pub(crate) type FilterComponents<L> = (

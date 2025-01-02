@@ -33,56 +33,45 @@ struct Idle;
 #[component(storage = "SparseSet")]
 struct Cast;
 
-#[derive(Bundle)]
-struct CastBundle {
-    sprite: Handle<PxSprite>,
-    animation: PxAnimationBundle,
-}
-
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     let idle = assets.load("sprite/mage.px_sprite.png");
     let cast = assets.load("sprite/mage_cast.px_sprite.png");
 
     // Spawn a sprite
     commands.spawn((
-        PxSpriteBundle::<Layer> {
-            sprite: idle.clone(),
-            position: IVec2::splat(8).into(),
-            ..default()
-        },
+        PxSprite(idle.clone()),
+        PxPosition(IVec2::splat(8)),
         InputManagerBundle {
-            input_map: InputMap::default()
-                .insert(Action::Cast, KeyCode::Space)
-                .build(),
+            input_map: InputMap::default().with(Action::Cast, KeyCode::Space),
             ..default()
         },
         StateMachine::default()
             .trans::<Idle, _>(just_pressed(Action::Cast), Cast)
             .on_enter::<Cast>(move |entity| {
-                entity.insert(CastBundle {
-                    sprite: cast.clone(),
-                    animation: PxAnimationBundle {
+                entity.insert((
+                    PxSprite(cast.clone()),
+                    PxAnimation {
                         duration: PxAnimationDuration::millis_per_animation(2000),
                         on_finish: PxAnimationFinishBehavior::Done,
                         ..default()
                     },
-                });
+                ));
             })
             .on_exit::<Cast>(|entity| {
-                entity.remove::<CastBundle>();
+                entity.remove::<PxAnimation>();
             })
             .trans::<Cast, _>(done(None), Idle)
             .on_enter::<Idle>(move |entity| {
-                entity.insert(idle.clone());
+                entity.insert(PxSprite(idle.clone()));
             })
             .set_trans_logging(true),
         Idle,
     ));
 }
 
-#[derive(Actionlike, Clone, Eq, Hash, PartialEq, Reflect)]
+#[derive(Actionlike, Clone, Eq, Hash, PartialEq, Reflect, Debug)]
 enum Action {
     Cast,
 }

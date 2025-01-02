@@ -187,6 +187,7 @@ pub struct PxScreenAlign(pub Diagonal);
 /// Float-based position. Add to entities that have [`PxPosition`], but also need
 /// a sub-pixel position. Use [`PxPosition`] unless a sub-pixel position is necessary.
 #[derive(Component, Debug, Default, Deref, DerefMut)]
+#[require(PxPosition)]
 pub struct PxSubPosition(pub Vec2);
 
 impl From<Vec2> for PxSubPosition {
@@ -208,6 +209,7 @@ impl Position2 for PxSubPosition {
 
 /// Velocity. Entities with this and [`PxSubPosition`] will move at this velocity over time.
 #[derive(Clone, Component, Copy, Debug, Default, Deref, DerefMut)]
+#[require(PxSubPosition)]
 pub struct PxVelocity(pub Vec2);
 
 impl From<Vec2> for PxVelocity {

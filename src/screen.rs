@@ -934,7 +934,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             // This is where I draw the line! /j
             #[cfg(feature = "line")]
             for (line, filter, canvas, animation) in clip_lines {
-                if let Some(filter) = filters.get(filter) {
+                if let Some(filter) = filters.get(&**filter) {
                     draw_line(
                         line,
                         filter,
@@ -960,7 +960,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
             #[cfg(feature = "line")]
             for (line, filter, canvas, animation) in over_lines {
-                if let Some(filter) = filters.get(filter) {
+                if let Some(filter) = filters.get(&**filter) {
                     draw_line(
                         line,
                         filter,
