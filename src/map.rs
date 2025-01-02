@@ -160,8 +160,8 @@ impl PxTileset {
     }
 }
 
-/// A tilemap
-#[derive(Component, Clone, Default, Debug)]
+/// The tiles in a tilemap
+#[derive(Clone, Default, Debug)]
 pub struct PxTiles {
     tiles: Vec<Option<Entity>>,
     width: usize,

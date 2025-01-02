@@ -181,8 +181,9 @@ impl PxAnchor {
 }
 
 /// Aligns a spatial entity to a corner of the screen
+// TODO This is private because it's not done yet
 #[derive(Component)]
-pub struct PxScreenAlign(pub Diagonal);
+struct PxScreenAlign(pub Diagonal);
 
 /// Float-based position. Add to entities that have [`PxPosition`], but also need
 /// a sub-pixel position. Use [`PxPosition`] unless a sub-pixel position is necessary.

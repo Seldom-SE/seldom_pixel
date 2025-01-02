@@ -171,41 +171,41 @@ impl AnimatedAssetComponent for PxSprite {
     }
 }
 
-/// Size of threshold map to use for dithering. The image is tiled with dithering according to this
-/// map, so smaller sizes will have more visible repetition and worse color approximation, but
-/// larger sizes are much, much slower with pattern dithering.
-#[derive(Clone, Copy, Debug)]
-pub enum ThresholdMap {
-    /// 2x2
-    X2_2,
-    /// 4x4
-    X4_4,
-    /// 8x8
-    X8_8,
-}
-
-/// Dithering algorithm. Perf measurements are for 10,000 pixels with a 4x4 threshold map on a
-/// pretty old machine.
-#[derive(Clone, Copy, Debug)]
-pub enum DitherAlgorithm {
-    /// Almost as fast as undithered. 16.0 ms in debug mode and 1.23 ms in release mode. Doesn't
-    /// make very good use of the color palette.
-    Ordered,
-    /// Slow, but mixes colors very well. 219 ms in debug mode and 6.81 ms in release mode. Consider
-    /// only using this algorithm with some optimizations enabled.
-    Pattern,
-}
-
-/// Info needed to dither an image
-#[derive(Clone, Debug)]
-pub struct Dither {
-    /// Dithering algorithm
-    pub algorithm: DitherAlgorithm,
-    /// How much to dither. Lower values leave solid color areas. Should range from 0 to 1.
-    pub threshold: f32,
-    /// Threshold map size
-    pub threshold_map: ThresholdMap,
-}
+// /// Size of threshold map to use for dithering. The image is tiled with dithering according to this
+// /// map, so smaller sizes will have more visible repetition and worse color approximation, but
+// /// larger sizes are much, much slower with pattern dithering.
+// #[derive(Clone, Copy, Debug)]
+// pub enum ThresholdMap {
+//     /// 2x2
+//     X2_2,
+//     /// 4x4
+//     X4_4,
+//     /// 8x8
+//     X8_8,
+// }
+//
+// /// Dithering algorithm. Perf measurements are for 10,000 pixels with a 4x4 threshold map on a
+// /// pretty old machine.
+// #[derive(Clone, Copy, Debug)]
+// pub enum DitherAlgorithm {
+//     /// Almost as fast as undithered. 16.0 ms in debug mode and 1.23 ms in release mode. Doesn't
+//     /// make very good use of the color palette.
+//     Ordered,
+//     /// Slow, but mixes colors very well. 219 ms in debug mode and 6.81 ms in release mode. Consider
+//     /// only using this algorithm with some optimizations enabled.
+//     Pattern,
+// }
+//
+// /// Info needed to dither an image
+// #[derive(Clone, Debug)]
+// pub struct Dither {
+//     /// Dithering algorithm
+//     pub algorithm: DitherAlgorithm,
+//     /// How much to dither. Lower values leave solid color areas. Should range from 0 to 1.
+//     pub threshold: f32,
+//     /// Threshold map size
+//     pub threshold_map: ThresholdMap,
+// }
 
 // // TODO Example
 // /// Renders the contents of an image to a sprite every tick. The image is interpreted as

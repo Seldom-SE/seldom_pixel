@@ -23,7 +23,7 @@ pub use crate::{
     filter::{PxFilter, PxFilterAsset, PxFilterLayers},
     map::{PxMap, PxTile, PxTiles, PxTileset},
     math::{Diagonal, Orthogonal},
-    position::{PxAnchor, PxLayer, PxPosition, PxScreenAlign, PxSubPosition, PxVelocity},
+    position::{PxAnchor, PxLayer, PxPosition, PxSubPosition, PxVelocity},
     screen::ScreenSize,
     sprite::{PxSprite, PxSpriteAsset},
     text::{PxText, PxTypeface},
