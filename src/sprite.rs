@@ -108,7 +108,7 @@ impl RenderAsset for PxSpriteAsset {
 }
 
 impl Animation for PxSpriteAsset {
-    type Param = ();
+    type Param = PxFlip;
 
     fn frame_count(&self) -> usize {
         self.data.area() / self.frame_size
@@ -116,7 +116,7 @@ impl Animation for PxSpriteAsset {
 
     fn draw(
         &self,
-        _: (),
+        flip: PxFlip,
         image: &mut PxImageSliceMut<impl Pixel>,
         frame: impl Fn(UVec2) -> usize,
         filter: impl Fn(u8) -> u8,
@@ -124,7 +124,7 @@ impl Animation for PxSpriteAsset {
         let width = self.data.width();
         let image_width = image.image_width();
         image.for_each_mut(|slice_i, image_i, pixel| {
-            if let Some(Some(value)) = self.data.get_pixel(IVec2::new(
+            let mut v = IVec2::new(
                 (slice_i % width) as i32,
                 ((frame(UVec2::new(
                     (image_i % image_width) as u32,
@@ -132,7 +132,14 @@ impl Animation for PxSpriteAsset {
                 )) * self.frame_size
                     + slice_i)
                     / width) as i32,
-            )) {
+            );
+            if flip.x {
+                v.x = width as i32 - v.x - 1;
+            }
+            if flip.y {
+                v.y = self.data.height() as i32 - v.y - 1;
+            }
+            if let Some(Some(value)) = self.data.get_pixel(v) {
                 pixel.set_value(filter(value));
             }
         });
@@ -146,6 +153,15 @@ impl Spatial for PxSpriteAsset {
             (self.frame_size / self.data.width()) as u32,
         )
     }
+}
+
+/// Flips the sprite or tile on the x-axis, y-axis, or both.
+#[derive(Component, Default, Clone, Copy, Debug)]
+pub struct PxFlip {
+    /// If true, flips the x-axis.
+    pub x: bool,
+    /// If true, flips the y-axis.
+    pub y: bool,
 }
 
 /// A sprite
@@ -400,6 +416,7 @@ pub(crate) type SpriteComponents<L> = (
     &'static PxCanvas,
     Option<&'static PxAnimation>,
     Option<&'static PxFilter>,
+    Option<&'static PxFlip>,
 );
 
 fn extract_sprites<L: PxLayer>(
@@ -407,7 +424,7 @@ fn extract_sprites<L: PxLayer>(
     sprites: Extract<Query<(SpriteComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((sprite, &position, &anchor, layer, &canvas, animation, filter), visibility, id) in
+    for ((sprite, &position, &anchor, layer, &canvas, animation, filter, flip), visibility, id) in
         &sprites
     {
         if !visibility.get() {
@@ -427,6 +444,12 @@ fn extract_sprites<L: PxLayer>(
             entity.insert(filter.clone());
         } else {
             entity.remove::<PxFilter>();
+        }
+
+        if let Some(flip) = flip {
+            entity.insert(flip.clone());
+        } else {
+            entity.remove::<PxFlip>();
         }
     }
 }

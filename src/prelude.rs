@@ -25,7 +25,7 @@ pub use crate::{
     math::{Diagonal, Orthogonal},
     position::{PxAnchor, PxLayer, PxPosition, PxSubPosition, PxVelocity},
     screen::ScreenSize,
-    sprite::{PxSprite, PxSpriteAsset},
+    sprite::{PxSprite, PxSpriteAsset, PxFlip},
     text::{PxText, PxTypeface},
     ui::PxRect,
     PxPlugin,
