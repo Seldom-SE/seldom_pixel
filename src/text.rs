@@ -155,6 +155,13 @@ pub struct PxTypeface {
     pub(crate) max_frame_count: usize,
 }
 
+impl PxTypeface {
+    /// Check whether the typeface contains the given character, including separators
+    pub fn contains(&self, character: char) -> bool {
+        self.characters.contains_key(&character) || self.separators.contains_key(&character)
+    }
+}
+
 impl RenderAsset for PxTypeface {
     type SourceAsset = Self;
     type Param = ();
