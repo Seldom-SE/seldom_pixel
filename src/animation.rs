@@ -210,7 +210,7 @@ pub(crate) fn animate(
     };
 
     move |pos| {
-        (frame + (0b1000_0000_0000_0000 >> (pos.x % 4 + pos.y % 4 * 4) & dithering != 0) as usize)
+        (frame + ((0b1000_0000_0000_0000 >> (pos.x % 4 + pos.y % 4 * 4)) & dithering != 0) as usize)
             % frame_count
     }
 }
