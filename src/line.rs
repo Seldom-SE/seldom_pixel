@@ -92,11 +92,13 @@ fn extract_lines<L: PxLayer>(
     mut cmd: Commands,
 ) {
     for ((line, filter, layers, &canvas, animation), visibility, id) in &lines {
+        let mut entity = cmd.entity(id);
+
         if !visibility.get() {
+            entity.remove::<PxFilterLayers<L>>();
             continue;
         }
 
-        let mut entity = cmd.entity(id);
         entity.insert((line.clone(), filter.clone(), layers.clone(), canvas));
 
         if let Some(animation) = animation {

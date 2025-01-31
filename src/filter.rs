@@ -284,11 +284,13 @@ fn extract_filters<L: PxLayer>(
     mut cmd: Commands,
 ) {
     for ((filter, layers, animation), visibility, id) in &filters {
+        let mut entity = cmd.entity(id);
+
         if !visibility.get() {
+            entity.remove::<PxFilterLayers<L>>();
             continue;
         }
 
-        let mut entity = cmd.entity(id);
         entity.insert((filter.clone(), layers.clone()));
 
         if let Some(animation) = animation {

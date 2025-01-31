@@ -272,11 +272,12 @@ fn extract_maps<L: PxLayer>(
     mut cmd: Commands,
 ) {
     for ((map, &position, layer, &canvas, animation, filter), visibility, id) in &maps {
+        let mut entity = cmd.entity(id);
+
         if !visibility.get() {
+            entity.remove::<L>();
             continue;
         }
-
-        let mut entity = cmd.entity(id);
 
         let mut map = map.clone();
         for opt_tile in &mut map.tiles.tiles {
@@ -309,6 +310,7 @@ fn extract_tiles(
 ) {
     for ((tile, filter), visibility, entity) in &tiles {
         if !visibility.get() {
+            // TODO This doesn't work
             continue;
         }
 

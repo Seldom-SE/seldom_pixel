@@ -410,11 +410,14 @@ fn extract_sprites<L: PxLayer>(
     for ((sprite, &position, &anchor, layer, &canvas, animation, filter), visibility, id) in
         &sprites
     {
+        let mut entity = cmd.entity(id);
+
         if !visibility.get() {
+            // TODO Need to a better way to prevent entities from rendering
+            entity.remove::<L>();
             continue;
         }
 
-        let mut entity = cmd.entity(id);
         entity.insert((sprite.clone(), position, anchor, layer.clone(), canvas));
 
         if let Some(animation) = animation {

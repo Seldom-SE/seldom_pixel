@@ -211,11 +211,13 @@ fn extract_texts<L: PxLayer>(
     mut cmd: Commands,
 ) {
     for ((text, &rect, &alignment, layer, &canvas, animation, filter), visibility, id) in &texts {
+        let mut entity = cmd.entity(id);
+
         if !visibility.get() {
+            entity.remove::<L>();
             continue;
         }
 
-        let mut entity = cmd.entity(id);
         entity.insert((text.clone(), rect, alignment, layer.clone(), canvas));
 
         if let Some(animation) = animation {
