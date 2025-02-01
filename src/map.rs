@@ -302,13 +302,13 @@ fn extract_maps<L: PxLayer>(
     }
 }
 
-pub(crate) type TileComponents = (&'static PxTile, Option<&'static PxFilter>);
+pub(crate) type TileComponents = (&'static PxTile, Option<&'static PxFilter>, Option<&'static PxFlip>);
 
 fn extract_tiles(
     tiles: Extract<Query<(TileComponents, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((tile, filter), visibility, entity) in &tiles {
+    for ((tile, filter, flip), visibility, entity) in &tiles {
         if !visibility.get() {
             // TODO This doesn't work
             continue;
@@ -321,6 +321,12 @@ fn extract_tiles(
             entity.insert(filter.clone());
         } else {
             entity.remove::<PxFilter>();
+        }
+
+        if let Some(flip) = flip {
+            entity.insert(flip.clone());
+        } else {
+            entity.remove::<PxFlip>();
         }
     }
 }

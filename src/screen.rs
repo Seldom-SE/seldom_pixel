@@ -394,17 +394,17 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         //     }
         // }
 
-        for (sprite, position, anchor, layer, canvas, animation, filter) in
+        for (sprite, position, anchor, layer, canvas, animation, filter, flip) in
             self.sprites.iter_manual(world)
         {
             if let Some((_, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-                sprites.push((sprite, position, anchor, canvas, animation, filter));
+                sprites.push((sprite, position, anchor, canvas, animation, filter, flip));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
                         default(),
-                        vec![(sprite, position, anchor, canvas, animation, filter)],
+                        vec![(sprite, position, anchor, canvas, animation, filter, flip)],
                         default(),
                         default(),
                         default(),
@@ -578,7 +578,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                             continue;
                         };
 
-                        let Ok((&PxTile { texture }, tile_filter)) =
+                        let Ok((&PxTile { texture }, tile_filter, tile_flip)) =
                             self.tiles.get_manual(world, tile)
                         else {
                             continue;
@@ -591,7 +591,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
                         draw_spatial(
                             tile,
-                            (),
+                            tile_flip.cloned().unwrap_or_default(),
                             &mut layer_image,
                             (**position + pos.as_ivec2() * tileset.tile_size().as_ivec2()).into(),
                             PxAnchor::BottomLeft,
@@ -748,14 +748,14 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             //     );
             // }
 
-            for (sprite, position, anchor, canvas, animation, filter) in sprites {
+            for (sprite, position, anchor, canvas, animation, filter, flip) in sprites {
                 let Some(sprite) = sprite_assets.get(&**sprite) else {
                     continue;
                 };
 
                 draw_spatial(
                     sprite,
-                    (),
+                    flip.cloned().unwrap_or_default(),
                     &mut layer_image,
                     *position,
                     *anchor,
@@ -896,7 +896,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
                             draw_spatial(
                                 character,
-                                (),
+                                PxFlip::default(),
                                 &mut text_image,
                                 IVec2::new(character_x as i32, line_y as i32).into(),
                                 PxAnchor::BottomLeft,
