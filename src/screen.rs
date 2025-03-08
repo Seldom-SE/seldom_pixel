@@ -34,7 +34,6 @@ use crate::{
     filter::{draw_filter, FilterComponents},
     image::{PxImage, PxImageSliceMut},
     map::{MapComponents, PxTile, TileComponents},
-    math::RectExt,
     palette::{PaletteHandle, PaletteParam},
     position::PxLayer,
     prelude::*,
@@ -415,18 +414,18 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
         }
 
-        for (text, rect, alignment, layer, canvas, animation, filter) in
+        for (text, pos, alignment, layer, canvas, animation, filter) in
             self.texts.iter_manual(world)
         {
             if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
-                texts.push((text, rect, alignment, canvas, animation, filter));
+                texts.push((text, pos, alignment, canvas, animation, filter));
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
                         default(),
                         default(),
-                        vec![(text, rect, alignment, canvas, animation, filter)],
+                        vec![(text, pos, alignment, canvas, animation, filter)],
                         default(),
                         default(),
                         default(),
@@ -766,169 +765,49 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 );
             }
 
-            for (text, rect, alignment, canvas, animation, filter) in texts {
+            for (text, pos, alignment, canvas, animation, filter) in texts {
                 let Some(typeface) = typefaces.get(&text.typeface) else {
                     continue;
                 };
 
-                let rect = match canvas {
-                    PxCanvas::World => rect.sub_ivec2(*camera),
-                    PxCanvas::Camera => **rect,
-                };
-                let rect_size = rect.size().as_uvec2();
-                let line_count = (rect_size.y + 1) / (typeface.height + 1);
-
-                let mut lines = Vec::default();
-                let mut line = Vec::default();
-                let mut line_width = 0;
-                let mut word = Vec::default();
-                let mut word_width = 0;
-                let mut separator = Vec::default();
-                let mut separator_width = 0;
+                let mut line_y = text.computed_size.y - 1;
+                let mut character_x = 0;
+                let mut was_character = false;
                 for character in text.value.chars() {
-                    let (character_width, is_separator) = typeface
-                        .characters
-                        .get(&character)
-                        .map(|character| (character.data.width() as u32, false))
-                        .unwrap_or_else(|| {
-                            (
-                                typeface
-                                    .separators
-                                    .get(&character)
-                                    .map(|separator| separator.width)
-                                    .unwrap_or_else(|| {
-                                        error!(
-                                            "received character '{character}' that isn't in typeface"
-                                        );
-                                        0
-                                    }),
-                                true,
-                            )
-                        });
+                    if typeface.separators.contains_key(&character) {
+                        line_y -= typeface.height + 1;
+                        character_x = 0;
+                        was_character = false;
+                    }
 
-                    if if is_separator {
-                        if line_width + separator_width + word_width - 1 > rect_size.x {
-                            lines.push((line_width, line));
-                            line_width = word_width - 1;
-                            line = word;
-                            word_width = 0;
-                            word = default();
-                            separator_width = character_width;
-                            separator = vec![character];
-                            true
-                        } else if word.is_empty() {
-                            separator_width += character_width;
-                            separator.push(character);
-                            false
-                        } else {
-                            line_width += separator_width + word_width - 1;
-                            line.append(&mut separator);
-                            line.append(&mut word);
-                            word_width = 0;
-                            separator_width = character_width;
-                            separator = vec![character];
-                            false
-                        }
-                    } else if word_width + character_width > rect_size.x {
-                        if !line.is_empty() {
-                            lines.push((line_width, line));
-                            line_width = 0;
-                            line = default();
-                        }
+                    character_x += if let Some(character) = typeface.characters.get(&character) {
+                        was_character = true;
 
-                        if word_width > 0 {
-                            lines.push((word_width - 1, word));
+                        draw_spatial(
+                            character,
+                            (),
+                            &mut layer_image,
+                            PxPosition(**pos + IVec2::new(character_x as i32, line_y as i32)),
+                            *alignment,
+                            *canvas,
+                            copy_animation_params(animation, last_update),
+                            filter.and_then(|filter| filters.get(&**filter)),
+                            camera,
+                        );
+
+                        character.data.width() as u32 + 1
+                    } else if let Some(separator) = typeface.separators.get(&character) {
+                        if was_character {
+                            character_x -= 1;
                         }
-                        word_width = character_width + 1;
-                        word = vec![character];
-                        separator_width = 0;
-                        separator = default();
-                        true
+                        was_character = false;
+
+                        separator.width
                     } else {
-                        word_width += character_width + 1;
-                        word.push(character);
-                        false
-                    } && lines.len() as u32 > line_count
-                    {
-                        line_width = 0;
-                        line.clear();
-                        word_width = 0;
-                        word.clear();
-                        separator_width = 0;
-                        separator.clear();
-                        break;
-                    }
+                        error!("received character '{character}' that isn't in typeface");
+                        0
+                    };
                 }
-
-                if line_width + separator_width + word_width + 1 > rect_size.x {
-                    lines.push((line_width, line));
-                    if word_width > 0 {
-                        lines.push((word_width - 1, word));
-                    }
-                } else if !word.is_empty() {
-                    line_width += separator_width + word_width - 1;
-                    line.append(&mut separator);
-                    line.append(&mut word);
-                    lines.push((line_width, line));
-                }
-
-                if lines.len() as u32 > line_count {
-                    for _ in 0..lines.len() as u32 - line_count {
-                        lines.pop();
-                    }
-                }
-
-                let mut text_image = PxImage::empty(rect_size);
-                let lines_height =
-                    (lines.len() as u32 * typeface.height + lines.len() as u32).max(1) - 1;
-                let mut line_y = alignment.y_pos(rect_size.y - lines_height)
-                    + lines.len() as u32 * (typeface.height + 1);
-
-                for (line_width, line) in lines {
-                    line_y -= typeface.height + 1;
-                    let mut character_x = alignment.x_pos(rect_size.x - line_width);
-                    let mut was_character = false;
-
-                    for character in line {
-                        character_x += if let Some(character) = typeface.characters.get(&character)
-                        {
-                            was_character = true;
-
-                            draw_spatial(
-                                character,
-                                (),
-                                &mut text_image,
-                                IVec2::new(character_x as i32, line_y as i32).into(),
-                                PxAnchor::BottomLeft,
-                                PxCanvas::Camera,
-                                copy_animation_params(animation, last_update),
-                                filter.and_then(|filter| filters.get(&**filter)),
-                                camera,
-                            );
-
-                            character.data.width() as u32 + 1
-                        } else {
-                            if was_character {
-                                character_x -= 1;
-                            }
-                            was_character = false;
-
-                            typeface.separators.get(&character).unwrap().width
-                        };
-                    }
-                }
-
-                if let Some(filter) = filter {
-                    if let Some(PxFilterAsset(filter)) = filters.get(&**filter) {
-                        text_image.slice_all_mut().for_each_mut(|_, _, pixel| {
-                            if let Some(pixel) = pixel {
-                                *pixel = filter.pixel(IVec2::new(*pixel as i32, 0));
-                            }
-                        });
-                    }
-                }
-
-                layer_image.slice_mut(rect).draw(&text_image);
             }
 
             // This is where I draw the line! /j

@@ -176,12 +176,25 @@ impl RenderAsset for PxTypeface {
 
 /// Spawns text to be rendered on-screen
 #[derive(Component, Default, Clone, Debug)]
-#[require(PxRect, PxAnchor, DefaultLayer, PxCanvas, Visibility)]
+#[require(PxPosition, PxAnchor, DefaultLayer, PxCanvas, Visibility)]
 pub struct PxText {
     /// The contents of the text
     pub value: String,
     /// The typeface
     pub typeface: Handle<PxTypeface>,
+    pub line_breaks: Vec<u32>,
+    pub computed_size: UVec2,
+}
+
+impl PxText {
+    pub fn new(value: impl Into<String>, typeface: Handle<PxTypeface>) -> Self {
+        Self {
+            value: value.into(),
+            typeface,
+            line_breaks: Vec::new(),
+            computed_size: UVec2::ZERO,
+        }
+    }
 }
 
 impl AnimatedAssetComponent for PxText {
@@ -198,7 +211,7 @@ impl AnimatedAssetComponent for PxText {
 
 pub(crate) type TextComponents<L> = (
     &'static PxText,
-    &'static PxRect,
+    &'static PxPosition,
     &'static PxAnchor,
     &'static L,
     &'static PxCanvas,
@@ -210,7 +223,7 @@ fn extract_texts<L: PxLayer>(
     texts: Extract<Query<(TextComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((text, &rect, &alignment, layer, &canvas, animation, filter), visibility, id) in &texts {
+    for ((text, &pos, &alignment, layer, &canvas, animation, filter), visibility, id) in &texts {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -218,7 +231,7 @@ fn extract_texts<L: PxLayer>(
             continue;
         }
 
-        entity.insert((text.clone(), rect, alignment, layer.clone(), canvas));
+        entity.insert((text.clone(), pos, alignment, layer.clone(), canvas));
 
         if let Some(animation) = animation {
             entity.insert(*animation);

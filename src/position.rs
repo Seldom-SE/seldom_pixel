@@ -7,33 +7,7 @@ use bevy::{
     render::{extract_component::ExtractComponent, RenderApp},
 };
 
-use crate::{math::Diagonal, prelude::*, screen::Screen, set::PxSet, sprite::PxSpriteAsset};
-
-// TODO Try to use traits instead of macros when we get the new solver
-macro_rules! align_to_screen {
-    ($components:ty, $param:ty, $get:expr) => {{
-        fn align_to_screen(
-            screen: Res<Screen>,
-            mut spatials: Query<($components, &PxScreenAlign, &PxAnchor, &mut PxPosition)>,
-            param: $param,
-        ) {
-            spatials
-                .iter_mut()
-                .for_each(|(components, PxScreenAlign(align), anchor, mut pos)| {
-                    #[allow(clippy::redundant_closure_call)]
-                    let Some(size) = ($get)(components, &param) else {
-                        return;
-                    };
-
-                    **pos = align.as_uvec2().as_ivec2()
-                        * (screen.computed_size.as_ivec2() - size.as_ivec2())
-                        + anchor.pos(size).as_ivec2();
-                });
-        }
-
-        align_to_screen
-    }};
-}
+use crate::{prelude::*, set::PxSet};
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.insert_resource(InsertDefaultLayer::new::<L>())
@@ -44,27 +18,6 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
                 update_position_to_sub.in_set(PxSet::UpdatePosToSubPos),
             )
                 .chain(),
-        )
-        .add_systems(
-            PostUpdate,
-            (
-                align_to_screen!(&PxMap, Res<Assets<PxTileset>>, |map: &PxMap,
-                                                                  tilesets: &Res<
-                    Assets<PxTileset>,
-                >| {
-                    Some((&map.tiles, tilesets.get(&map.tileset)?).frame_size())
-                }),
-                align_to_screen!(
-                    &PxSprite,
-                    Res<Assets<PxSpriteAsset>>,
-                    |sprite: &PxSprite, sprites: &Res<Assets<PxSpriteAsset>>| {
-                        Some(sprites.get(&**sprite)?.frame_size())
-                    }
-                ),
-                align_to_screen!(&PxRect, (), |rect: &PxRect, &()| Some(rect.frame_size())),
-                #[cfg(feature = "line")]
-                align_to_screen!(&PxLine, (), |line: &PxLine, &()| Some(line.frame_size())),
-            ),
         )
         .sub_app_mut(RenderApp)
         .insert_resource(InsertDefaultLayer::new::<L>());
@@ -179,11 +132,6 @@ impl PxAnchor {
         UVec2::new(self.x_pos(size.x), self.y_pos(size.y))
     }
 }
-
-/// Aligns a spatial entity to a corner of the screen
-// TODO This is private because it's not done yet
-#[derive(Component)]
-struct PxScreenAlign(pub Diagonal);
 
 /// Float-based position. Add to entities that have [`PxPosition`], but also need
 /// a sub-pixel position. Use [`PxPosition`] unless a sub-pixel position is necessary.

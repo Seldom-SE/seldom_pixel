@@ -28,7 +28,7 @@ pub mod screen;
 pub mod set;
 pub mod sprite;
 mod text;
-mod ui;
+pub mod ui;
 
 use std::{marker::PhantomData, path::PathBuf};
 
@@ -73,6 +73,7 @@ impl<L: PxLayer> Plugin for PxPlugin<L> {
             screen::Plug::<L>::new(self.screen_size),
             sprite::plug::<L>,
             text::plug::<L>,
+            ui::plug,
             #[cfg(feature = "particle")]
             (RngPlugin::default(), particle::plug::<L>),
         ));
