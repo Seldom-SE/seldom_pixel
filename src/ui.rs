@@ -1,4 +1,4 @@
-use bevy::ecs::system::IntoObserverSystem;
+use bevy::ecs::system::{IntoObserverSystem, SystemId};
 
 use crate::{filter::DefaultPxFilterLayers, prelude::*, screen::Screen};
 
@@ -34,9 +34,7 @@ pub trait PxUiBuilder<M>: 'static {
     where
         Self: Sized,
     {
-        let mut entity = cmd.spawn_empty();
-        self.insert_into(entity.reborrow());
-        entity
+        Box::new(self).dyn_spawn(cmd)
     }
 
     fn dyn_spawn<'a>(self: Box<Self>, cmd: &'a mut Commands) -> EntityCommands<'a> {
@@ -60,7 +58,20 @@ pub trait PxUiBuilder<M>: 'static {
 }
 
 impl PxUiBuilder<()> for Entity {
-    fn dyn_insert_into(self: Box<Self>, entity: EntityCommands) {}
+    fn dyn_spawn<'a>(self: Box<Self>, cmd: &'a mut Commands) -> EntityCommands<'a> {
+        cmd.entity(*self)
+    }
+
+    fn dyn_insert_into(self: Box<Self>, _: EntityCommands) {
+        error!("Called `dyn_insert_into` on `Entity`")
+    }
+
+    fn erase(self) -> impl PxUiBuilder<()>
+    where
+        Self: Sized,
+    {
+        self
+    }
 }
 
 impl<T: 'static + FnOnce(EntityCommands)> PxUiBuilder<()> for T {
@@ -253,6 +264,9 @@ impl PxSlotBuilder<PxRowSlot, ()> for PxRowSlotBuilder {
 #[require(Visibility)]
 pub struct PxRow {
     pub entries: Vec<PxRowSlot>,
+    pub vertical: bool,
+    pub space_between: u32,
+    pub scroll: bool,
 }
 
 impl PxRow {
@@ -261,6 +275,7 @@ impl PxRow {
             entries: Vec::new(),
             vertical: false,
             space_between: 0,
+            scroll: false,
         }
     }
 }
@@ -269,6 +284,7 @@ pub struct PxRowBuilder {
     pub entries: Vec<Box<dyn PxSlotBuilder<PxRowSlot, ()>>>,
     pub vertical: bool,
     pub space_between: u32,
+    pub scroll: bool,
 }
 
 impl PxRowBuilder {
@@ -286,6 +302,11 @@ impl PxRowBuilder {
         self.space_between = space_between;
         self
     }
+
+    pub fn scroll(mut self) -> Self {
+        self.scroll = true;
+        self
+    }
 }
 
 impl PxUiBuilder<()> for PxRowBuilder {
@@ -298,7 +319,64 @@ impl PxUiBuilder<()> for PxRowBuilder {
             .map(|entry| entry.spawn(commands.reborrow()))
             .collect();
 
-        entity.try_insert(PxRow { entries });
+        entity.try_insert(PxRow {
+            entries,
+            vertical: self.vertical,
+            space_between: self.space_between,
+            scroll: self.scroll,
+        });
+    }
+
+    fn erase(self) -> impl PxUiBuilder<()>
+    where
+        Self: Sized,
+    {
+        self
+    }
+}
+
+#[derive(Component)]
+#[require(Visibility)]
+pub struct PxGrid {
+    width: u32,
+    entries: Vec<Entity>,
+}
+
+impl PxGrid {
+    pub fn build(width: u32) -> PxGridBuilder {
+        PxGridBuilder {
+            width,
+            entries: Vec::new(),
+        }
+    }
+}
+
+pub struct PxGridBuilder {
+    pub width: u32,
+    pub entries: Vec<Box<dyn PxUiBuilder<()>>>,
+}
+
+impl PxGridBuilder {
+    pub fn entry<M>(mut self, entry: impl PxUiBuilder<M>) -> Self {
+        self.entries.push(Box::new(entry.erase()));
+        self
+    }
+}
+
+impl PxUiBuilder<()> for PxGridBuilder {
+    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
+        let mut commands = entity.commands();
+
+        let entries = self
+            .entries
+            .into_iter()
+            .map(|entry| entry.dyn_spawn(&mut commands).id())
+            .collect();
+
+        entity.try_insert(PxGrid {
+            width: self.width,
+            entries,
+        });
     }
 
     fn erase(self) -> impl PxUiBuilder<()>
@@ -388,6 +466,19 @@ impl PxUiBuilder<()> for PxRectBuilder {
     }
 }
 
+impl PxUiBuilder<()> for PxSprite {
+    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
+        entity.try_insert(*self);
+    }
+
+    fn erase(self) -> impl PxUiBuilder<()>
+    where
+        Self: Sized,
+    {
+        self
+    }
+}
+
 impl PxUiBuilder<()> for PxText {
     fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
         entity.try_insert(*self);
@@ -399,6 +490,72 @@ impl PxUiBuilder<()> for PxText {
     {
         self
     }
+}
+
+#[derive(Component)]
+#[require(PxText)]
+pub struct PxKeyField {
+    /// System that creates the text label
+    ///
+    /// Ideally, this would accept a Bevy `Key`, but there doesn't seem to be a way to convert a
+    /// winit `PhysicalKey` to a winit `Key`, so it wouldn't be possible to run this when building
+    /// the UI (ie in `PxUiBuilder::dyn_insert_into`) or update all the text if the keyboard layout
+    /// changes.
+    pub key_to_str: SystemId<In<KeyCode>, String>,
+}
+
+impl PxKeyField {
+    pub fn build(
+        key: KeyCode,
+        key_to_str: SystemId<In<KeyCode>, String>,
+        typeface: Handle<PxTypeface>,
+    ) -> PxKeyFieldBuilder {
+        PxKeyFieldBuilder {
+            key,
+            key_to_str,
+            typeface,
+        }
+    }
+}
+
+pub struct PxKeyFieldBuilder {
+    pub key: KeyCode,
+    pub typeface: Handle<PxTypeface>,
+    pub key_to_str: SystemId<In<KeyCode>, String>,
+}
+
+impl PxUiBuilder<()> for PxKeyFieldBuilder {
+    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
+        entity.queue(|id: Entity, world: &mut World| {
+            let Ok(text) = world.run_system_with_input(self.key_to_str, self.key) else {
+                error!("couldn't run `key_to_str`");
+                return;
+            };
+
+            let Ok(mut entity) = world.get_entity_mut(id) else {
+                return;
+            };
+
+            entity.insert((
+                PxKeyField {
+                    key_to_str: self.key_to_str,
+                },
+                PxText::new(text, self.typeface),
+            ));
+        });
+    }
+
+    fn erase(self) -> impl PxUiBuilder<()>
+    where
+        Self: Sized,
+    {
+        self
+    }
+}
+
+#[derive(Event)]
+pub struct PxKeyFieldUpdate {
+    pub key: KeyCode,
 }
 
 #[derive(Component)]

@@ -28,7 +28,8 @@ pub use crate::{
     sprite::{PxSprite, PxSpriteAsset},
     text::{PxText, PxTypeface},
     ui::{
-        PxContainer, PxRect, PxRow, PxRowSlot, PxSpace, PxStack, PxStackBuilder, PxTextField,
+        PxContainer, PxGrid, PxGridBuilder, PxKeyField, PxKeyFieldUpdate, PxRect, PxRow,
+        PxRowBuilder, PxRowSlot, PxSlotBuilder, PxSpace, PxStack, PxStackBuilder, PxTextField,
         PxTextFieldUpdate, PxUiBuilder,
     },
     PxPlugin,
