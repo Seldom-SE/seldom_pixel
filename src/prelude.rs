@@ -34,4 +34,6 @@ pub use crate::{
     },
     PxPlugin,
 };
+
+pub use next::Next;
 pub use seldom_pixel_macros::px_layer;

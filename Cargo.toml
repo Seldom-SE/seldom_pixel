@@ -1,6 +1,6 @@
 [package]
 name = "seldom_pixel"
-version = "0.8.0"
+version = "0.9.0-dev"
 edition = "2021"
 categories = ["game-development"]
 description = "Bevy plugin for limited color palette pixel art games"
@@ -17,6 +17,7 @@ particle = ["dep:bevy_turborand"]
 state = ["dep:seldom_state"]
 
 [dependencies]
+next = "0.1.0"
 anyhow = "1.0"
 event-listener = "5.3"
 serde = "1.0"
@@ -24,7 +25,7 @@ line_drawing = { version = "1.0", optional = true }
 seldom_singleton = "0.3.0"
 bevy_turborand = { version = "0.10.0", optional = true }
 seldom_map_nav = { version = "0.8.0", optional = true }
-seldom_pixel_macros = { version = "0.2.0-dev", path = "macros" }
+seldom_pixel_macros = { version = "0.3.0-dev", path = "macros" }
 seldom_state = { version = "0.12.0", optional = true }
 
 [dependencies.bevy_internal]

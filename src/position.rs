@@ -7,7 +7,7 @@ use bevy::{
     render::{extract_component::ExtractComponent, RenderApp},
 };
 
-use crate::{math::Next, prelude::*, set::PxSet};
+use crate::{prelude::*, set::PxSet};
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.insert_resource(InsertDefaultLayer::new::<L>())

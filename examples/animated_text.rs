@@ -1,6 +1,6 @@
 // In this program, animated text is spawned
 
-use bevy::prelude::*;
+use bevy::{math::ivec2, prelude::*};
 use seldom_pixel::prelude::*;
 
 fn main() {
@@ -20,42 +20,32 @@ fn main() {
         .run();
 }
 
-fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2d);
+fn init(assets: Res<AssetServer>, mut cmd: Commands) {
+    cmd.spawn(Camera2d);
 
     let typeface = assets.load("typeface/animated_typeface.px_typeface.png");
 
-    // Spawn text
-    commands.spawn((
-        PxText {
-            value: "LOOPED ANIMATION ⭐🙂⭐".to_string(),
-            typeface: typeface.clone(),
-        },
-        PxRect(IRect::new(0, 0, 64, 64)),
-        PxAnchor::TopCenter,
-        PxAnimation {
-            // Use millis_per_animation to have each character loop at the same time
-            duration: PxAnimationDuration::millis_per_frame(333),
-            on_finish: PxAnimationFinishBehavior::Loop,
-            ..default()
-        },
-    ));
-
-    commands.spawn((
-        PxText {
-            value: "DITHERED ANIMATION 🙂⭐🙂".to_string(),
-            typeface,
-        },
-        PxRect(IRect::new(0, 0, 64, 64)),
-        PxAnchor::BottomCenter,
-        PxAnimation {
-            // Use millis_per_animation to have each character loop at the same time
-            duration: PxAnimationDuration::millis_per_frame(333),
-            on_finish: PxAnimationFinishBehavior::Loop,
-            frame_transition: PxAnimationFrameTransition::Dither,
-            ..default()
-        },
-    ));
+    PxRow::build()
+        .vertical()
+        .entry(
+            PxText::new("LOOPED ANIMATION ⭐🙂⭐", typeface.clone()).animation(PxAnimation {
+                // Use millis_per_animation to have each character loop at the same time
+                duration: PxAnimationDuration::millis_per_frame(333),
+                on_finish: PxAnimationFinishBehavior::Loop,
+                ..default()
+            }),
+        )
+        .entry(PxRowSlot::build(PxSpace).stretch())
+        .entry(
+            PxText::new("DITHERED ANIMATION 🙂⭐🙂", typeface).animation(PxAnimation {
+                // Use millis_per_animation to have each character loop at the same time
+                duration: PxAnimationDuration::millis_per_frame(333),
+                on_finish: PxAnimationFinishBehavior::Loop,
+                frame_transition: PxAnimationFrameTransition::Dither,
+                ..default()
+            }),
+        )
+        .spawn_root(Layer, &mut cmd);
 }
 
 #[px_layer]
