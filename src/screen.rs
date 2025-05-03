@@ -1,10 +1,11 @@
 //! Screen and rendering
 
-use std::{collections::BTreeMap, marker::PhantomData};
+use std::{collections::BTreeMap, iter::empty, marker::PhantomData};
 
 use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     image::TextureFormatPixelInfo,
+    math::{ivec2, uvec2},
     render::{
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
@@ -37,6 +38,7 @@ use crate::{
     palette::{PaletteHandle, PaletteParam},
     position::PxLayer,
     prelude::*,
+    rect::RectComponents,
     sprite::SpriteComponents,
     text::TextComponents,
 };
@@ -287,6 +289,7 @@ struct PxRenderNode<L: PxLayer> {
     // image_to_sprites: QueryState<ImageToSpriteComponents<L>>,
     sprites: QueryState<SpriteComponents<L>>,
     texts: QueryState<TextComponents<L>>,
+    rects: QueryState<RectComponents<L>>,
     #[cfg(feature = "line")]
     lines: QueryState<LineComponents<L>>,
     filters: QueryState<FilterComponents<L>, Without<PxCanvas>>,
@@ -300,6 +303,7 @@ impl<L: PxLayer> FromWorld for PxRenderNode<L> {
             // image_to_sprites: world.query(),
             sprites: world.query(),
             texts: world.query(),
+            rects: world.query(),
             #[cfg(feature = "line")]
             lines: world.query(),
             filters: world.query_filtered(),
@@ -316,6 +320,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         // self.image_to_sprites.update_archetypes(world);
         self.sprites.update_archetypes(world);
         self.texts.update_archetypes(world);
+        self.rects.update_archetypes(world);
         #[cfg(feature = "line")]
         self.lines.update_archetypes(world);
         self.filters.update_archetypes(world);
@@ -345,27 +350,54 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         );
 
         #[cfg(feature = "line")]
-        let mut layer_contents =
-            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>::default();
+        let mut layer_contents = BTreeMap::<
+            _,
+            (
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+            ),
+        >::default();
         #[cfg(not(feature = "line"))]
-        let mut layer_contents =
-            BTreeMap::<_, (Vec<_>, Vec<_>, Vec<_>, (), Vec<_>, (), Vec<_>)>::default();
+        let mut layer_contents = BTreeMap::<
+            _,
+            (
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                (),
+                Vec<_>,
+                Vec<_>,
+                (),
+                Vec<_>,
+            ),
+        >::default();
 
-        for (map, position, layer, canvas, animation, filter) in self.maps.iter_manual(world) {
-            if let Some((maps, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-                maps.push((map, position, canvas, animation, filter));
+        for (map, &pos, layer, &canvas, animation, filter) in self.maps.iter_manual(world) {
+            let map = (map, pos, canvas, animation, filter);
+
+            if let Some((maps, _, _, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+                maps.push(map);
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
-                        vec![(map, position, canvas, animation, filter)],
-                        // default(),
+                        vec![map],
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
                         default(),
+                        Vec::new(),
+                        Vec::new(),
                         default(),
-                        default(),
-                        default(),
-                        default(),
-                        default(),
+                        Vec::new(),
                     ),
                 );
             }
@@ -393,50 +425,59 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         //     }
         // }
 
-        for (sprite, position, anchor, layer, canvas, animation, filter) in
+        for (sprite, &position, &anchor, layer, &canvas, animation, filter) in
             self.sprites.iter_manual(world)
         {
-            if let Some((_, sprites, _, _, _, _, _)) = layer_contents.get_mut(layer) {
-                sprites.push((sprite, position, anchor, canvas, animation, filter));
+            let sprite = (sprite, position, anchor, canvas, animation, filter);
+
+            if let Some((_, sprites, _, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+                sprites.push(sprite);
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
+                        Vec::new(),
+                        vec![sprite],
+                        Vec::new(),
+                        Vec::new(),
                         default(),
-                        vec![(sprite, position, anchor, canvas, animation, filter)],
+                        Vec::new(),
+                        Vec::new(),
                         default(),
-                        default(),
-                        default(),
-                        default(),
-                        default(),
+                        Vec::new(),
                     ),
                 );
             }
         }
 
-        for (text, pos, alignment, layer, canvas, animation, filter) in
+        for (text, &pos, &alignment, layer, &canvas, animation, filter) in
             self.texts.iter_manual(world)
         {
-            if let Some((_, _, texts, _, _, _, _)) = layer_contents.get_mut(layer) {
-                texts.push((text, pos, alignment, canvas, animation, filter));
+            let text = (text, pos, alignment, canvas, animation, filter);
+
+            if let Some((_, _, texts, _, _, _, _, _, _)) = layer_contents.get_mut(layer) {
+                texts.push(text);
             } else {
                 layer_contents.insert(
                     layer.clone(),
                     (
+                        Vec::new(),
+                        Vec::new(),
+                        vec![text],
+                        Vec::new(),
                         default(),
+                        Vec::new(),
+                        Vec::new(),
                         default(),
-                        vec![(text, pos, alignment, canvas, animation, filter)],
-                        default(),
-                        default(),
-                        default(),
-                        default(),
+                        Vec::new(),
                     ),
                 );
             }
         }
 
-        #[cfg(feature = "line")]
-        for (line, filter, layers, canvas, animation) in self.lines.iter_manual(world) {
+        for (&rect, filter, layers, &pos, &anchor, &canvas, animation) in
+            self.rects.iter_manual(world)
+        {
             for (layer, clip) in match layers {
                 PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
                 PxFilterLayers::Many(layers) => {
@@ -450,35 +491,96 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
             .into_iter()
             {
-                if let Some((_, _, _, clip_lines, _, over_lines, _)) =
+                let rect = (rect, filter, pos, anchor, canvas, animation);
+
+                if let Some((_, _, _, clip_rects, _, _, over_rects, _, _)) =
                     layer_contents.get_mut(&layer)
                 {
-                    if clip { clip_lines } else { over_lines }
-                        .push((line, filter, canvas, animation));
+                    if clip { clip_rects } else { over_rects }.push(rect);
                 } else {
-                    let lines = vec![(line, filter, canvas, animation)];
+                    let rects = vec![rect];
 
                     layer_contents.insert(
                         layer,
                         if clip {
                             (
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                rects,
                                 default(),
+                                Vec::new(),
+                                Vec::new(),
                                 default(),
-                                default(),
-                                lines,
-                                default(),
-                                default(),
-                                default(),
+                                Vec::new(),
                             )
                         } else {
                             (
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
                                 default(),
+                                Vec::new(),
+                                rects,
                                 default(),
-                                default(),
-                                default(),
-                                default(),
+                                Vec::new(),
+                            )
+                        },
+                    );
+                }
+            }
+        }
+
+        #[cfg(feature = "line")]
+        for (line, filter, layers, &canvas, animation) in self.lines.iter_manual(world) {
+            let line = (line, filter, canvas, animation);
+
+            for (layer, clip) in match layers {
+                PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
+                PxFilterLayers::Many(layers) => {
+                    layers.iter().map(|layer| (layer.clone(), true)).collect()
+                }
+                PxFilterLayers::Select(select_fn) => layer_contents
+                    .keys()
+                    .filter(|layer| select_fn(layer))
+                    .map(|layer| (layer.clone(), true))
+                    .collect(),
+            }
+            .into_iter()
+            {
+                if let Some((_, _, _, _, clip_lines, _, _, over_lines, _)) =
+                    layer_contents.get_mut(&layer)
+                {
+                    if clip { clip_lines } else { over_lines }.push(line);
+                } else {
+                    let lines = vec![line];
+
+                    layer_contents.insert(
+                        layer,
+                        if clip {
+                            (
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
                                 lines,
-                                default(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                            )
+                        } else {
+                            (
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                lines,
+                                Vec::new(),
                             )
                         },
                     );
@@ -487,6 +589,8 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         }
 
         for (filter, layers, animation) in self.filters.iter_manual(world) {
+            let filter = (filter, animation);
+
             for (layer, clip) in match layers {
                 PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
                 PxFilterLayers::Many(layers) => {
@@ -500,32 +604,36 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
             .into_iter()
             {
-                if let Some((_, _, _, _, clip_filters, _, over_filters)) =
+                if let Some((_, _, _, _, _, clip_filters, _, _, over_filters)) =
                     layer_contents.get_mut(&layer)
                 {
-                    if clip { clip_filters } else { over_filters }.push((filter, animation));
+                    if clip { clip_filters } else { over_filters }.push(filter);
                 } else {
-                    let filters = vec![(filter, animation)];
+                    let filters = vec![filter];
 
                     layer_contents.insert(
                         layer,
                         if clip {
                             (
-                                default(),
-                                default(),
-                                default(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
                                 default(),
                                 filters,
+                                Vec::new(),
                                 default(),
-                                default(),
+                                Vec::new(),
                             )
                         } else {
                             (
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
+                                Vec::new(),
                                 default(),
-                                default(),
-                                default(),
-                                default(),
-                                default(),
+                                Vec::new(),
+                                Vec::new(),
                                 default(),
                                 filters,
                             )
@@ -552,14 +660,17 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 // image_to_sprites,
                 sprites,
                 texts,
+                clip_rects,
                 clip_lines,
                 clip_filters,
+                over_rects,
                 over_lines,
                 over_filters,
             ),
         ) in layer_contents.into_iter()
         {
             layer_image.clear();
+            let mut layer_slice = layer_image.slice_all_mut();
 
             for (map, position, canvas, animation, map_filter) in maps {
                 let Some(tileset) = tilesets.get(&map.tileset) else {
@@ -591,10 +702,10 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         draw_spatial(
                             tile,
                             (),
-                            &mut layer_image,
-                            (**position + pos.as_ivec2() * tileset.tile_size().as_ivec2()).into(),
+                            &mut layer_slice,
+                            (*position + pos.as_ivec2() * tileset.tile_size().as_ivec2()).into(),
                             PxAnchor::BottomLeft,
-                            *canvas,
+                            canvas,
                             copy_animation_params(animation, last_update),
                             [
                                 tile_filter.and_then(|tile_filter| filters.get(&**tile_filter)),
@@ -755,10 +866,10 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 draw_spatial(
                     sprite,
                     (),
-                    &mut layer_image,
-                    *position,
-                    *anchor,
-                    *canvas,
+                    &mut layer_slice,
+                    position,
+                    anchor,
+                    canvas,
                     copy_animation_params(animation, last_update),
                     filter.and_then(|filter| filters.get(&**filter)),
                     camera,
@@ -770,43 +881,71 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                     continue;
                 };
 
-                let mut line_y = text.computed_size.y - 1;
-                let mut character_x = 0;
-                let mut was_character = false;
-                for character in text.value.chars() {
-                    if typeface.separators.contains_key(&character) {
-                        line_y -= typeface.height + 1;
-                        character_x = 0;
-                        was_character = false;
+                let line_break_count = text.line_breaks.len() as u32;
+                let mut size = uvec2(
+                    0,
+                    (line_break_count + 1) * typeface.height + line_break_count,
+                );
+                let mut x = 0;
+                let mut y = 0;
+                let mut chars = Vec::new();
+                let mut line_break_index = 0;
+
+                for (index, char) in text.value.chars().enumerate() {
+                    if let Some(char) = typeface.characters.get(&char) {
+                        if x != 0 {
+                            x += 1;
+                        }
+
+                        chars.push((x, y, char));
+                        x += char.data.size().x;
+
+                        if x > size.x {
+                            size.x = x;
+                        }
+                    } else if let Some(separator) = typeface.separators.get(&char) {
+                        x += separator.width;
+                    } else {
+                        error!(r#"character "{char}" in text isn't in typeface"#);
                     }
 
-                    character_x += if let Some(character) = typeface.characters.get(&character) {
-                        was_character = true;
+                    if text.line_breaks.get(line_break_index).copied() == Some(index as u32) {
+                        line_break_index += 1;
+                        y += typeface.height + 1;
+                        x = 0;
+                    }
+                }
 
-                        draw_spatial(
-                            character,
-                            (),
-                            &mut layer_image,
-                            PxPosition(**pos + IVec2::new(character_x as i32, line_y as i32)),
-                            *alignment,
-                            *canvas,
-                            copy_animation_params(animation, last_update),
-                            filter.and_then(|filter| filters.get(&**filter)),
-                            camera,
-                        );
+                let top_left = *pos - alignment.pos(size).as_ivec2() + ivec2(0, size.y as i32 - 1);
 
-                        character.data.width() as u32 + 1
-                    } else if let Some(separator) = typeface.separators.get(&character) {
-                        if was_character {
-                            character_x -= 1;
-                        }
-                        was_character = false;
+                for (x, y, char) in chars {
+                    draw_spatial(
+                        char,
+                        (),
+                        &mut layer_slice,
+                        PxPosition(top_left + ivec2(x as i32, -(y as i32))),
+                        PxAnchor::TopLeft,
+                        canvas,
+                        copy_animation_params(animation, last_update),
+                        filter.and_then(|filter| filters.get(&**filter)),
+                        camera,
+                    );
+                }
+            }
 
-                        separator.width
-                    } else {
-                        error!("received character '{character}' that isn't in typeface");
-                        0
-                    };
+            for (rect, filter, pos, anchor, canvas, animation) in clip_rects {
+                if let Some(filter) = filters.get(&**filter) {
+                    draw_spatial(
+                        &(rect, filter),
+                        (),
+                        &mut layer_slice,
+                        pos,
+                        anchor,
+                        canvas,
+                        copy_animation_params(animation, last_update),
+                        empty(),
+                        camera,
+                    );
                 }
             }
 
@@ -817,8 +956,8 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                     draw_line(
                         line,
                         filter,
-                        &mut layer_image.slice_all_mut(),
-                        *canvas,
+                        &mut layer_slice,
+                        canvas,
                         copy_animation_params(animation, last_update),
                         camera,
                     );
@@ -830,12 +969,28 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                     draw_filter(
                         filter,
                         copy_animation_params(animation, last_update),
-                        &mut layer_image.slice_all_mut(),
+                        &mut layer_slice,
                     );
                 }
             }
 
             image_slice.draw(&layer_image);
+
+            for (rect, filter, pos, anchor, canvas, animation) in over_rects {
+                if let Some(filter) = filters.get(&**filter) {
+                    draw_spatial(
+                        &(rect, filter),
+                        (),
+                        &mut image_slice,
+                        pos,
+                        anchor,
+                        canvas,
+                        copy_animation_params(animation, last_update),
+                        empty(),
+                        camera,
+                    );
+                }
+            }
 
             #[cfg(feature = "line")]
             for (line, filter, canvas, animation) in over_lines {
@@ -844,7 +999,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         line,
                         filter,
                         &mut image_slice,
-                        *canvas,
+                        canvas,
                         copy_animation_params(animation, last_update),
                         camera,
                     );

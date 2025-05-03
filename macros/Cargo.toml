@@ -12,5 +12,6 @@ repository = "https://github.com/Seldom-SE/seldom_pixel"
 proc-macro = true
 
 [dependencies]
-quote = "1"
-syn = "1"
+quote = "1.0"
+syn = "2.0"
+proc-macro2 = "1.0"

@@ -7,7 +7,7 @@ use bevy::{
     render::{extract_component::ExtractComponent, RenderApp},
 };
 
-use crate::{prelude::*, set::PxSet};
+use crate::{math::Next, prelude::*, set::PxSet};
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.insert_resource(InsertDefaultLayer::new::<L>())
@@ -34,7 +34,7 @@ impl<T: Spatial> Spatial for &'_ T {
 }
 
 /// The position of an entity
-#[derive(ExtractComponent, Component, Deref, DerefMut, Clone, Copy, Default, Debug)]
+#[derive(ExtractComponent, Component, Deref, DerefMut, Clone, Copy, Default, Reflect, Debug)]
 pub struct PxPosition(pub IVec2);
 
 impl From<IVec2> for PxPosition {
@@ -47,9 +47,9 @@ impl From<IVec2> for PxPosition {
 /// or derive/implement the required traits manually. The layers will be rendered in the order
 /// defined by the [`PartialOrd`] implementation. So, lower values will be in the back
 /// and vice versa.
-pub trait PxLayer: ExtractComponent + Component + Ord + Clone + Default + Debug {}
+pub trait PxLayer: ExtractComponent + Component + Next + Ord + Clone + Default + Debug {}
 
-impl<L: ExtractComponent + Component + Ord + Clone + Default + Debug> PxLayer for L {}
+impl<L: ExtractComponent + Component + Next + Ord + Clone + Default + Debug> PxLayer for L {}
 
 #[derive(Resource, Deref)]
 struct InsertDefaultLayer(Box<dyn Fn(&mut EntityWorldMut) + Send + Sync>);

@@ -6,12 +6,7 @@ use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::utils::Instant;
 
 use crate::position::Spatial;
-use crate::{
-    image::{PxImage, PxImageSliceMut},
-    pixel::Pixel,
-    prelude::*,
-    set::PxSet,
-};
+use crate::{image::PxImageSliceMut, pixel::Pixel, prelude::*, set::PxSet};
 
 pub(crate) fn plug(app: &mut App) {
     app.add_plugins(ExtractResourcePlugin::<LastUpdate>::default())
@@ -91,7 +86,7 @@ pub enum PxAnimationFrameTransition {
     Dither,
 }
 
-/// Animates an entity. Works on sprites, filters, text, tilemaps, and lines.
+/// Animates an entity. Works on sprites, filters, text, tilemaps, rectangles, and lines.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct PxAnimation {
     /// A [`PxAnimationDirection`]
@@ -258,7 +253,7 @@ pub(crate) fn draw_animation<'a, A: Animation>(
 pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
     spatial: &A,
     param: <A as Animation>::Param,
-    image: &mut PxImage<impl Pixel>,
+    image: &mut PxImageSliceMut<impl Pixel>,
     position: PxPosition,
     anchor: PxAnchor,
     canvas: PxCanvas,
@@ -278,7 +273,7 @@ pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
         PxCanvas::World => position - *camera,
         PxCanvas::Camera => position,
     };
-    let position = IVec2::new(position.x, image.size().y as i32 - position.y);
+    let position = IVec2::new(position.x, image.height() as i32 - position.y);
     let size = size.as_ivec2();
 
     let mut image = image.slice_mut(IRect {

@@ -22,4 +22,5 @@ pub enum PxSet {
     /// Update particle emitters. In [`CoreSet::PostUpdate`].
     #[cfg(feature = "particle")]
     UpdateEmitters,
+    Picking,
 }

@@ -39,7 +39,6 @@ impl<P: Pixel> PxImage<P> {
         .then(|| self.pixel(position))
     }
 
-    #[allow(dead_code)]
     pub(crate) fn size(&self) -> UVec2 {
         UVec2::new(self.width as u32, (self.image.len() / self.width) as u32)
     }
@@ -56,11 +55,12 @@ impl<P: Pixel> PxImage<P> {
         self.image.len()
     }
 
-    #[allow(unused)]
+    #[expect(unused)]
     pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut P> {
         self.image.iter_mut()
     }
 
+    #[expect(unused)]
     pub(crate) fn slice_mut(&mut self, slice: IRect) -> PxImageSliceMut<P> {
         PxImageSliceMut {
             slice,
@@ -174,6 +174,8 @@ impl PxImage<Option<u8>> {
 }
 
 pub(crate) struct PxImageSliceMut<'a, P: Pixel> {
+    // TODO Currently, this is the entire image. Trim it down to the slice that this should have
+    // access to.
     image: Vec<&'a mut [P]>,
     width: usize,
     slice: IRect,
@@ -219,16 +221,32 @@ impl<P: Pixel> PxImageSliceMut<'_, P> {
         .then(|| self.pixel_mut(position))
     }
 
+    #[expect(unused)]
+    pub(crate) fn size(&self) -> UVec2 {
+        self.slice.size().as_uvec2()
+    }
+
     pub(crate) fn width(&self) -> u32 {
-        self.slice.size().x as u32
+        self.slice.width() as u32
     }
 
     pub(crate) fn height(&self) -> u32 {
-        self.slice.size().y as u32
+        self.slice.height() as u32
     }
 
     pub(crate) fn image_width(&self) -> usize {
         self.width
+    }
+
+    pub(crate) fn slice_mut(&mut self, slice: IRect) -> PxImageSliceMut<P> {
+        PxImageSliceMut {
+            image: self.image.iter_mut().map(|row| &mut **row).collect(),
+            width: self.width,
+            slice: IRect {
+                min: slice.min + self.slice.min,
+                max: slice.max + self.slice.min,
+            },
+        }
     }
 
     pub(crate) fn draw(&mut self, image: &PxImage<impl Pixel>) {

@@ -1,8 +1,59 @@
 //! Math helpers
 
+pub use seldom_pixel_macros::Next;
+
 use crate::prelude::*;
 
-/// Extension crate for [`IRect`]. Adds helpers.
+/// Allows getting the next sequential value. `MIN` and `next` should agree with `PartialOrd`.
+pub trait Next: Sized {
+    /// The minimum value
+    const MIN: Self;
+
+    /// Gets the next sequential value
+    fn next(self) -> Option<Self>;
+}
+
+impl Next for () {
+    const MIN: Self = ();
+
+    fn next(self) -> Option<Self> {
+        None
+    }
+}
+
+impl Next for bool {
+    const MIN: Self = false;
+
+    fn next(self) -> Option<Self> {
+        (!self).then_some(true)
+    }
+}
+
+impl Next for u8 {
+    const MIN: Self = 0;
+
+    fn next(self) -> Option<Self> {
+        self.checked_add(1)
+    }
+}
+
+impl Next for u32 {
+    const MIN: Self = 0;
+
+    fn next(self) -> Option<Self> {
+        self.checked_add(1)
+    }
+}
+
+impl Next for f32 {
+    const MIN: Self = f32::NEG_INFINITY;
+
+    fn next(self) -> Option<Self> {
+        (self != f32::INFINITY).then(|| self.next_up())
+    }
+}
+
+/// Extension trait for [`IRect`]. Adds helpers.
 pub trait RectExt {
     /// Like `contains`, but excludes the end bounds of the rectangle
     fn contains_exclusive(self, point: IVec2) -> bool;

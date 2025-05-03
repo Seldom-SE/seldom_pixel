@@ -245,19 +245,18 @@ impl<L: PxLayer> PxFilterLayers<L> {
 }
 
 #[derive(Resource, Deref)]
-struct InsertDefaultPxFilterLayers(Box<dyn Fn(&mut EntityWorldMut) + Send + Sync>);
+struct InsertDefaultPxFilterLayers(Box<dyn Fn(bool, &mut EntityWorldMut) + Send + Sync>);
 
 impl InsertDefaultPxFilterLayers {
     fn new<L: PxLayer>() -> Self {
-        Self(Box::new(|entity| {
-            entity.insert_if_new(PxFilterLayers::<L>::default());
+        Self(Box::new(|clip, entity| {
+            entity.insert_if_new(PxFilterLayers::Single {
+                layer: L::default(),
+                clip,
+            });
         }))
     }
 }
-
-#[derive(Component, Default)]
-#[component(on_add = insert_default_px_filter_layers)]
-pub(crate) struct DefaultPxFilterLayers;
 
 fn insert_default_px_filter_layers(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
     world.commands().queue(move |world: &mut World| {
@@ -265,10 +264,27 @@ fn insert_default_px_filter_layers(mut world: DeferredWorld, entity: Entity, _: 
             .remove_resource::<InsertDefaultPxFilterLayers>()
             .unwrap();
         if let Ok(mut entity) = world.get_entity_mut(entity) {
-            insert_default_px_filter_layers(entity.remove::<DefaultPxFilterLayers>());
+            if let Some(default) = entity.get::<DefaultPxFilterLayers>() {
+                insert_default_px_filter_layers(
+                    default.clip,
+                    entity.remove::<DefaultPxFilterLayers>(),
+                );
+            }
         }
         world.insert_resource(insert_default_px_filter_layers);
     })
+}
+
+#[derive(Component)]
+#[component(on_add = insert_default_px_filter_layers)]
+pub(crate) struct DefaultPxFilterLayers {
+    pub(crate) clip: bool,
+}
+
+impl Default for DefaultPxFilterLayers {
+    fn default() -> Self {
+        Self { clip: true }
+    }
 }
 
 pub(crate) type FilterComponents<L> = (

@@ -175,7 +175,7 @@ impl RenderAsset for PxTypeface {
 }
 
 /// Spawns text to be rendered on-screen
-#[derive(Component, Default, Clone, Debug)]
+#[derive(Component, Default, Clone, Debug, Reflect)]
 #[require(PxPosition, PxAnchor, DefaultLayer, PxCanvas, Visibility)]
 pub struct PxText {
     /// The contents of the text
@@ -183,7 +183,6 @@ pub struct PxText {
     /// The typeface
     pub typeface: Handle<PxTypeface>,
     pub line_breaks: Vec<u32>,
-    pub computed_size: UVec2,
 }
 
 impl PxText {
@@ -192,7 +191,6 @@ impl PxText {
             value: value.into(),
             typeface,
             line_breaks: Vec::new(),
-            computed_size: UVec2::ZERO,
         }
     }
 }

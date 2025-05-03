@@ -138,7 +138,7 @@ static ASSET_PALETTE_INITIALIZED: AtomicBool = AtomicBool::new(false);
 /// Notifies after `ASSET_PALETTE_INITIALIZED` is set
 static ASSET_PALETTE_JUST_INITIALIZED: Event = Event::new();
 
-#[allow(static_mut_refs)]
+#[expect(static_mut_refs)]
 pub(crate) async fn asset_palette() -> &'static Palette {
     if ASSET_PALETTE_INITIALIZED.load(Ordering::SeqCst) {
         // SAFETY: Checked above

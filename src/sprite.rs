@@ -4,6 +4,7 @@ use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
+    math::{ivec2, uvec2},
     render::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
         sync_component::SyncComponentPlugin,
@@ -116,7 +117,7 @@ impl Animation for PxSpriteAsset {
 
     fn draw(
         &self,
-        _: (),
+        (): (),
         image: &mut PxImageSliceMut<impl Pixel>,
         frame: impl Fn(UVec2) -> usize,
         filter: impl Fn(u8) -> u8,
@@ -124,9 +125,9 @@ impl Animation for PxSpriteAsset {
         let width = self.data.width();
         let image_width = image.image_width();
         image.for_each_mut(|slice_i, image_i, pixel| {
-            if let Some(Some(value)) = self.data.get_pixel(IVec2::new(
+            if let Some(Some(value)) = self.data.get_pixel(ivec2(
                 (slice_i % width) as i32,
-                ((frame(UVec2::new(
+                ((frame(uvec2(
                     (image_i % image_width) as u32,
                     (image_i / image_width) as u32,
                 )) * self.frame_size

@@ -65,9 +65,9 @@ to develop and maintain. Anyway, limitations can incite creativity.
 
 ## Future Work
 
-- [ ] Advanced UI, good enough to build a UI library on
+- [x] Advanced UI, good enough to build a UI library on
 - [ ] More advanced particle system
-- [ ] More shape primitives
+- [x] More shape primitives
 - [ ] Spatial filters that can filter defined areas, and apply their animations over space
       instead of time. For effects like lighting and bloom.
 - [x] Make the rendering happen in the render world

@@ -9,7 +9,7 @@
 #![warn(missing_docs)]
 
 pub mod animation;
-mod button;
+pub mod blink;
 mod camera;
 pub mod cursor;
 pub mod filter;
@@ -21,9 +21,11 @@ pub mod math;
 pub mod palette;
 #[cfg(feature = "particle")]
 mod particle;
+mod picking;
 mod pixel;
 pub mod position;
 pub mod prelude;
+mod rect;
 pub mod screen;
 pub mod set;
 pub mod sprite;
@@ -60,22 +62,28 @@ impl<L: PxLayer> PxPlugin<L> {
 impl<L: PxLayer> Plugin for PxPlugin<L> {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            animation::plug,
-            button::plug,
-            camera::plug,
-            cursor::plug,
-            filter::plug::<L>,
-            #[cfg(feature = "line")]
-            line::plug::<L>,
-            map::plug::<L>,
-            palette::plug(self.palette_path.clone()),
-            position::plug::<L>,
-            screen::Plug::<L>::new(self.screen_size),
-            sprite::plug::<L>,
-            text::plug::<L>,
-            ui::plug,
-            #[cfg(feature = "particle")]
-            (RngPlugin::default(), particle::plug::<L>),
+            (
+                animation::plug,
+                blink::plug,
+                camera::plug,
+                cursor::plug,
+                palette::plug(self.palette_path.clone()),
+                picking::plug::<L>,
+                position::plug::<L>,
+                screen::Plug::<L>::new(self.screen_size),
+            ),
+            (
+                filter::plug::<L>,
+                #[cfg(feature = "line")]
+                line::plug::<L>,
+                map::plug::<L>,
+                rect::plug::<L>,
+                sprite::plug::<L>,
+                text::plug::<L>,
+                ui::plug::<L>,
+                #[cfg(feature = "particle")]
+                (RngPlugin::default(), particle::plug::<L>),
+            ),
         ));
     }
 }
