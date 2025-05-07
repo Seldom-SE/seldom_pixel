@@ -1,5 +1,7 @@
 // In this game, you can press buttons
 
+use std::fmt::Debug;
+
 use bevy::prelude::*;
 use seldom_pixel::prelude::*;
 
@@ -17,12 +19,19 @@ fn main() {
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, init)
-        .add_systems(Update, interact_buttons)
         .run();
 }
 
-fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2d);
+fn set_sprite<E: Clone + Reflect + Debug>(
+    path: &'static str,
+) -> impl Fn(Trigger<Pointer<E>>, Query<&mut PxSprite>, Res<AssetServer>) {
+    move |trigger, mut sprites, assets| {
+        **sprites.get_mut(trigger.entity()).unwrap() = assets.load(path);
+    }
+}
+
+fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut cmd: Commands) {
+    cmd.spawn(Camera2d);
 
     let idle = assets.load("filter/invert.px_filter.png");
 
@@ -33,49 +42,20 @@ fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut commands: Co
         right_click: idle,
     };
 
-    let button_idle = assets.load("sprite/button_idle.px_sprite.png");
+    let idle_path = "sprite/button_idle.px_sprite.png";
+    let hover_path = "sprite/button_hover.px_sprite.png";
 
-    // Sprite-based button
-    commands.spawn((
-        PxSprite(button_idle.clone()),
-        PxPosition(IVec2::new(8, 4)),
-        PxInteractBounds::from(UVec2::new(8, 4)),
-        PxButtonSprite {
-            idle: button_idle.clone(),
-            hover: assets.load("sprite/button_hover.px_sprite.png"),
-            click: assets.load("sprite/button_click.px_sprite.png"),
-        },
-        Button,
-    ));
-
-    // Filter-based button
-    commands.spawn((
-        PxSprite(button_idle),
-        PxPosition(IVec2::new(8, 12)),
-        PxInteractBounds::from(UVec2::new(8, 4)),
-        PxButtonFilter {
-            idle: assets.load("filter/identity.px_filter.png"),
-            hover: assets.load("filter/hover.px_filter.png"),
-            click: assets.load("filter/click.px_filter.png"),
-        },
-        Button,
-    ));
-}
-
-#[derive(Component)]
-struct Button;
-
-fn interact_buttons(
-    hovers: Query<(), (With<Button>, Added<PxHover>)>,
-    clicks: Query<(), (With<Button>, Added<PxClick>)>,
-) {
-    for _ in &hovers {
-        info!("Hover!");
-    }
-
-    for _ in &clicks {
-        info!("Click!");
-    }
+    PxContainer::build(
+        PxSprite::build(assets.load(idle_path))
+            .observe(set_sprite::<Over>(hover_path))
+            .observe(set_sprite::<Out>(idle_path))
+            .observe(set_sprite::<Down>("sprite/button_click.px_sprite.png"))
+            .observe(set_sprite::<Up>(hover_path))
+            .observe(|_: Trigger<Pointer<Click>>| {
+                info!("Click!");
+            }),
+    )
+    .spawn(&mut cmd);
 }
 
 #[px_layer]

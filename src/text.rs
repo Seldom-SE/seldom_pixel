@@ -182,10 +182,13 @@ pub struct PxText {
     pub value: String,
     /// The typeface
     pub typeface: Handle<PxTypeface>,
+    /// The indices of characters after which a line break will be inserted. Should be strictly
+    /// ascending. This is automatically computed for UI.
     pub line_breaks: Vec<u32>,
 }
 
 impl PxText {
+    /// Creates a [`PxText`] with no line breaks
     pub fn new(value: impl Into<String>, typeface: Handle<PxTypeface>) -> Self {
         Self {
             value: value.into(),

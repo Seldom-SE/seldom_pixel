@@ -13,14 +13,11 @@ pub enum PxSet {
     UpdateCursorPosition,
 
     // `PostUpdate`
-    /// New buttons have assets added to them. In [`CoreSet::PostUpdate`].
-    AddButtonAssets,
-    /// Button assets are updated. In [`CoreSet::PostUpdate`].
-    UpdateButtonAssets,
     /// Animations are completed. In [`CoreSet::PostUpdate`].
     FinishAnimations,
     /// Update particle emitters. In [`CoreSet::PostUpdate`].
     #[cfg(feature = "particle")]
     UpdateEmitters,
+    /// Picking backend runs. In [`CoreSet::PostUpdate`].
     Picking,
 }

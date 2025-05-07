@@ -10,6 +10,7 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
         .add_systems(ExtractSchedule, extract_rects::<L>);
 }
 
+/// A rectangle in which a filter is applied
 #[derive(Component, Deref, DerefMut, Clone, Copy, Reflect)]
 #[require(
     PxFilter,

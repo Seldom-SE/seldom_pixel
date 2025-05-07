@@ -20,18 +20,18 @@ fn main() {
         .run();
 }
 
-fn init(assets: Res<AssetServer>, mut commands: Commands) {
-    commands.spawn(Camera2d);
+fn init(assets: Res<AssetServer>, mut cmd: Commands) {
+    cmd.spawn(Camera2d);
 
-    // Spawn text
-    commands.spawn((
-        PxText {
-            value: "THE MITOCHONDRIA IS THE POWERHOUSE OF THE CELL".to_string(),
-            typeface: assets.load("typeface/typeface.px_typeface.png"),
-        },
-        PxRect(IRect::new(0, 0, 64, 64)),
-        PxFilter(assets.load("filter/dim.px_filter.png")),
-    ));
+    // Spawn text. Since we want the text wrap automatically, we wrap it in UI.
+    PxContainer::build(
+        PxText::build(
+            "THE MITOCHONDRIA IS THE POWERHOUSE OF THE CELL",
+            assets.load("typeface/typeface.px_typeface.png"),
+        )
+        .filter(assets.load("filter/dim.px_filter.png")),
+    )
+    .spawn(&mut cmd);
 }
 
 #[px_layer]

@@ -1,6 +1,6 @@
 // In this program, animated text is spawned
 
-use bevy::{math::ivec2, prelude::*};
+use bevy::prelude::*;
 use seldom_pixel::prelude::*;
 
 fn main() {
@@ -28,7 +28,7 @@ fn init(assets: Res<AssetServer>, mut cmd: Commands) {
     PxRow::build()
         .vertical()
         .entry(
-            PxText::new("LOOPED ANIMATION ⭐🙂⭐", typeface.clone()).animation(PxAnimation {
+            PxText::build("LOOPED ANIMATION ⭐🙂⭐", typeface.clone()).animation(PxAnimation {
                 // Use millis_per_animation to have each character loop at the same time
                 duration: PxAnimationDuration::millis_per_frame(333),
                 on_finish: PxAnimationFinishBehavior::Loop,
@@ -37,7 +37,7 @@ fn init(assets: Res<AssetServer>, mut cmd: Commands) {
         )
         .entry(PxRowSlot::build(PxSpace).stretch())
         .entry(
-            PxText::new("DITHERED ANIMATION 🙂⭐🙂", typeface).animation(PxAnimation {
+            PxText::build("DITHERED ANIMATION 🙂⭐🙂", typeface).animation(PxAnimation {
                 // Use millis_per_animation to have each character loop at the same time
                 duration: PxAnimationDuration::millis_per_frame(333),
                 on_finish: PxAnimationFinishBehavior::Loop,

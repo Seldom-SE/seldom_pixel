@@ -1,3 +1,20 @@
+//! `seldom_pixel`'s UI system. The core building blocks of UI are here, but they are bare-bones.
+//! For example, there is a [`PxTextField`] component, but if you spawn it on its own, the text
+//! field won't have a background, and you won't even be able to type in it. Instead, you should
+//! make your own helper functions that compose UI builders together. For a text field, you could
+//! use a [`PxStack`] with a white [`PxRect`] background and a [`PxTextField`], and add an observer
+//! on [`PxRect`] that sets [`Focus`] to the text field.
+//!
+//! The UI is bare-bones by design; `seldom_pixel` isn't meant to go far beyond the scope of a
+//! graphics library. It means you're forced to make all of the decisions about the appearance and
+//! behavior of your game's UI, for better and worse. The initial cost of this UI is a bit higher
+//! than ideal. Make yourself some helpers and stay organized, and it won't be too bad.
+//!
+//! For more information, browse this module and see the `ui` example.
+
+// TODO UI example
+// TODO Feature parity between widgets
+
 use std::time::Duration;
 
 use bevy::{
@@ -580,9 +597,45 @@ impl PxUiBuilder<()> for PxRectBuilder {
     }
 }
 
-impl PxUiBuilder<()> for PxSprite {
+impl PxSprite {
+    pub fn build(sprite: Handle<PxSpriteAsset>) -> PxSpriteBuilder {
+        PxSpriteBuilder {
+            sprite,
+            filter: None,
+            animation: None,
+        }
+    }
+}
+
+pub struct PxSpriteBuilder {
+    pub sprite: Handle<PxSpriteAsset>,
+    pub filter: Option<Handle<PxFilterAsset>>,
+    pub animation: Option<PxAnimation>,
+}
+
+impl PxSpriteBuilder {
+    pub fn filter(mut self, filter: Handle<PxFilterAsset>) -> Self {
+        self.filter = Some(filter);
+        self
+    }
+
+    pub fn animation(mut self, animation: PxAnimation) -> Self {
+        self.animation = Some(animation);
+        self
+    }
+}
+
+impl PxUiBuilder<()> for PxSpriteBuilder {
     fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.try_insert(*self);
+        entity.try_insert(PxSprite(self.sprite));
+
+        if let Some(filter) = self.filter {
+            entity.try_insert(PxFilter(filter));
+        }
+
+        if let Some(animation) = self.animation {
+            entity.try_insert(animation);
+        }
     }
 
     fn erase(self) -> impl PxUiBuilder<()>
@@ -599,6 +652,7 @@ impl PxText {
             value: value.into(),
             typeface,
             filter: None,
+            animation: None,
         }
     }
 }
@@ -607,11 +661,17 @@ pub struct PxTextBuilder {
     pub value: String,
     pub typeface: Handle<PxTypeface>,
     pub filter: Option<Handle<PxFilterAsset>>,
+    pub animation: Option<PxAnimation>,
 }
 
 impl PxTextBuilder {
     pub fn filter(mut self, filter: Handle<PxFilterAsset>) -> Self {
         self.filter = Some(filter);
+        self
+    }
+
+    pub fn animation(mut self, animation: PxAnimation) -> Self {
+        self.animation = Some(animation);
         self
     }
 }
@@ -622,6 +682,10 @@ impl PxUiBuilder<()> for PxTextBuilder {
 
         if let Some(filter) = self.filter {
             entity.try_insert(PxFilter(filter));
+        }
+
+        if let Some(animation) = self.animation {
+            entity.try_insert(animation);
         }
     }
 
