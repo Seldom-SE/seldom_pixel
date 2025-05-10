@@ -206,19 +206,27 @@ impl<P: Pixel> PxImageSliceMut<'_, P> {
             });
     }
 
+    pub(crate) fn contains_pixel(&self, position: IVec2) -> bool {
+        IRect {
+            min: IVec2::splat(0),
+            max: IVec2::new(self.width as i32, self.image.len() as i32),
+        }
+        .contains_exclusive(position - self.slice.min)
+            && self.slice.contains_exclusive(position)
+    }
+
     pub(crate) fn pixel_mut(&mut self, position: IVec2) -> &mut P {
         &mut self.image[(self.slice.min.y + position.y) as usize]
             [(self.slice.min.x + position.x) as usize]
     }
 
     pub(crate) fn get_pixel_mut(&mut self, position: IVec2) -> Option<&mut P> {
-        (IRect {
-            min: IVec2::splat(0),
-            max: IVec2::new(self.width as i32, self.image.len() as i32),
-        }
-        .contains_exclusive(position + self.slice.min)
-            && self.slice.contains_exclusive(position))
-        .then(|| self.pixel_mut(position))
+        self.contains_pixel(position)
+            .then(|| self.pixel_mut(position))
+    }
+
+    pub(crate) fn image_pixel_mut(&mut self, position: IVec2) -> &mut P {
+        &mut self.image[position.y as usize][position.x as usize]
     }
 
     #[expect(unused)]
@@ -236,6 +244,14 @@ impl<P: Pixel> PxImageSliceMut<'_, P> {
 
     pub(crate) fn image_width(&self) -> usize {
         self.width
+    }
+
+    pub(crate) fn image_height(&self) -> usize {
+        self.image.len()
+    }
+
+    pub(crate) fn offset(&self) -> IVec2 {
+        self.slice.min
     }
 
     pub(crate) fn slice_mut(&mut self, slice: IRect) -> PxImageSliceMut<P> {

@@ -1,6 +1,10 @@
 use std::time::Duration;
 
-use bevy::render::{sync_world::RenderEntity, Extract, RenderApp};
+use bevy::{
+    math::{ivec2, uvec2},
+    render::{sync_world::RenderEntity, Extract, RenderApp},
+    utils::HashSet,
+};
 use line_drawing::Bresenham;
 
 use crate::{
@@ -40,7 +44,7 @@ impl Spatial for PxLine {
 }
 
 impl Animation for (&PxLine, &PxFilterAsset) {
-    type Param = IVec2;
+    type Param = (IVec2, bool);
 
     fn frame_count(&self) -> usize {
         let (_, PxFilterAsset(filter)) = self;
@@ -49,22 +53,34 @@ impl Animation for (&PxLine, &PxFilterAsset) {
 
     fn draw(
         &self,
-        param: Self::Param,
+        (offset, invert): Self::Param,
         image: &mut PxImageSliceMut<impl Pixel>,
         frame: impl Fn(UVec2) -> usize,
         _: impl Fn(u8) -> u8,
     ) {
         let (line, PxFilterAsset(filter)) = self;
-        for (start, end) in line.iter().zip(line.iter().skip(1)) {
-            let start = *start + param;
-            let end = *end + param;
+        let mut poses = HashSet::new();
 
-            for (x, y) in Bresenham::new(start.into(), end.into()) {
-                if let Some(pixel) = image.get_pixel_mut((x, y).into()) {
-                    if let Some(pixel) = pixel.get_value_mut() {
-                        *pixel = filter.pixel(IVec2::new(
+        for (start, end) in line.iter().zip(line.iter().skip(1)) {
+            let start = *start + offset;
+            let end = *end + offset;
+
+            for pos in Bresenham::new(start.into(), end.into()) {
+                poses.insert(IVec2::from(pos));
+            }
+        }
+
+        let offset = image.offset();
+
+        for x in 0..image.image_width() as i32 {
+            for y in 0..image.image_height() as i32 {
+                let pos = ivec2(x, y);
+
+                if poses.contains(&(pos - offset)) != invert {
+                    if let Some(pixel) = image.image_pixel_mut(pos).get_value_mut() {
+                        *pixel = filter.pixel(ivec2(
                             *pixel as i32,
-                            frame(UVec2::new(x as u32, y as u32)) as i32,
+                            frame(uvec2(x as u32, y as u32)) as i32,
                         ));
                     }
                 }
@@ -85,13 +101,14 @@ pub(crate) type LineComponents<L> = (
     &'static PxFilterLayers<L>,
     &'static PxCanvas,
     Option<&'static PxAnimation>,
+    Has<PxInvertMask>,
 );
 
 fn extract_lines<L: PxLayer>(
     lines: Extract<Query<(LineComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((line, filter, layers, &canvas, animation), visibility, id) in &lines {
+    for ((line, filter, layers, &canvas, animation, invert), visibility, id) in &lines {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -101,10 +118,16 @@ fn extract_lines<L: PxLayer>(
 
         entity.insert((line.clone(), filter.clone(), layers.clone(), canvas));
 
-        if let Some(animation) = animation {
-            entity.insert(*animation);
+        if let Some(&animation) = animation {
+            entity.insert(animation);
         } else {
             entity.remove::<PxAnimation>();
+        }
+
+        if invert {
+            entity.insert(PxInvertMask);
+        } else {
+            entity.remove::<PxInvertMask>();
         }
     }
 }
@@ -112,6 +135,7 @@ fn extract_lines<L: PxLayer>(
 pub(crate) fn draw_line(
     line: &PxLine,
     filter: &PxFilterAsset,
+    invert: bool,
     image: &mut PxImageSliceMut<impl Pixel>,
     canvas: PxCanvas,
     animation: Option<(
@@ -126,10 +150,13 @@ pub(crate) fn draw_line(
     // TODO Make an `animated_line` example
     draw_animation(
         &(line, filter),
-        match canvas {
-            PxCanvas::World => -*camera,
-            PxCanvas::Camera => IVec2::ZERO,
-        },
+        (
+            match canvas {
+                PxCanvas::World => -*camera,
+                PxCanvas::Camera => IVec2::ZERO,
+            },
+            invert,
+        ),
         image,
         animation,
         [],

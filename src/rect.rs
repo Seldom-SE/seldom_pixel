@@ -1,4 +1,7 @@
-use bevy::render::{sync_world::RenderEntity, Extract, RenderApp};
+use bevy::{
+    math::{ivec2, uvec2},
+    render::{sync_world::RenderEntity, Extract, RenderApp},
+};
 
 use crate::{
     animation::Animation, filter::DefaultPxFilterLayers, image::PxImageSliceMut, pixel::Pixel,
@@ -22,8 +25,14 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
 )]
 pub struct PxRect(pub UVec2);
 
+impl Default for PxRect {
+    fn default() -> Self {
+        Self(UVec2::ONE)
+    }
+}
+
 impl Animation for (PxRect, &PxFilterAsset) {
-    type Param = ();
+    type Param = bool;
 
     fn frame_count(&self) -> usize {
         self.1.frame_count()
@@ -31,12 +40,26 @@ impl Animation for (PxRect, &PxFilterAsset) {
 
     fn draw(
         &self,
-        (): (),
+        invert: bool,
         image: &mut PxImageSliceMut<impl Pixel>,
         frame: impl Fn(UVec2) -> usize,
-        filter: impl Fn(u8) -> u8,
+        filter_fn: impl Fn(u8) -> u8,
     ) {
-        self.1.draw((), image, frame, filter);
+        let (_, PxFilterAsset(filter)) = self;
+
+        for x in 0..image.image_width() as i32 {
+            for y in 0..image.image_height() as i32 {
+                let pos = ivec2(x, y);
+                if image.contains_pixel(pos) != invert {
+                    if let Some(pixel) = image.image_pixel_mut(pos).get_value_mut() {
+                        *pixel = filter_fn(filter.pixel(ivec2(
+                            *pixel as i32,
+                            frame(uvec2(x as u32, y as u32)) as i32,
+                        )));
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -54,13 +77,16 @@ pub(crate) type RectComponents<L> = (
     &'static PxAnchor,
     &'static PxCanvas,
     Option<&'static PxAnimation>,
+    Has<PxInvertMask>,
 );
 
 fn extract_rects<L: PxLayer>(
     rects: Extract<Query<(RectComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((&rect, filter, layers, &pos, &anchor, &canvas, animation), visibility, id) in &rects {
+    for ((&rect, filter, layers, &pos, &anchor, &canvas, animation, invert), visibility, id) in
+        &rects
+    {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -70,10 +96,16 @@ fn extract_rects<L: PxLayer>(
 
         entity.insert((rect, filter.clone(), layers.clone(), pos, anchor, canvas));
 
-        if let Some(animation) = animation {
-            entity.insert(*animation);
+        if let Some(&animation) = animation {
+            entity.insert(animation);
         } else {
             entity.remove::<PxAnimation>();
+        }
+
+        if invert {
+            entity.insert(PxInvertMask);
+        } else {
+            entity.remove::<PxInvertMask>();
         }
     }
 }

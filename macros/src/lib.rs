@@ -27,7 +27,7 @@ pub fn px_layer(
             #[derive(
                 ::bevy::render::extract_component::ExtractComponent,
                 ::bevy::prelude::Component,
-                ::seldom_pixel::prelude::Next,
+                ::seldom_pixel::math::Next,
                 ::std::cmp::Ord,
                 ::std::cmp::PartialOrd,
                 ::std::cmp::Eq,
@@ -36,6 +36,7 @@ pub fn px_layer(
                 ::std::default::Default,
                 ::std::fmt::Debug,
             )]
+            #[next(path = ::seldom_pixel::math::Next)]
         }
     });
 

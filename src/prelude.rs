@@ -19,7 +19,7 @@ pub use crate::{
     },
     camera::{PxCamera, PxCanvas},
     cursor::PxCursor,
-    filter::{PxFilter, PxFilterAsset, PxFilterLayers},
+    filter::{PxFilter, PxFilterAsset, PxFilterLayers, PxInvertMask},
     map::{PxMap, PxTile, PxTiles, PxTileset},
     math::{Diagonal, Orthogonal},
     position::{PxAnchor, PxLayer, PxPosition, PxSubPosition, PxVelocity},
@@ -29,12 +29,12 @@ pub use crate::{
     text::{PxText, PxTypeface},
     ui::{
         PxContainer, PxContainerBuilder, PxGrid, PxGridBuilder, PxKeyField, PxKeyFieldBuilder,
-        PxKeyFieldUpdate, PxRectBuilder, PxRow, PxRowBuilder, PxRowSlot, PxSlotBuilder, PxSpace,
-        PxSpriteBuilder, PxStack, PxStackBuilder, PxTextBuilder, PxTextField, PxTextFieldBuilder,
-        PxTextFieldUpdate, PxUiBuilder,
+        PxKeyFieldUpdate, PxMinSize, PxMinSizeBuilder, PxRectBuilder, PxRow, PxRowBuilder,
+        PxRowSlot, PxScroll, PxScrollBuilder, PxSlotBuilder, PxSpace, PxSpriteBuilder, PxStack,
+        PxStackBuilder, PxTextBuilder, PxTextField, PxTextFieldBuilder, PxTextFieldUpdate,
+        PxUiBuilder,
     },
     PxPlugin,
 };
 
-pub use next::Next;
 pub use seldom_pixel_macros::px_layer;

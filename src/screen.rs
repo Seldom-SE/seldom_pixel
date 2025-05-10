@@ -475,23 +475,24 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
         }
 
-        for (&rect, filter, layers, &pos, &anchor, &canvas, animation) in
+        for (&rect, filter, layers, &pos, &anchor, &canvas, animation, invert) in
             self.rects.iter_manual(world)
         {
             for (layer, clip) in match layers {
                 PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
+                // TODO Need to do this after all layers have been extracted
+                PxFilterLayers::Range(range) => layer_contents
+                    .keys()
+                    .filter(|layer| range.contains(layer))
+                    .map(|layer| (layer.clone(), true))
+                    .collect(),
                 PxFilterLayers::Many(layers) => {
                     layers.iter().map(|layer| (layer.clone(), true)).collect()
                 }
-                PxFilterLayers::Select(select_fn) => layer_contents
-                    .keys()
-                    .filter(|layer| select_fn(layer))
-                    .map(|layer| (layer.clone(), true))
-                    .collect(),
             }
             .into_iter()
             {
-                let rect = (rect, filter, pos, anchor, canvas, animation);
+                let rect = (rect, filter, pos, anchor, canvas, animation, invert);
 
                 if let Some((_, _, _, clip_rects, _, _, over_rects, _, _)) =
                     layer_contents.get_mut(&layer)
@@ -533,19 +534,19 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         }
 
         #[cfg(feature = "line")]
-        for (line, filter, layers, &canvas, animation) in self.lines.iter_manual(world) {
-            let line = (line, filter, canvas, animation);
+        for (line, filter, layers, &canvas, animation, invert) in self.lines.iter_manual(world) {
+            let line = (line, filter, canvas, animation, invert);
 
             for (layer, clip) in match layers {
                 PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
+                PxFilterLayers::Range(range) => layer_contents
+                    .keys()
+                    .filter(|layer| range.contains(layer))
+                    .map(|layer| (layer.clone(), true))
+                    .collect(),
                 PxFilterLayers::Many(layers) => {
                     layers.iter().map(|layer| (layer.clone(), true)).collect()
                 }
-                PxFilterLayers::Select(select_fn) => layer_contents
-                    .keys()
-                    .filter(|layer| select_fn(layer))
-                    .map(|layer| (layer.clone(), true))
-                    .collect(),
             }
             .into_iter()
             {
@@ -593,14 +594,14 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
             for (layer, clip) in match layers {
                 PxFilterLayers::Single { layer, clip } => vec![(layer.clone(), *clip)],
+                PxFilterLayers::Range(range) => layer_contents
+                    .keys()
+                    .filter(|layer| range.contains(layer))
+                    .map(|layer| (layer.clone(), true))
+                    .collect(),
                 PxFilterLayers::Many(layers) => {
                     layers.iter().map(|layer| (layer.clone(), true)).collect()
                 }
-                PxFilterLayers::Select(select_fn) => layer_contents
-                    .keys()
-                    .filter(|layer| select_fn(layer))
-                    .map(|layer| (layer.clone(), true))
-                    .collect(),
             }
             .into_iter()
             {
@@ -933,11 +934,11 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 }
             }
 
-            for (rect, filter, pos, anchor, canvas, animation) in clip_rects {
+            for (rect, filter, pos, anchor, canvas, animation, invert) in clip_rects {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_spatial(
                         &(rect, filter),
-                        (),
+                        invert,
                         &mut layer_slice,
                         pos,
                         anchor,
@@ -951,11 +952,12 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
             // This is where I draw the line! /j
             #[cfg(feature = "line")]
-            for (line, filter, canvas, animation) in clip_lines {
+            for (line, filter, canvas, animation, invert) in clip_lines {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_line(
                         line,
                         filter,
+                        invert,
                         &mut layer_slice,
                         canvas,
                         copy_animation_params(animation, last_update),
@@ -976,11 +978,11 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
             image_slice.draw(&layer_image);
 
-            for (rect, filter, pos, anchor, canvas, animation) in over_rects {
+            for (rect, filter, pos, anchor, canvas, animation, invert) in over_rects {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_spatial(
                         &(rect, filter),
-                        (),
+                        invert,
                         &mut image_slice,
                         pos,
                         anchor,
@@ -993,11 +995,12 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
 
             #[cfg(feature = "line")]
-            for (line, filter, canvas, animation) in over_lines {
+            for (line, filter, canvas, animation, invert) in over_lines {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_line(
                         line,
                         filter,
+                        invert,
                         &mut image_slice,
                         canvas,
                         copy_animation_params(animation, last_update),

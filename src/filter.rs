@@ -1,12 +1,13 @@
 //! Filtering
 
-use std::time::Duration;
+use std::{ops::RangeInclusive, time::Duration};
 
 use anyhow::{Error, Result};
 use bevy::{
     asset::{io::Reader, AssetLoader, LoadContext},
     ecs::{component::ComponentId, world::DeferredWorld},
     image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
+    math::uvec2,
     render::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
         sync_component::SyncComponentPlugin,
@@ -24,6 +25,9 @@ use crate::{
     prelude::*,
 };
 
+pub const TRANSPARENT_FILTER: Handle<PxFilterAsset> =
+    Handle::weak_from_u128(0x798C_57A4_A83C_5DD6_8FA6_1426_E31A_84CA);
+
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.add_plugins((
         RenderAssetPlugin::<PxFilterAsset>::default(),
@@ -32,9 +36,17 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     .init_asset::<PxFilterAsset>()
     .init_asset_loader::<PxFilterLoader>()
     .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
-    .sub_app_mut(RenderApp)
-    .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
-    .add_systems(ExtractSchedule, extract_filters::<L>);
+    .world_mut()
+    .resource_mut::<Assets<PxFilterAsset>>()
+    // .insert(TRANSPARENT_FILTER.id(), PxFilterAsset([0; 256]));
+    .insert(
+        TRANSPARENT_FILTER.id(),
+        PxFilterAsset(PxImage::empty(uvec2(16, 16))),
+    );
+
+    app.sub_app_mut(RenderApp)
+        .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
+        .add_systems(ExtractSchedule, extract_filters::<L>);
 }
 
 #[derive(Default)]
@@ -182,25 +194,6 @@ impl AnimatedAssetComponent for PxFilter {
     }
 }
 
-/// Function that can be used as a layer selection function in `PxFilterLayers`. Automatically
-/// implemented for types with the bounds and `Clone`.
-pub trait SelectLayerFn<L: PxLayer>: 'static + Fn(&L) -> bool + Send + Sync {
-    /// Clones into a trait object
-    fn clone(&self) -> Box<dyn SelectLayerFn<L>>;
-}
-
-impl<L: PxLayer, T: 'static + Fn(&L) -> bool + Clone + Send + Sync> SelectLayerFn<L> for T {
-    fn clone(&self) -> Box<dyn SelectLayerFn<L>> {
-        Box::new(Clone::clone(self))
-    }
-}
-
-impl<L: PxLayer> Clone for Box<dyn SelectLayerFn<L>> {
-    fn clone(&self) -> Self {
-        SelectLayerFn::clone(&**self)
-    }
-}
-
 /// Determines which layers a filter appies to
 #[derive(Component, Clone)]
 #[require(PxFilter, Visibility)]
@@ -214,10 +207,9 @@ pub enum PxFilterLayers<L: PxLayer> {
         /// is rendered, including the background color.
         clip: bool,
     },
+    Range(RangeInclusive<L>),
     /// Filter applies to a set list of layers
     Many(Vec<L>),
-    /// Filter applies to layers selected by the given function
-    Select(Box<dyn SelectLayerFn<L>>),
 }
 
 impl<L: PxLayer> Default for PxFilterLayers<L> {
@@ -226,9 +218,9 @@ impl<L: PxLayer> Default for PxFilterLayers<L> {
     }
 }
 
-impl<L: PxLayer, T: 'static + Fn(&L) -> bool + Clone + Send + Sync> From<T> for PxFilterLayers<L> {
-    fn from(t: T) -> Self {
-        Self::Select(Box::new(t))
+impl<L: PxLayer> From<RangeInclusive<L>> for PxFilterLayers<L> {
+    fn from(range: RangeInclusive<L>) -> Self {
+        Self::Range(range)
     }
 }
 
@@ -286,6 +278,9 @@ impl Default for DefaultPxFilterLayers {
         Self { clip: true }
     }
 }
+
+#[derive(Component, Default)]
+pub struct PxInvertMask;
 
 pub(crate) type FilterComponents<L> = (
     &'static PxFilter,

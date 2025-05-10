@@ -17,7 +17,7 @@ particle = ["dep:bevy_turborand"]
 state = ["dep:seldom_state"]
 
 [dependencies]
-next = "0.1.0"
+next = "0.2.0"
 anyhow = "1.0"
 event-listener = "5.3"
 serde = "1.0"

@@ -57,7 +57,7 @@ fn pick<L: PxLayer>(
                         PxFilterLayers::Single { layer, .. } => Some(layer),
                         PxFilterLayers::Many(layers) => layers.iter().max(),
                         // TODO Can't pick rects with this variant
-                        PxFilterLayers::Select(_) => None,
+                        PxFilterLayers::Range(range) => Some(range.end()),
                     }?;
 
                     let depth = if let Some(&depth) = layer_depths.get(layer) {
@@ -87,7 +87,7 @@ fn pick<L: PxLayer>(
 
                     IRect {
                         min: position,
-                        max: position + size.as_ivec2(),
+                        max: position.saturating_add(size.as_ivec2()),
                     }
                     .contains_exclusive(cursor)
                     .then_some((

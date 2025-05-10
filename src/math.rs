@@ -2,6 +2,8 @@
 
 use crate::prelude::*;
 
+pub use next::Next;
+
 /// Extension trait for [`IRect`]. Adds helpers.
 pub trait RectExt {
     /// Like `contains`, but excludes the end bounds of the rectangle
