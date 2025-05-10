@@ -82,16 +82,21 @@ type LoadingAssetPaletteParam<'w> = AssetSingleton<'w, LoadingAssetPaletteHandle
 
 impl Palette {
     /// Create a palette from an [`Image`]
-    pub fn new(palette: &Image) -> Palette {
-        let (colors, _, _) = palette
-            .convert(TextureFormat::Rgba8UnormSrgb)
-            .unwrap()
+    pub fn new(image: &Image) -> Palette {
+        let image = image.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
+
+        if image.data.get(3) != Some(&0) {
+            panic!("palette's top left pixel should be transparent");
+        }
+
+        let (colors, _, _) = image
             .data
             .iter()
+            .skip(4)
             .copied()
             // TODO Should use chunks here
             .fold(
-                (Vec::default(), [0, 0, 0], 0),
+                (vec![[0, 0, 0]], [0, 0, 0], 0),
                 |(mut colors, mut color, i), value| {
                     if i == 3 {
                         if value != 0 {
@@ -107,12 +112,13 @@ impl Palette {
 
         Palette {
             size: UVec2::new(
-                palette.texture_descriptor.size.width,
-                palette.texture_descriptor.size.height,
+                image.texture_descriptor.size.width,
+                image.texture_descriptor.size.height,
             ),
             indices: colors
                 .iter()
                 .enumerate()
+                .skip(1)
                 .map(|(i, color)| (*color, i as u8))
                 .collect(),
             colors,

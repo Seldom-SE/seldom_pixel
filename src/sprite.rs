@@ -18,7 +18,6 @@ use crate::{
     animation::{AnimatedAssetComponent, Animation},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
-    pixel::Pixel,
     position::{DefaultLayer, PxLayer, Spatial},
     prelude::*,
 };
@@ -91,8 +90,7 @@ impl AssetLoader for PxSpriteLoader {
 /// See `assets/sprite/runner.png` for an example of an animated sprite.
 #[derive(Asset, Serialize, Deserialize, Clone, Reflect, Debug)]
 pub struct PxSpriteAsset {
-    // TODO Use 0 for transparency
-    pub(crate) data: PxImage<Option<u8>>,
+    pub(crate) data: PxImage,
     pub(crate) frame_size: usize,
 }
 
@@ -118,14 +116,14 @@ impl Animation for PxSpriteAsset {
     fn draw(
         &self,
         (): (),
-        image: &mut PxImageSliceMut<impl Pixel>,
+        image: &mut PxImageSliceMut,
         frame: impl Fn(UVec2) -> usize,
         filter: impl Fn(u8) -> u8,
     ) {
         let width = self.data.width();
         let image_width = image.image_width();
         image.for_each_mut(|slice_i, image_i, pixel| {
-            if let Some(Some(value)) = self.data.get_pixel(ivec2(
+            if let Some(value) = self.data.get_pixel(ivec2(
                 (slice_i % width) as i32,
                 ((frame(uvec2(
                     (image_i % image_width) as u32,
@@ -134,7 +132,9 @@ impl Animation for PxSpriteAsset {
                     + slice_i)
                     / width) as i32,
             )) {
-                pixel.set_value(filter(value));
+                if value != 0 {
+                    *pixel = filter(value);
+                }
             }
         });
     }

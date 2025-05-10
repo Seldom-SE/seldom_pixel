@@ -20,7 +20,6 @@ use crate::{
     animation::{draw_animation, AnimatedAssetComponent, Animation, PxAnimation},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
-    pixel::Pixel,
     position::PxLayer,
     prelude::*,
 };
@@ -38,7 +37,6 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
     .world_mut()
     .resource_mut::<Assets<PxFilterAsset>>()
-    // .insert(TRANSPARENT_FILTER.id(), PxFilterAsset([0; 256]));
     .insert(
         TRANSPARENT_FILTER.id(),
         PxFilterAsset(PxImage::empty(uvec2(16, 16))),
@@ -92,21 +90,20 @@ impl AssetLoader for PxFilterLoader {
                 frame_visible = false;
             }
 
-            filter.push(
-                if let Some(index) = indices.pixel(
-                    (UVec2::new(
-                        frame_index % frame_filter_width,
-                        frame_index / frame_filter_width,
-                    ) * frame_size
-                        + UVec2::new(frame_pos % frame_size.x, frame_pos / frame_size.x))
-                    .as_ivec2(),
-                ) {
-                    frame_visible = true;
-                    index
-                } else {
-                    0
-                },
+            let index = indices.pixel(
+                (UVec2::new(
+                    frame_index % frame_filter_width,
+                    frame_index / frame_filter_width,
+                ) * frame_size
+                    + UVec2::new(frame_pos % frame_size.x, frame_pos / frame_size.x))
+                .as_ivec2(),
             );
+
+            if index == 0 {
+                frame_visible = true;
+            }
+
+            filter.push(index);
         }
 
         Ok(PxFilterAsset(PxImage::new(filter, frame_area as usize)))
@@ -128,7 +125,7 @@ impl AssetLoader for PxFilterLoader {
 /// of the image. For examples, see the `assets/` directory in this repository. `fade_to_black.png`
 /// is an animated filter.
 #[derive(Asset, Clone, Reflect, Debug)]
-pub struct PxFilterAsset(pub(crate) PxImage<u8>);
+pub struct PxFilterAsset(pub(crate) PxImage);
 
 impl RenderAsset for PxFilterAsset {
     type SourceAsset = Self;
@@ -153,20 +150,18 @@ impl Animation for PxFilterAsset {
     fn draw(
         &self,
         (): (),
-        image: &mut PxImageSliceMut<impl Pixel>,
+        image: &mut PxImageSliceMut,
         frame: impl Fn(UVec2) -> usize,
         _: impl Fn(u8) -> u8,
     ) {
         let Self(filter) = self;
         let width = image.width();
         image.for_each_mut(|index, _, pixel| {
-            if let Some(pixel) = pixel.get_value_mut() {
-                let index = index as u32;
-                *pixel = filter.pixel(IVec2::new(
-                    *pixel as i32,
-                    frame(UVec2::new(index % width, index / width)) as i32,
-                ));
-            }
+            let index = index as u32;
+            *pixel = filter.pixel(IVec2::new(
+                *pixel as i32,
+                frame(UVec2::new(index % width, index / width)) as i32,
+            ));
         })
     }
 }
@@ -321,7 +316,7 @@ pub(crate) fn draw_filter(
         PxAnimationFrameTransition,
         Duration,
     )>,
-    image: &mut PxImageSliceMut<impl Pixel>,
+    image: &mut PxImageSliceMut,
 ) {
     draw_animation(filter, (), image, animation, []);
 }

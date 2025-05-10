@@ -11,7 +11,6 @@ use crate::{
     animation::{draw_animation, Animation},
     filter::DefaultPxFilterLayers,
     image::PxImageSliceMut,
-    pixel::Pixel,
     position::{PxLayer, Spatial},
     prelude::*,
 };
@@ -54,7 +53,7 @@ impl Animation for (&PxLine, &PxFilterAsset) {
     fn draw(
         &self,
         (offset, invert): Self::Param,
-        image: &mut PxImageSliceMut<impl Pixel>,
+        image: &mut PxImageSliceMut,
         frame: impl Fn(UVec2) -> usize,
         _: impl Fn(u8) -> u8,
     ) {
@@ -77,12 +76,11 @@ impl Animation for (&PxLine, &PxFilterAsset) {
                 let pos = ivec2(x, y);
 
                 if poses.contains(&(pos - offset)) != invert {
-                    if let Some(pixel) = image.image_pixel_mut(pos).get_value_mut() {
-                        *pixel = filter.pixel(ivec2(
-                            *pixel as i32,
-                            frame(uvec2(x as u32, y as u32)) as i32,
-                        ));
-                    }
+                    let pixel = image.image_pixel_mut(pos);
+                    *pixel = filter.pixel(ivec2(
+                        *pixel as i32,
+                        frame(uvec2(x as u32, y as u32)) as i32,
+                    ));
                 }
             }
         }
@@ -136,7 +134,7 @@ pub(crate) fn draw_line(
     line: &PxLine,
     filter: &PxFilterAsset,
     invert: bool,
-    image: &mut PxImageSliceMut<impl Pixel>,
+    image: &mut PxImageSliceMut,
     canvas: PxCanvas,
     animation: Option<(
         PxAnimationDirection,

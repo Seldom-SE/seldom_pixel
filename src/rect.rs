@@ -4,8 +4,8 @@ use bevy::{
 };
 
 use crate::{
-    animation::Animation, filter::DefaultPxFilterLayers, image::PxImageSliceMut, pixel::Pixel,
-    position::Spatial, prelude::*,
+    animation::Animation, filter::DefaultPxFilterLayers, image::PxImageSliceMut, position::Spatial,
+    prelude::*,
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
@@ -41,7 +41,7 @@ impl Animation for (PxRect, &PxFilterAsset) {
     fn draw(
         &self,
         invert: bool,
-        image: &mut PxImageSliceMut<impl Pixel>,
+        image: &mut PxImageSliceMut,
         frame: impl Fn(UVec2) -> usize,
         filter_fn: impl Fn(u8) -> u8,
     ) {
@@ -51,12 +51,11 @@ impl Animation for (PxRect, &PxFilterAsset) {
             for y in 0..image.image_height() as i32 {
                 let pos = ivec2(x, y);
                 if image.contains_pixel(pos) != invert {
-                    if let Some(pixel) = image.image_pixel_mut(pos).get_value_mut() {
-                        *pixel = filter_fn(filter.pixel(ivec2(
-                            *pixel as i32,
-                            frame(uvec2(x as u32, y as u32)) as i32,
-                        )));
-                    }
+                    let pixel = image.image_pixel_mut(pos);
+                    *pixel = filter_fn(filter.pixel(ivec2(
+                        *pixel as i32,
+                        frame(uvec2(x as u32, y as u32)) as i32,
+                    )));
                 }
             }
         }

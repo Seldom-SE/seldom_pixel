@@ -650,7 +650,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         let typefaces = world.resource::<RenderAssets<PxTypeface>>();
         let filters = world.resource::<RenderAssets<PxFilterAsset>>();
 
-        let mut layer_image = PxImage::<Option<u8>>::empty_from_image(&image);
+        let mut layer_image = PxImage::empty_from_image(&image);
         let mut image_slice = PxImageSliceMut::from_image_mut(&mut image);
 
         #[allow(unused_variables)]

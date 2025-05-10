@@ -6,7 +6,7 @@ use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::utils::Instant;
 
 use crate::position::Spatial;
-use crate::{image::PxImageSliceMut, pixel::Pixel, prelude::*, set::PxSet};
+use crate::{image::PxImageSliceMut, prelude::*, set::PxSet};
 
 pub(crate) fn plug(app: &mut App) {
     app.add_plugins(ExtractResourcePlugin::<LastUpdate>::default())
@@ -125,7 +125,7 @@ pub(crate) trait Animation {
     fn draw(
         &self,
         param: Self::Param,
-        image: &mut PxImageSliceMut<impl Pixel>,
+        image: &mut PxImageSliceMut,
         frame: impl Fn(UVec2) -> usize,
         filter: impl Fn(u8) -> u8,
     );
@@ -213,7 +213,7 @@ pub(crate) fn animate(
 pub(crate) fn draw_animation<'a, A: Animation>(
     animation: &A,
     param: A::Param,
-    image: &mut PxImageSliceMut<impl Pixel>,
+    image: &mut PxImageSliceMut,
     animation_params: Option<(
         PxAnimationDirection,
         PxAnimationDuration,
@@ -253,7 +253,7 @@ pub(crate) fn draw_animation<'a, A: Animation>(
 pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
     spatial: &A,
     param: <A as Animation>::Param,
-    image: &mut PxImageSliceMut<impl Pixel>,
+    image: &mut PxImageSliceMut,
     position: PxPosition,
     anchor: PxAnchor,
     canvas: PxCanvas,

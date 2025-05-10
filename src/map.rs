@@ -97,7 +97,7 @@ impl AssetLoader for PxTilesetLoader {
                 while tile.len() > tile_area as usize
                     && tile[tile.len() - tile_area as usize..tile.len()]
                         .iter()
-                        .all(|pixel| pixel.is_none())
+                        .all(|&pixel| pixel == 0)
                 {
                     tile.truncate(tile.len() - tile_area as usize);
                 }

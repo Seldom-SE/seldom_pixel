@@ -22,7 +22,6 @@ pub mod palette;
 #[cfg(feature = "particle")]
 mod particle;
 mod picking;
-mod pixel;
 pub mod position;
 pub mod prelude;
 mod rect;

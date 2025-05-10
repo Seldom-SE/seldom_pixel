@@ -9,6 +9,7 @@
 
 // TODO UI example
 // TODO Feature parity between widgets
+// TODO Split into modules
 
 use std::time::Duration;
 
@@ -24,11 +25,7 @@ use bevy::{
 };
 
 use crate::{
-    blink::Blink,
-    filter::{DefaultPxFilterLayers, TRANSPARENT_FILTER},
-    position::Spatial,
-    prelude::*,
-    screen::Screen,
+    blink::Blink, filter::TRANSPARENT_FILTER, position::Spatial, prelude::*, screen::Screen,
     set::PxSet,
 };
 
@@ -690,11 +687,7 @@ pub struct PxRectBuilder {
 
 impl PxUiBuilder<()> for PxRectBuilder {
     fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.try_insert((
-            PxRect(UVec2::ZERO),
-            PxFilter(self.filter),
-            DefaultPxFilterLayers { clip: false },
-        ));
+        entity.try_insert((PxRect(UVec2::ZERO), PxFilter(self.filter)));
     }
 
     fn erase(self) -> impl PxUiBuilder<()> {
