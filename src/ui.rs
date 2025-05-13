@@ -53,8 +53,15 @@ pub trait PxUiBuilder<M>: 'static {
     where
         Self: Sized,
     {
+        self.insert(Visibility::Hidden)
+    }
+
+    fn insert(self, bundle: impl Bundle) -> impl PxUiBuilder<()>
+    where
+        Self: Sized,
+    {
         move |mut entity: EntityCommands| {
-            entity.insert(Visibility::Hidden);
+            entity.insert(bundle);
             self.insert_into(entity);
         }
     }
