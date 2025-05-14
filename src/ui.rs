@@ -192,7 +192,7 @@ impl<M, T: PxUiBuilder<M>, U: PxSlot> PxSlotBuilder<U, M> for T {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct PxSpace;
 
 impl PxUiBuilder<()> for PxSpace {
@@ -208,7 +208,7 @@ impl PxUiBuilder<()> for PxSpace {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[require(Visibility)]
 pub struct PxMinSize {
     pub content: Entity,
@@ -457,18 +457,18 @@ impl PxUiBuilder<()> for PxRowBuilder {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Reflect)]
 pub struct GridRow {
     pub stretch: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub struct GridRows {
     pub rows: Vec<GridRow>,
     pub space_between: u32,
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Reflect)]
 #[require(Visibility)]
 pub struct PxGrid {
     pub width: u32,
@@ -560,7 +560,7 @@ impl PxUiBuilder<()> for PxGridBuilder {
     }
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Reflect)]
 #[require(Visibility)]
 pub struct PxStack {
     pub entries: Vec<Entity>,
@@ -605,7 +605,7 @@ impl PxUiBuilder<()> for PxStackBuilder {
     }
 }
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Reflect)]
 #[require(PxInvertMask, PxRect)]
 pub struct PxScroll {
     pub content: Entity,
@@ -796,8 +796,9 @@ impl PxUiBuilder<()> for PxTextBuilder {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[require(PxText)]
+#[reflect(from_reflect = false)]
 pub struct PxKeyField {
     pub caret: char,
     /// System that creates the text label
@@ -806,6 +807,7 @@ pub struct PxKeyField {
     /// winit `PhysicalKey` to a winit `Key`, so it wouldn't be possible to run this when building
     /// the UI (ie in `PxUiBuilder::dyn_insert_into`) or update all the text if the keyboard layout
     /// changes.
+    #[reflect(ignore)]
     pub key_to_str: SystemId<In<KeyCode>, String>,
     pub cached_text: String,
 }
@@ -946,6 +948,7 @@ fn update_key_fields(
     **focus = None;
 }
 
+#[derive(Reflect)]
 pub struct PxCaret {
     pub state: bool,
     pub timer: Timer,
@@ -960,7 +963,7 @@ impl Default for PxCaret {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[require(PxText)]
 pub struct PxTextField {
     pub cached_text: String,
