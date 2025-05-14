@@ -1833,7 +1833,13 @@ fn layout<L: PxLayer>(
         Query<
             (&L, &PxCanvas, Entity),
             (
-                Or<(With<PxContainer>, With<PxRow>, With<PxGrid>, With<PxStack>)>,
+                Or<(
+                    With<PxMinSize>,
+                    With<PxContainer>,
+                    With<PxRow>,
+                    With<PxGrid>,
+                    With<PxStack>,
+                )>,
                 Without<Parent>,
             ),
         >,

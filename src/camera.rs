@@ -15,7 +15,7 @@ pub(crate) fn plug(app: &mut App) {
 pub struct PxCamera(pub IVec2);
 
 /// Determines whether the entity is locked to the camera
-#[derive(ExtractComponent, Component, Clone, Copy, Default, Debug)]
+#[derive(ExtractComponent, Component, Clone, Copy, Default, Reflect, Debug)]
 pub enum PxCanvas {
     /// The entity is drawn relative to the world, like terrain
     #[default]
