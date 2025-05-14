@@ -2,10 +2,12 @@
 
 use std::fmt::Debug;
 
-use bevy::{
-    ecs::{component::ComponentId, world::DeferredWorld},
-    render::{extract_component::ExtractComponent, RenderApp},
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::{
+    component::{HookContext, Mutable},
+    world::DeferredWorld,
 };
+use bevy_render::{extract_component::ExtractComponent, RenderApp};
 use next::Next;
 
 use crate::{prelude::*, set::PxSet};
@@ -48,9 +50,16 @@ impl From<IVec2> for PxPosition {
 /// or derive/implement the required traits manually. The layers will be rendered in the order
 /// defined by the [`PartialOrd`] implementation. So, lower values will be in the back
 /// and vice versa.
-pub trait PxLayer: ExtractComponent + Component + Next + Ord + Clone + Default + Debug {}
+pub trait PxLayer:
+    ExtractComponent + Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug
+{
+}
 
-impl<L: ExtractComponent + Component + Next + Ord + Clone + Default + Debug> PxLayer for L {}
+impl<
+        L: ExtractComponent + Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug,
+    > PxLayer for L
+{
+}
 
 #[derive(Resource, Deref)]
 struct InsertDefaultLayer(Box<dyn Fn(&mut EntityWorldMut) + Send + Sync>);
@@ -67,10 +76,10 @@ impl InsertDefaultLayer {
 #[component(on_add = insert_default_layer)]
 pub(crate) struct DefaultLayer;
 
-fn insert_default_layer(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
+fn insert_default_layer(mut world: DeferredWorld, ctx: HookContext) {
     world.commands().queue(move |world: &mut World| {
         let insert_default_layer = world.remove_resource::<InsertDefaultLayer>().unwrap();
-        if let Ok(mut entity) = world.get_entity_mut(entity) {
+        if let Ok(mut entity) = world.get_entity_mut(ctx.entity) {
             insert_default_layer(entity.remove::<DefaultLayer>());
         }
         world.insert_resource(insert_default_layer);

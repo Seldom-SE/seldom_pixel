@@ -13,16 +13,14 @@
 
 use std::time::Duration;
 
-use bevy::{
-    a11y::Focus,
-    ecs::system::{IntoObserverSystem, SystemId},
-    input::{
-        keyboard::{Key, KeyboardInput, NativeKey},
-        mouse::MouseWheel,
-        ButtonState, InputSystem,
-    },
-    math::{ivec2, uvec2},
+use bevy_ecs::system::{IntoObserverSystem, SystemId};
+use bevy_input::{
+    keyboard::{Key, KeyboardInput, NativeKey},
+    mouse::MouseWheel,
+    ButtonState, InputSystem,
 };
+use bevy_input_focus::InputFocus;
+use bevy_math::{ivec2, uvec2};
 
 use crate::{
     blink::Blink, filter::TRANSPARENT_FILTER, position::Spatial, prelude::*, screen::Screen,
@@ -146,12 +144,14 @@ impl<M, U: PxUiBuilder<M>, M2, T: 'static + IntoSystem<(), U, M2> + Send> PxUiBu
     for T
 {
     fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.queue(|id: Entity, world: &mut World| {
+        entity.queue(|entity: EntityWorldMut| {
             let mut system = IntoSystem::into_system(*self);
+            let id = entity.id();
+            let world = entity.into_world_mut();
             system.initialize(world);
             let ui = system.run((), world);
             let mut cmd = world.commands();
-            let Some(entity) = cmd.get_entity(id) else {
+            let Ok(entity) = cmd.get_entity(id) else {
                 return;
             };
             ui.insert_into(entity);
@@ -405,7 +405,7 @@ impl PxRow {
 
     pub fn clear_entries(&mut self, mut row: EntityCommands) {
         self.entries.clear();
-        row.try_despawn_descendants();
+        row.despawn_related::<Children>();
     }
 }
 
@@ -837,13 +837,11 @@ pub struct PxKeyFieldBuilder {
 
 impl PxUiBuilder<()> for PxKeyFieldBuilder {
     fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.queue(|id: Entity, world: &mut World| {
-            let Ok(text) = world.run_system_with_input(self.key_to_str, self.key) else {
+        entity.queue(|mut entity: EntityWorldMut| {
+            let Ok(text) =
+                entity.world_scope(|world| world.run_system_with(self.key_to_str, self.key))
+            else {
                 error!("couldn't run `key_to_str`");
-                return;
-            };
-
-            let Ok(mut entity) = world.get_entity_mut(id) else {
                 return;
             };
 
@@ -866,10 +864,12 @@ impl PxUiBuilder<()> for PxKeyFieldBuilder {
 fn update_key_field_focus(
     mut prev_focus: Local<Option<Entity>>,
     mut fields: Query<(&PxKeyField, &mut PxText, &mut Visibility, Entity)>,
-    focus: Res<Focus>,
+    focus: Res<InputFocus>,
     mut cmd: Commands,
 ) {
-    if *prev_focus == **focus {
+    let focus = focus.get();
+
+    if *prev_focus == focus {
         return;
     }
 
@@ -881,7 +881,7 @@ fn update_key_field_focus(
         }
     }
 
-    if let Some(focus) = **focus {
+    if let Some(focus) = focus {
         if let Ok((field, mut text, _, id)) = fields.get_mut(focus) {
             text.value = field.caret.to_string();
             cmd.entity(id)
@@ -889,7 +889,7 @@ fn update_key_field_focus(
         }
     }
 
-    *prev_focus = **focus;
+    *prev_focus = focus;
 }
 
 #[derive(Event)]
@@ -900,7 +900,7 @@ pub struct PxKeyFieldUpdate {
 // TODO Should be modular
 fn update_key_fields(
     mut fields: Query<Entity, With<PxKeyField>>,
-    mut focus: ResMut<Focus>,
+    mut focus: ResMut<InputFocus>,
     mut keys: EventReader<KeyboardInput>,
     mut cmd: Commands,
 ) {
@@ -911,7 +911,7 @@ fn update_key_fields(
         return;
     };
 
-    let Some(focus_id) = **focus else {
+    let Some(focus_id) = focus.get() else {
         return;
     };
 
@@ -926,7 +926,7 @@ fn update_key_fields(
             return;
         };
 
-        let key = match world.run_system_with_input(field.key_to_str, key) {
+        let key = match world.run_system_with(field.key_to_str, key) {
             Ok(key) => key,
             Err(err) => {
                 error!("couldn't get text for pressed key for key field: {err}");
@@ -945,7 +945,7 @@ fn update_key_fields(
 
     cmd.entity(field_id).trigger(PxKeyFieldUpdate { key });
 
-    **focus = None;
+    focus.clear();
 }
 
 #[derive(Reflect)]
@@ -1002,9 +1002,11 @@ impl PxUiBuilder<()> for PxTextFieldBuilder {
 fn update_text_field_focus(
     mut prev_focus: Local<Option<Entity>>,
     mut fields: Query<(&mut PxTextField, &mut PxText)>,
-    focus: Res<Focus>,
+    focus: Res<InputFocus>,
 ) {
-    if *prev_focus == **focus {
+    let focus = focus.get();
+
+    if *prev_focus == focus {
         return;
     }
 
@@ -1015,7 +1017,7 @@ fn update_text_field_focus(
         }
     }
 
-    if let Some(focus) = **focus {
+    if let Some(focus) = focus {
         if let Ok((mut field, mut text)) = fields.get_mut(focus) {
             field.cached_text = text.value.clone();
             text.value += &field.caret_char.to_string();
@@ -1023,7 +1025,7 @@ fn update_text_field_focus(
         }
     }
 
-    *prev_focus = **focus;
+    *prev_focus = focus;
 }
 
 fn caret_blink(mut fields: Query<(&mut PxTextField, &mut PxText)>, time: Res<Time>) {
@@ -1055,7 +1057,7 @@ pub struct PxTextFieldUpdate {
 // TODO Should be modular
 fn update_text_fields(
     mut fields: Query<(&mut PxTextField, &mut PxText)>,
-    focus: Res<Focus>,
+    focus: Res<InputFocus>,
     mut keys: EventReader<KeyboardInput>,
     mut cmd: Commands,
 ) {
@@ -1068,7 +1070,7 @@ fn update_text_fields(
         return;
     }
 
-    let Some(focus_id) = **focus else {
+    let Some(focus_id) = focus.get() else {
         return;
     };
 
@@ -1127,12 +1129,12 @@ fn calc_min_size<L: PxLayer>(
     };
 
     if let Some(min_size) = min_size {
-        return calc_min_size(min_size.content, uis.to_readonly(), typefaces, sprites)
+        return calc_min_size(min_size.content, uis.as_readonly(), typefaces, sprites)
             .max(uvec2(min_size.x, min_size.y));
     }
 
     if let Some(container) = container {
-        return calc_min_size(container.content, uis.to_readonly(), typefaces, sprites)
+        return calc_min_size(container.content, uis.as_readonly(), typefaces, sprites)
             + 2 * UVec2::splat(container.margin);
     }
 
@@ -1159,7 +1161,7 @@ fn calc_min_size<L: PxLayer>(
         *dim_mut(&mut size, vert) += row.entries.len().saturating_sub(1) as u32 * row.space_between;
 
         for entry in &row.entries {
-            let min_size = calc_min_size(entry.content, uis.to_readonly(), typefaces, sprites);
+            let min_size = calc_min_size(entry.content, uis.as_readonly(), typefaces, sprites);
 
             *dim_mut(&mut size, vert) += dim(min_size, vert);
 
@@ -1183,7 +1185,7 @@ fn calc_min_size<L: PxLayer>(
             let mut row_height = 0;
 
             for (column, &entry) in row.iter().enumerate() {
-                let size = calc_min_size(entry, uis.to_readonly(), typefaces, sprites);
+                let size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites);
 
                 if size.x > column_widths[column] {
                     column_widths[column] = size.x;
@@ -1208,7 +1210,7 @@ fn calc_min_size<L: PxLayer>(
         let mut size = UVec2::ZERO;
 
         for &entry in &stack.entries {
-            size = size.max(calc_min_size(entry, uis.to_readonly(), typefaces, sprites));
+            size = size.max(calc_min_size(entry, uis.as_readonly(), typefaces, sprites));
         }
 
         return size;
@@ -1221,9 +1223,9 @@ fn calc_min_size<L: PxLayer>(
 
         let horz = scroll.horizontal;
 
-        let mut size = calc_min_size(scroll.content, uis.to_readonly(), typefaces, sprites);
-        let bar_size = calc_min_size(scroll.bar, uis.to_readonly(), typefaces, sprites).max(
-            calc_min_size(scroll.bar_bg, uis.to_readonly(), typefaces, sprites),
+        let mut size = calc_min_size(scroll.content, uis.as_readonly(), typefaces, sprites);
+        let bar_size = calc_min_size(scroll.bar, uis.as_readonly(), typefaces, sprites).max(
+            calc_min_size(scroll.bar_bg, uis.as_readonly(), typefaces, sprites),
         );
 
         *dim_mut(&mut size, horz) += dim(bar_size, horz);
@@ -1364,7 +1366,7 @@ fn layout_inner<L: PxLayer>(
             row.entries.iter().filter(|entry| entry.stretch).count() as i32;
         let mut stretch_budget = rect_size(target_rect, vert)
             - dim(
-                calc_min_size(ui, uis.to_readonly(), typefaces, sprites).as_ivec2(),
+                calc_min_size(ui, uis.as_readonly(), typefaces, sprites).as_ivec2(),
                 vert,
             );
         let fill_size = rect_size(target_rect, !vert);
@@ -1373,7 +1375,7 @@ fn layout_inner<L: PxLayer>(
 
         for entry in row.entries {
             let mut size =
-                calc_min_size(entry.content, uis.to_readonly(), typefaces, sprites).as_ivec2();
+                calc_min_size(entry.content, uis.as_readonly(), typefaces, sprites).as_ivec2();
             if entry.stretch {
                 // For simplicity, we just split the extra size among the stretched entries evenly
                 // instead of prioritizing the smallest. I might change this in the future.
@@ -1425,7 +1427,7 @@ fn layout_inner<L: PxLayer>(
 
         for (row_index, row) in grid.entries.chunks(grid.width as usize).enumerate() {
             for (column, &entry) in row.iter().enumerate() {
-                let size = calc_min_size(entry, uis.to_readonly(), typefaces, sprites).as_ivec2();
+                let size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites).as_ivec2();
 
                 if size.x > column_widths[column] {
                     column_widths[column] = size.x;
@@ -1437,7 +1439,7 @@ fn layout_inner<L: PxLayer>(
             }
         }
 
-        let min_size = calc_min_size(ui, uis.to_readonly(), typefaces, sprites).as_ivec2();
+        let min_size = calc_min_size(ui, uis.as_readonly(), typefaces, sprites).as_ivec2();
 
         let mut remaining_stretching_rows =
             grid.rows.rows.iter().filter(|row| row.stretch).count() as i32;
@@ -1590,12 +1592,12 @@ fn layout_inner<L: PxLayer>(
             let horz = scroll.horizontal;
 
             let content_min_size =
-                calc_min_size(scroll.content, uis.to_readonly(), typefaces, sprites).as_ivec2();
+                calc_min_size(scroll.content, uis.as_readonly(), typefaces, sprites).as_ivec2();
 
-            let bar_min_size = calc_min_size(scroll.bar, uis.to_readonly(), typefaces, sprites)
+            let bar_min_size = calc_min_size(scroll.bar, uis.as_readonly(), typefaces, sprites)
                 .max(calc_min_size(
                     scroll.bar_bg,
-                    uis.to_readonly(),
+                    uis.as_readonly(),
                     typefaces,
                     sprites,
                 ))
@@ -1840,7 +1842,7 @@ fn layout<L: PxLayer>(
                     With<PxGrid>,
                     With<PxStack>,
                 )>,
-                Without<Parent>,
+                Without<ChildOf>,
             ),
         >,
         Query<(

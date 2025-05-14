@@ -1,19 +1,17 @@
 //! Color palettes
 
 use std::{
+    error::Error,
     path::PathBuf,
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use anyhow::{Error, Result};
-use bevy::{
-    asset::{io::Reader, AssetLoader, LoadContext},
-    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
-    render::render_resource::TextureFormat,
-    utils::HashMap,
-};
+use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_derive::{Deref, DerefMut};
+use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
+use bevy_platform::collections::HashMap;
+use bevy_render::render_resource::TextureFormat;
 use event_listener::Event;
-use seldom_singleton::AssetSingleton;
 
 use crate::prelude::*;
 
@@ -35,19 +33,20 @@ struct PaletteLoader;
 impl AssetLoader for PaletteLoader {
     type Asset = Palette;
     type Settings = ImageLoaderSettings;
-    type Error = Error;
+    type Error = Box<dyn Error + Send + Sync>;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
         settings: &ImageLoaderSettings,
         load_context: &mut LoadContext<'_>,
-    ) -> Result<Palette> {
-        Ok(Palette::new(
+    ) -> Result<Palette, Self::Error> {
+        Palette::new(
             &ImageLoader::new(CompressedImageFormats::NONE)
                 .load(reader, settings, load_context)
                 .await?,
-        ))
+        )
+        .map_err(|err| err.to_string().into())
     }
 
     fn extensions(&self) -> &[&str] {
@@ -73,24 +72,20 @@ pub struct Palette {
 #[derive(Resource, Deref, DerefMut)]
 pub struct PaletteHandle(pub Handle<Palette>);
 
-pub(crate) type PaletteParam<'w> = AssetSingleton<'w, PaletteHandle>;
-
 #[derive(Resource, Deref)]
 struct LoadingAssetPaletteHandle(Handle<Palette>);
 
-type LoadingAssetPaletteParam<'w> = AssetSingleton<'w, LoadingAssetPaletteHandle>;
-
 impl Palette {
     /// Create a palette from an [`Image`]
-    pub fn new(image: &Image) -> Palette {
+    pub fn new(image: &Image) -> Result<Palette> {
         let image = image.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
+        let data = image.data.ok_or("image is uninitialized")?;
 
-        if image.data.get(3) != Some(&0) {
-            panic!("palette's top left pixel should be transparent");
+        if data.get(3) != Some(&0) {
+            return Err("palette's top left pixel should be transparent".into());
         }
 
-        let (colors, _, _) = image
-            .data
+        let (colors, _, _) = data
             .iter()
             .skip(4)
             .copied()
@@ -110,7 +105,7 @@ impl Palette {
                 },
             );
 
-        Palette {
+        Ok(Palette {
             size: UVec2::new(
                 image.texture_descriptor.size.width,
                 image.texture_descriptor.size.height,
@@ -122,7 +117,7 @@ impl Palette {
                 .map(|(i, color)| (*color, i as u8))
                 .collect(),
             colors,
-        }
+        })
     }
 }
 
@@ -163,8 +158,12 @@ pub(crate) async fn asset_palette() -> &'static Palette {
     unsafe { ASSET_PALETTE.as_ref() }.unwrap()
 }
 
-fn load_asset_palette(palette: LoadingAssetPaletteParam, mut cmd: Commands) {
-    let Some(palette) = palette.get() else {
+fn load_asset_palette(
+    palette: Res<LoadingAssetPaletteHandle>,
+    palettes: Res<Assets<Palette>>,
+    mut cmd: Commands,
+) {
+    let Some(palette) = palettes.get(&**palette) else {
         return;
     };
 

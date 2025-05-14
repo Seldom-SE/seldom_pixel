@@ -1,9 +1,8 @@
 //! Cursor
 
-use bevy::{
-    render::extract_resource::{ExtractResource, ExtractResourcePlugin},
-    window::PrimaryWindow,
-};
+use bevy_derive::{Deref, DerefMut};
+use bevy_render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+use bevy_window::PrimaryWindow;
 
 use crate::{
     filter::PxFilterAsset,
@@ -68,11 +67,11 @@ fn update_cursor_position(
         return;
     };
 
-    let Ok((camera, tf)) = cameras.get_single() else {
+    let Ok((camera, tf)) = cameras.single() else {
         return;
     };
 
-    let Ok(window) = windows.get_single() else {
+    let Ok(window) = windows.single() else {
         return;
     };
 
@@ -103,7 +102,7 @@ fn change_cursor(
         return;
     }
 
-    let Ok(mut window) = windows.get_single_mut() else {
+    let Ok(mut window) = windows.single_mut() else {
         return;
     };
 

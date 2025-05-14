@@ -1,16 +1,16 @@
 //! Sprites
 
-use anyhow::{Error, Result};
-use bevy::{
-    asset::{io::Reader, AssetLoader, LoadContext},
-    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
-    math::{ivec2, uvec2},
-    render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
-        sync_component::SyncComponentPlugin,
-        sync_world::RenderEntity,
-        Extract, RenderApp,
-    },
+use std::error::Error;
+
+use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_derive::{Deref, DerefMut};
+use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
+use bevy_math::{ivec2, uvec2};
+use bevy_render::{
+    render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
+    sync_component::SyncComponentPlugin,
+    sync_world::RenderEntity,
+    Extract, RenderApp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -60,19 +60,19 @@ struct PxSpriteLoader;
 impl AssetLoader for PxSpriteLoader {
     type Asset = PxSpriteAsset;
     type Settings = PxSpriteLoaderSettings;
-    type Error = Error;
+    type Error = Box<dyn Error + Send + Sync>;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
         settings: &PxSpriteLoaderSettings,
         load_context: &mut LoadContext<'_>,
-    ) -> Result<PxSpriteAsset> {
+    ) -> Result<PxSpriteAsset, Self::Error> {
         let image = ImageLoader::new(CompressedImageFormats::NONE)
             .load(reader, &settings.image_loader_settings, load_context)
             .await?;
         let palette = asset_palette().await;
-        let data = PxImage::palette_indices(palette, &image)?;
+        let data = PxImage::palette_indices(palette, &image).map_err(|err| err.to_string())?;
 
         Ok(PxSpriteAsset {
             frame_size: data.area() / settings.frame_count,
@@ -100,6 +100,7 @@ impl RenderAsset for PxSpriteAsset {
 
     fn prepare_asset(
         source_asset: Self,
+        _: AssetId<Self>,
         &mut (): &mut (),
     ) -> Result<Self, PrepareAssetError<Self>> {
         Ok(source_asset)

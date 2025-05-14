@@ -1,10 +1,9 @@
 use std::time::Duration;
 
-use bevy::{
-    math::{ivec2, uvec2},
-    render::{sync_world::RenderEntity, Extract, RenderApp},
-    utils::HashSet,
-};
+use bevy_derive::{Deref, DerefMut};
+use bevy_math::{ivec2, uvec2};
+use bevy_platform::collections::HashSet;
+use bevy_render::{sync_world::RenderEntity, Extract, RenderApp};
 use line_drawing::Bresenham;
 
 use crate::{
@@ -27,7 +26,7 @@ pub struct PxLine(pub Vec<IVec2>);
 
 impl Spatial for PxLine {
     fn frame_size(&self) -> UVec2 {
-        if self.len() == 0 {
+        if self.is_empty() {
             return UVec2::ZERO;
         }
 

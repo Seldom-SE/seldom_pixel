@@ -1,19 +1,17 @@
 //! Filtering
 
-use std::{ops::RangeInclusive, time::Duration};
+use std::{error::Error, ops::RangeInclusive, time::Duration};
 
-use anyhow::{Error, Result};
-use bevy::{
-    asset::{io::Reader, AssetLoader, LoadContext},
-    ecs::{component::ComponentId, world::DeferredWorld},
-    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
-    math::uvec2,
-    render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
-        sync_component::SyncComponentPlugin,
-        sync_world::RenderEntity,
-        Extract, RenderApp,
-    },
+use bevy_asset::{io::Reader, weak_handle, AssetLoader, LoadContext};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::{component::HookContext, world::DeferredWorld};
+use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
+use bevy_math::uvec2;
+use bevy_render::{
+    render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
+    sync_component::SyncComponentPlugin,
+    sync_world::RenderEntity,
+    Extract, RenderApp,
 };
 
 use crate::{
@@ -25,19 +23,21 @@ use crate::{
 };
 
 pub const TRANSPARENT_FILTER: Handle<PxFilterAsset> =
-    Handle::weak_from_u128(0x798C_57A4_A83C_5DD6_8FA6_1426_E31A_84CA);
+    weak_handle!("798C57A4-A83C-5DD6-8FA6-1426E31A84CA");
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
-    app.add_plugins((
-        RenderAssetPlugin::<PxFilterAsset>::default(),
-        SyncComponentPlugin::<PxFilterLayers<L>>::default(),
-    ))
-    .init_asset::<PxFilterAsset>()
-    .init_asset_loader::<PxFilterLoader>()
-    .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
-    .world_mut()
-    .resource_mut::<Assets<PxFilterAsset>>()
-    .insert(
+    // R-A workaround
+    Assets::insert(
+        &mut app
+            .add_plugins((
+                RenderAssetPlugin::<PxFilterAsset>::default(),
+                SyncComponentPlugin::<PxFilterLayers<L>>::default(),
+            ))
+            .init_asset::<PxFilterAsset>()
+            .init_asset_loader::<PxFilterLoader>()
+            .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
+            .world_mut()
+            .resource_mut::<Assets<PxFilterAsset>>(),
         TRANSPARENT_FILTER.id(),
         PxFilterAsset(PxImage::empty(uvec2(16, 16))),
     );
@@ -53,19 +53,19 @@ struct PxFilterLoader;
 impl AssetLoader for PxFilterLoader {
     type Asset = PxFilterAsset;
     type Settings = ImageLoaderSettings;
-    type Error = Error;
+    type Error = Box<dyn Error + Send + Sync>;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
         settings: &ImageLoaderSettings,
         load_context: &mut LoadContext<'_>,
-    ) -> Result<PxFilterAsset> {
+    ) -> Result<PxFilterAsset, Self::Error> {
         let image = ImageLoader::new(CompressedImageFormats::NONE)
             .load(reader, settings, load_context)
             .await?;
         let palette = asset_palette().await;
-        let indices = PxImage::palette_indices(palette, &image)?;
+        let indices = PxImage::palette_indices(palette, &image).map_err(|err| err.to_string())?;
 
         let mut filter = Vec::with_capacity(indices.area());
         let frame_size = palette.size;
@@ -133,6 +133,7 @@ impl RenderAsset for PxFilterAsset {
 
     fn prepare_asset(
         source_asset: Self,
+        _: AssetId<Self>,
         &mut (): &mut (),
     ) -> Result<Self, PrepareAssetError<Self>> {
         Ok(source_asset)
@@ -180,7 +181,7 @@ pub struct PxFilter(pub Handle<PxFilterAsset>);
 impl AnimatedAssetComponent for PxFilter {
     type Asset = PxFilterAsset;
 
-    fn handle(&self) -> &Handle<Self::Asset> {
+    fn handle(&self) -> &Handle<PxFilterAsset> {
         self
     }
 
@@ -245,12 +246,12 @@ impl InsertDefaultPxFilterLayers {
     }
 }
 
-fn insert_default_px_filter_layers(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
+fn insert_default_px_filter_layers(mut world: DeferredWorld, ctx: HookContext) {
     world.commands().queue(move |world: &mut World| {
         let insert_default_px_filter_layers = world
             .remove_resource::<InsertDefaultPxFilterLayers>()
             .unwrap();
-        if let Ok(mut entity) = world.get_entity_mut(entity) {
+        if let Ok(mut entity) = world.get_entity_mut(ctx.entity) {
             if let Some(default) = entity.get::<DefaultPxFilterLayers>() {
                 insert_default_px_filter_layers(
                     default.clip,

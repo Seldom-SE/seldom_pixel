@@ -1,7 +1,6 @@
-use bevy::{
-    math::{ivec2, uvec2},
-    render::{sync_world::RenderEntity, Extract, RenderApp},
-};
+use bevy_derive::{Deref, DerefMut};
+use bevy_math::{ivec2, uvec2};
+use bevy_render::{sync_world::RenderEntity, Extract, RenderApp};
 
 use crate::{
     animation::Animation, filter::DefaultPxFilterLayers, image::PxImageSliceMut, position::Spatial,

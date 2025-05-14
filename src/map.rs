@@ -1,15 +1,12 @@
-use std::mem::replace;
+use std::{error::Error, mem::replace};
 
-use anyhow::{Error, Result};
-use bevy::{
-    asset::{io::Reader, AssetLoader, LoadContext},
-    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
-    render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
-        sync_component::SyncComponentPlugin,
-        sync_world::RenderEntity,
-        Extract, RenderApp,
-    },
+use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
+use bevy_render::{
+    render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
+    sync_component::SyncComponentPlugin,
+    sync_world::RenderEntity,
+    Extract, RenderApp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -55,19 +52,19 @@ struct PxTilesetLoader;
 impl AssetLoader for PxTilesetLoader {
     type Asset = PxTileset;
     type Settings = PxTilesetLoaderSettings;
-    type Error = Error;
+    type Error = Box<dyn Error + Send + Sync>;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
         settings: &PxTilesetLoaderSettings,
         load_context: &mut LoadContext<'_>,
-    ) -> Result<PxTileset> {
+    ) -> Result<PxTileset, Self::Error> {
         let image = ImageLoader::new(CompressedImageFormats::NONE)
             .load(reader, &settings.image_loader_settings, load_context)
             .await?;
         let palette = asset_palette().await;
-        let indices = PxImage::palette_indices(palette, &image)?;
+        let indices = PxImage::palette_indices(palette, &image).map_err(|err| err.to_string())?;
         let tile_size = settings.tile_size;
         let tile_area = tile_size.x * tile_size.y;
         let mut tileset = Vec::default();
@@ -147,6 +144,7 @@ impl RenderAsset for PxTileset {
 
     fn prepare_asset(
         source_asset: Self,
+        _: AssetId<Self>,
         &mut (): &mut (),
     ) -> Result<Self, PrepareAssetError<Self>> {
         Ok(source_asset)

@@ -1,5 +1,4 @@
-use anyhow::{anyhow, Result};
-use bevy::render::render_resource::TextureFormat;
+use bevy_render::render_resource::TextureFormat;
 use serde::{Deserialize, Serialize};
 
 use crate::{math::RectExt, palette::Palette, prelude::*};
@@ -30,8 +29,9 @@ impl PxImage {
         Ok(Self {
             image: image
                 .convert(TextureFormat::Rgba8UnormSrgb)
-                .ok_or_else(|| anyhow!("could not convert image to `Rgba8UnormSrgb`"))?
+                .ok_or("could not convert image to `Rgba8UnormSrgb`")?
                 .data
+                .ok_or("image is not initialized")?
                 .chunks_exact(4)
                 .map(|color| {
                     if color[3] == 0 {
@@ -42,13 +42,12 @@ impl PxImage {
                             .get(&[color[0], color[1], color[2]])
                             .copied()
                             .ok_or_else(|| {
-                                anyhow!(
+                                format!(
                                     "a sprite contained a color `#{:02X}{:02X}{:02X}` \
                                     that wasn't in the palette",
-                                    color[0],
-                                    color[1],
-                                    color[2]
+                                    color[0], color[1], color[2]
                                 )
+                                .into()
                             })
                     }
                 })
@@ -180,8 +179,8 @@ pub(crate) struct PxImageSliceMut<'a> {
 }
 
 impl<'a> PxImageSliceMut<'a> {
-    pub(crate) fn from_image_mut(image: &'a mut Image) -> Self {
-        Self {
+    pub(crate) fn from_image_mut(image: &'a mut Image) -> Result<Self> {
+        Ok(Self {
             slice: IRect {
                 min: IVec2::splat(0),
                 max: IVec2::new(
@@ -191,10 +190,12 @@ impl<'a> PxImageSliceMut<'a> {
             },
             image: image
                 .data
+                .as_mut()
+                .ok_or("image is not initialized")?
                 .chunks_exact_mut(image.texture_descriptor.size.width as usize)
                 .collect(),
             width: image.texture_descriptor.size.width as usize,
-        }
+        })
     }
 
     /// First `usize` is the index in the slice. Second `usize` is the index in the image.

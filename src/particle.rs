@@ -5,7 +5,9 @@ use std::{
     time::Duration,
 };
 
-use bevy::{ecs::system::EntityCommands, utils::Instant};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::system::EntityCommands;
+use bevy_platform::time::Instant;
 
 use crate::{
     position::{DefaultLayer, PxLayer},
@@ -24,7 +26,7 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
         (
             (
                 (simulate_emitters::<L>, insert_emitter_time),
-                (apply_deferred, update_emitters::<L>)
+                (ApplyDeferred, update_emitters::<L>)
                     .chain()
                     .in_set(PxSet::UpdateEmitters),
             )

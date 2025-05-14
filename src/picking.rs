@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bevy::picking::backend::prelude::*;
+use bevy_picking::backend::prelude::*;
 
 use crate::{cursor::PxCursorPosition, math::RectExt, prelude::*, set::PxSet};
 
@@ -31,7 +31,7 @@ fn pick<L: PxLayer>(
     };
     let cursor = cursor.as_ivec2();
 
-    let Ok((camera, camera_id)) = cameras.get_single() else {
+    let Ok((camera, camera_id)) = cameras.single() else {
         return;
     };
 
@@ -44,7 +44,7 @@ fn pick<L: PxLayer>(
 
         let mut layer_depths = BTreeMap::new();
 
-        hits.send(PointerHits {
+        hits.write(PointerHits {
             pointer,
             picks: rects
                 .iter()
@@ -73,7 +73,8 @@ fn pick<L: PxLayer>(
                             (None, None) => 0.,
                         };
 
-                        layer_depths.insert(layer.clone(), depth);
+                        // R-A workaround
+                        BTreeMap::insert(&mut layer_depths, layer.clone(), depth);
                         depth
                     };
 

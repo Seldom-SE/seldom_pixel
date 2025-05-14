@@ -1,4 +1,5 @@
-use bevy::render::{
+use bevy_derive::{Deref, DerefMut};
+use bevy_render::{
     extract_component::ExtractComponent,
     extract_resource::{ExtractResource, ExtractResourcePlugin},
 };

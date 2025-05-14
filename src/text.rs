@@ -1,14 +1,13 @@
-use anyhow::{anyhow, Error, Result};
-use bevy::{
-    asset::{io::Reader, AssetLoader, LoadContext},
-    image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings},
-    render::{
-        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
-        sync_component::SyncComponentPlugin,
-        sync_world::RenderEntity,
-        Extract, RenderApp,
-    },
-    utils::HashMap,
+use std::error::Error;
+
+use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
+use bevy_platform::collections::HashMap;
+use bevy_render::{
+    render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
+    sync_component::SyncComponentPlugin,
+    sync_world::RenderEntity,
+    Extract, RenderApp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -55,19 +54,19 @@ struct PxTypefaceLoader;
 impl AssetLoader for PxTypefaceLoader {
     type Asset = PxTypeface;
     type Settings = PxTypefaceLoaderSettings;
-    type Error = Error;
+    type Error = Box<dyn Error + Send + Sync>;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
         settings: &PxTypefaceLoaderSettings,
         load_context: &mut LoadContext<'_>,
-    ) -> Result<PxTypeface> {
+    ) -> Result<PxTypeface, Self::Error> {
         let image = ImageLoader::new(CompressedImageFormats::NONE)
             .load(reader, &settings.image_loader_settings, load_context)
             .await?;
         let palette = asset_palette().await;
-        let indices = PxImage::palette_indices(palette, &image)?;
+        let indices = PxImage::palette_indices(palette, &image).map_err(|err| err.to_string())?;
         let height = indices.height();
         let character_count = settings.characters.chars().count();
 
@@ -113,12 +112,13 @@ impl AssetLoader for PxTypefaceLoader {
             height: if image.texture_descriptor.size.height == 0 {
                 0
             } else if settings.characters.is_empty() {
-                return Err(anyhow!(
+                return Err(format!(
                     "Typeface `{}` was assigned no characters. \
                         If no `.meta` file exists for that asset, create one. \
                         See `assets/typeface/` for examples.",
                     load_context.path().display()
-                ));
+                )
+                .into());
             } else {
                 image.texture_descriptor.size.height / character_count as u32
             },
@@ -168,6 +168,7 @@ impl RenderAsset for PxTypeface {
 
     fn prepare_asset(
         source_asset: Self,
+        _: AssetId<Self>,
         &mut (): &mut (),
     ) -> Result<Self, PrepareAssetError<Self>> {
         Ok(source_asset)

@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 
+use bevy_derive::{Deref, DerefMut};
+
 use crate::prelude::*;
 
 pub(crate) fn plug(app: &mut App) {

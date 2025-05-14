@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
-use bevy::utils::Instant;
+use bevy_platform::time::Instant;
+use bevy_render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 
 use crate::position::Spatial;
 use crate::{image::PxImageSliceMut, prelude::*, set::PxSet};
