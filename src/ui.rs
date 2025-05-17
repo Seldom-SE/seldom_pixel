@@ -30,14 +30,18 @@ use crate::{
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     app.add_systems(
         PreUpdate,
-        (update_key_fields, update_text_fields, scroll).after(InputSystem),
+        (
+            (update_key_fields, update_text_fields).run_if(resource_exists::<InputFocus>),
+            scroll,
+        )
+            .after(InputSystem),
     )
     .add_systems(
         PostUpdate,
         (
-            update_key_field_focus,
+            update_key_field_focus.run_if(resource_exists::<InputFocus>),
             (
-                update_text_field_focus,
+                update_text_field_focus.run_if(resource_exists::<InputFocus>),
                 caret_blink,
                 layout::<L>.before(PxSet::Picking),
             )
