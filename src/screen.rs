@@ -30,7 +30,7 @@ use bevy_window::{PrimaryWindow, WindowResized};
 #[cfg(feature = "line")]
 use crate::line::{draw_line, LineComponents};
 use crate::{
-    animation::{copy_animation_params, draw_spatial, LastUpdate},
+    animation::draw_spatial,
     cursor::{CursorState, PxCursorPosition},
     filter::{draw_filter, FilterComponents},
     image::{PxImage, PxImageSliceMut},
@@ -344,7 +344,6 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
         world: &'w World,
     ) -> Result<(), NodeRunError> {
         let &camera = world.resource::<PxCamera>();
-        let &LastUpdate(last_update) = world.resource::<LastUpdate>();
         let screen = world.resource::<Screen>();
 
         let mut image = Image::new_fill(
@@ -689,7 +688,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             layer_image.clear();
             let mut layer_slice = layer_image.slice_all_mut();
 
-            for (map, position, canvas, animation, map_filter) in maps {
+            for (map, position, canvas, frame, map_filter) in maps {
                 let Some(tileset) = tilesets.get(&map.tileset) else {
                     continue;
                 };
@@ -723,7 +722,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                             (*position + pos.as_ivec2() * tileset.tile_size().as_ivec2()).into(),
                             PxAnchor::BottomLeft,
                             canvas,
-                            copy_animation_params(animation, last_update),
+                            frame.copied(),
                             [
                                 tile_filter.and_then(|tile_filter| filters.get(&**tile_filter)),
                                 map_filter,
@@ -875,7 +874,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             //     );
             // }
 
-            for (sprite, position, anchor, canvas, animation, filter) in sprites {
+            for (sprite, position, anchor, canvas, frame, filter) in sprites {
                 let Some(sprite) = sprite_assets.get(&**sprite) else {
                     continue;
                 };
@@ -887,13 +886,13 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                     position,
                     anchor,
                     canvas,
-                    copy_animation_params(animation, last_update),
+                    frame.copied(),
                     filter.and_then(|filter| filters.get(&**filter)),
                     camera,
                 );
             }
 
-            for (text, pos, alignment, canvas, animation, filter) in texts {
+            for (text, pos, alignment, canvas, frame, filter) in texts {
                 let Some(typeface) = typefaces.get(&text.typeface) else {
                     continue;
                 };
@@ -943,14 +942,14 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         PxPosition(top_left + ivec2(x as i32, -(y as i32))),
                         PxAnchor::TopLeft,
                         canvas,
-                        copy_animation_params(animation, last_update),
+                        frame.copied(),
                         filter.and_then(|filter| filters.get(&**filter)),
                         camera,
                     );
                 }
             }
 
-            for (rect, filter, pos, anchor, canvas, animation, invert) in clip_rects {
+            for (rect, filter, pos, anchor, canvas, frame, invert) in clip_rects {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_spatial(
                         &(rect, filter),
@@ -959,7 +958,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         pos,
                         anchor,
                         canvas,
-                        copy_animation_params(animation, last_update),
+                        frame.copied(),
                         empty(),
                         camera,
                     );
@@ -968,7 +967,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
 
             // This is where I draw the line! /j
             #[cfg(feature = "line")]
-            for (line, filter, canvas, animation, invert) in clip_lines {
+            for (line, filter, canvas, frame, invert) in clip_lines {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_line(
                         line,
@@ -976,25 +975,21 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         invert,
                         &mut layer_slice,
                         canvas,
-                        copy_animation_params(animation, last_update),
+                        frame.copied(),
                         camera,
                     );
                 }
             }
 
-            for (filter, animation) in clip_filters {
+            for (filter, frame) in clip_filters {
                 if let Some(filter) = filters.get(&**filter) {
-                    draw_filter(
-                        filter,
-                        copy_animation_params(animation, last_update),
-                        &mut layer_slice,
-                    );
+                    draw_filter(filter, frame.copied(), &mut layer_slice);
                 }
             }
 
             image_slice.draw(&layer_image);
 
-            for (rect, filter, pos, anchor, canvas, animation, invert) in over_rects {
+            for (rect, filter, pos, anchor, canvas, frame, invert) in over_rects {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_spatial(
                         &(rect, filter),
@@ -1003,7 +998,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         pos,
                         anchor,
                         canvas,
-                        copy_animation_params(animation, last_update),
+                        frame.copied(),
                         empty(),
                         camera,
                     );
@@ -1011,7 +1006,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             }
 
             #[cfg(feature = "line")]
-            for (line, filter, canvas, animation, invert) in over_lines {
+            for (line, filter, canvas, frame, invert) in over_lines {
                 if let Some(filter) = filters.get(&**filter) {
                     draw_line(
                         line,
@@ -1019,19 +1014,15 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         invert,
                         &mut image_slice,
                         canvas,
-                        copy_animation_params(animation, last_update),
+                        frame.copied(),
                         camera,
                     );
                 }
             }
 
-            for (filter, animation) in over_filters {
+            for (filter, frame) in over_filters {
                 if let Some(filter) = filters.get(&**filter) {
-                    draw_filter(
-                        filter,
-                        copy_animation_params(animation, last_update),
-                        &mut image_slice,
-                    );
+                    draw_filter(filter, frame.copied(), &mut image_slice);
                 }
             }
         }

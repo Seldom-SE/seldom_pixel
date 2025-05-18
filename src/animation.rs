@@ -3,23 +3,49 @@
 use std::time::Duration;
 
 use bevy_platform::time::Instant;
-use bevy_render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 
 use crate::position::Spatial;
 use crate::{image::PxImageSliceMut, prelude::*, set::PxSet};
 
 pub(crate) fn plug(app: &mut App) {
-    app.add_plugins(ExtractResourcePlugin::<LastUpdate>::default())
-        .add_systems(
-            PostUpdate,
-            (
-                finish_animations::<PxSprite>,
-                finish_animations::<PxFilter>,
-                finish_animations::<PxText>,
-                finish_animations::<PxMap>,
-            )
-                .in_set(PxSet::FinishAnimations),
-        );
+    app.add_systems(
+        PostUpdate,
+        (
+            finish_animations::<PxSprite>,
+            finish_animations::<PxFilter>,
+            finish_animations::<PxText>,
+            finish_animations::<PxMap>,
+        )
+            .in_set(PxSet::FinishAnimations),
+    );
+}
+
+#[derive(Clone, Copy)]
+pub enum PxFrameSelector {
+    Index(f32),
+    Normalized(f32),
+}
+
+impl Default for PxFrameSelector {
+    fn default() -> Self {
+        Self::Normalized(0.)
+    }
+}
+
+/// Method the animation uses to interpolate between frames
+#[derive(Clone, Copy, Debug, Default)]
+pub enum PxFrameTransition {
+    /// Frames are not interpolated
+    #[default]
+    None,
+    /// Dithering is used to interpolate between frames, smoothing the animation
+    Dither,
+}
+
+#[derive(Component, Default, Clone, Copy)]
+pub struct PxFrame {
+    pub selector: PxFrameSelector,
+    pub transition: PxFrameTransition,
 }
 
 /// Direction the animation plays
@@ -76,18 +102,9 @@ pub enum PxAnimationFinishBehavior {
     Loop,
 }
 
-/// Method the animation uses to interpolate between frames
-#[derive(Clone, Copy, Debug, Default)]
-pub enum PxAnimationFrameTransition {
-    /// Frames are not interpolated
-    #[default]
-    None,
-    /// Dithering is used to interpolate between frames, smoothing the animation
-    Dither,
-}
-
 /// Animates an entity. Works on sprites, filters, text, tilemaps, rectangles, and lines.
 #[derive(Component, Clone, Copy, Debug)]
+#[require(PxFrame)]
 pub struct PxAnimation {
     /// A [`PxAnimationDirection`]
     pub direction: PxAnimationDirection,
@@ -95,8 +112,6 @@ pub struct PxAnimation {
     pub duration: PxAnimationDuration,
     /// A [`PxAnimationFinishBehavior`]
     pub on_finish: PxAnimationFinishBehavior,
-    /// A [`PxAnimationFrameTransition`]
-    pub frame_transition: PxAnimationFrameTransition,
     /// Time when the animation started
     pub start: Instant,
 }
@@ -107,7 +122,6 @@ impl Default for PxAnimation {
             direction: default(),
             duration: default(),
             on_finish: default(),
-            frame_transition: default(),
             start: Instant::now(),
         }
     }
@@ -118,7 +132,7 @@ impl Default for PxAnimation {
 #[derive(Component, Debug)]
 pub struct PxAnimationFinished;
 
-pub(crate) trait Animation {
+pub(crate) trait Frames {
     type Param;
 
     fn frame_count(&self) -> usize;
@@ -157,70 +171,29 @@ static DITHERING: &[u16] = &[
     0b1111_1111_1111_0111,
 ];
 
-pub(crate) fn animate(
-    direction: PxAnimationDirection,
-    duration: PxAnimationDuration,
-    on_finish: PxAnimationFinishBehavior,
-    frame_transition: PxAnimationFrameTransition,
-    age: Duration,
-    frame_count: usize,
-) -> impl Fn(UVec2) -> usize {
-    let (animation_duration, frame_duration) = match duration {
-        PxAnimationDuration::PerAnimation(duration) => (duration, duration / frame_count as u32),
-        PxAnimationDuration::PerFrame(duration) => (duration * frame_count as u32, duration),
-    };
-    let animation_millis = animation_duration.as_millis();
-    let frame_millis = frame_duration.as_millis();
-
-    let looping = match on_finish {
-        PxAnimationFinishBehavior::Despawn | PxAnimationFinishBehavior::Mark => false,
-        #[cfg(feature = "state")]
-        PxAnimationFinishBehavior::Done => false,
-        PxAnimationFinishBehavior::Loop => true,
+pub(crate) fn animate(frame: PxFrame, frame_count: usize) -> impl Fn(UVec2) -> usize {
+    let index = match frame.selector {
+        PxFrameSelector::Normalized(frame) => frame * frame_count as f32,
+        PxFrameSelector::Index(frame) => frame,
     };
 
-    let elapsed_millis = age.as_millis();
-    let elapsed_millis = match looping {
-        true => elapsed_millis % animation_millis,
-        false => elapsed_millis,
+    let dithering = match frame.transition {
+        PxFrameTransition::Dither => DITHERING[(index.fract() * 16.) as usize % 16 as usize],
+        PxFrameTransition::None => 0,
     };
-    let elapsed_millis = match direction {
-        PxAnimationDirection::Foreward => match elapsed_millis > animation_millis {
-            true => animation_millis,
-            false => elapsed_millis,
-        },
-        PxAnimationDirection::Backward => match elapsed_millis > animation_millis {
-            true => 0,
-            false => animation_millis - elapsed_millis,
-        },
-    };
-
-    let frame = ((elapsed_millis / frame_millis) as usize).min(frame_count - 1);
-
-    let dithering = match frame_transition {
-        PxAnimationFrameTransition::Dither if looping || frame + 1 < frame_count => {
-            DITHERING[(elapsed_millis % frame_millis * 16 / frame_millis) as usize]
-        }
-        _ => 0,
-    };
+    let index = index.floor() as usize;
 
     move |pos| {
-        (frame + ((0b1000_0000_0000_0000 >> (pos.x % 4 + pos.y % 4 * 4)) & dithering != 0) as usize)
+        (index + ((0b1000_0000_0000_0000 >> (pos.x % 4 + pos.y % 4 * 4)) & dithering != 0) as usize)
             % frame_count
     }
 }
 
-pub(crate) fn draw_animation<'a, A: Animation>(
+pub(crate) fn draw_frame<'a, A: Frames>(
     animation: &A,
     param: A::Param,
     image: &mut PxImageSliceMut,
-    animation_params: Option<(
-        PxAnimationDirection,
-        PxAnimationDuration,
-        PxAnimationFinishBehavior,
-        PxAnimationFrameTransition,
-        Duration,
-    )>,
+    frame: Option<PxFrame>,
     filters: impl IntoIterator<Item = &'a PxFilterAsset>,
 ) {
     let mut filter: Box<dyn Fn(u8) -> u8> = Box::new(|pixel| pixel);
@@ -229,41 +202,24 @@ pub(crate) fn draw_animation<'a, A: Animation>(
         filter = Box::new(move |pixel| filter_part(filter(pixel)));
     }
 
-    match animation_params {
-        Some((direction, duration, on_finish, frame_transition, age)) => {
-            let frame = animate(
-                direction,
-                duration,
-                on_finish,
-                frame_transition,
-                age,
-                animation.frame_count(),
-            );
+    if let Some(frame) = frame {
+        let frame = animate(frame, animation.frame_count());
 
-            animation.draw(param, image, frame, filter);
-        }
-        None => {
-            let frame = |_| 0;
-
-            animation.draw(param, image, frame, filter);
-        }
+        animation.draw(param, image, frame, filter);
+    } else {
+        let frame = |_| 0;
+        animation.draw(param, image, frame, filter);
     }
 }
 
-pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
+pub(crate) fn draw_spatial<'a, A: Frames + Spatial>(
     spatial: &A,
-    param: <A as Animation>::Param,
+    param: <A as Frames>::Param,
     image: &mut PxImageSliceMut,
     position: PxPosition,
     anchor: PxAnchor,
     canvas: PxCanvas,
-    animation: Option<(
-        PxAnimationDirection,
-        PxAnimationDuration,
-        PxAnimationFinishBehavior,
-        PxAnimationFrameTransition,
-        Duration,
-    )>,
+    frame: Option<PxFrame>,
     filters: impl IntoIterator<Item = &'a PxFilterAsset>,
     camera: PxCamera,
 ) {
@@ -281,47 +237,7 @@ pub(crate) fn draw_spatial<'a, A: Animation + Spatial>(
         max: position + IVec2::new(size.x, 0),
     });
 
-    draw_animation(spatial, param, &mut image, animation, filters);
-}
-
-#[derive(Resource)]
-pub(crate) struct LastUpdate(pub(crate) Instant);
-
-impl ExtractResource for LastUpdate {
-    type Source = Time<Real>;
-
-    fn extract_resource(source: &Time<Real>) -> Self {
-        Self(source.last_update().unwrap_or_else(|| source.startup()))
-    }
-}
-
-pub(crate) fn copy_animation_params(
-    animation: Option<&PxAnimation>,
-    last_update: Instant,
-) -> Option<(
-    PxAnimationDirection,
-    PxAnimationDuration,
-    PxAnimationFinishBehavior,
-    PxAnimationFrameTransition,
-    Duration,
-)> {
-    animation.map(
-        |&PxAnimation {
-             direction,
-             duration,
-             on_finish,
-             frame_transition,
-             start,
-         }| {
-            (
-                direction,
-                duration,
-                on_finish,
-                frame_transition,
-                last_update - start,
-            )
-        },
-    )
+    draw_frame(spatial, param, &mut image, frame, filters);
 }
 
 fn finish_animations<A: AnimatedAssetComponent>(

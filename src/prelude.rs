@@ -30,7 +30,7 @@ pub use crate::particle::{PxEmitter, PxEmitterFrequency, PxEmitterSimulation, Px
 pub use crate::{
     animation::{
         PxAnimation, PxAnimationDirection, PxAnimationDuration, PxAnimationFinishBehavior,
-        PxAnimationFinished, PxAnimationFrameTransition,
+        PxAnimationFinished, PxFrame, PxFrameSelector, PxFrameTransition,
     },
     camera::{PxCamera, PxCanvas},
     cursor::PxCursor,

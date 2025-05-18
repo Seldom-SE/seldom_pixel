@@ -1,6 +1,6 @@
 //! Filtering
 
-use std::{error::Error, ops::RangeInclusive, time::Duration};
+use std::{error::Error, ops::RangeInclusive};
 
 use bevy_asset::{io::Reader, weak_handle, AssetLoader, LoadContext};
 use bevy_derive::{Deref, DerefMut};
@@ -15,7 +15,7 @@ use bevy_render::{
 };
 
 use crate::{
-    animation::{draw_animation, AnimatedAssetComponent, Animation, PxAnimation},
+    animation::{draw_frame, AnimatedAssetComponent, Frames},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
     position::PxLayer,
@@ -140,7 +140,7 @@ impl RenderAsset for PxFilterAsset {
     }
 }
 
-impl Animation for PxFilterAsset {
+impl Frames for PxFilterAsset {
     type Param = ();
 
     fn frame_count(&self) -> usize {
@@ -281,7 +281,7 @@ pub struct PxInvertMask;
 pub(crate) type FilterComponents<L> = (
     &'static PxFilter,
     &'static PxFilterLayers<L>,
-    Option<&'static PxAnimation>,
+    Option<&'static PxFrame>,
 );
 
 fn extract_filters<L: PxLayer>(
@@ -290,7 +290,7 @@ fn extract_filters<L: PxLayer>(
     >,
     mut cmd: Commands,
 ) {
-    for ((filter, layers, animation), visibility, id) in &filters {
+    for ((filter, layers, frame), visibility, id) in &filters {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -300,24 +300,18 @@ fn extract_filters<L: PxLayer>(
 
         entity.insert((filter.clone(), layers.clone()));
 
-        if let Some(animation) = animation {
-            entity.insert(*animation);
+        if let Some(frame) = frame {
+            entity.insert(*frame);
         } else {
-            entity.remove::<PxAnimation>();
+            entity.remove::<PxFrame>();
         }
     }
 }
 
 pub(crate) fn draw_filter(
     filter: &PxFilterAsset,
-    animation: Option<(
-        PxAnimationDirection,
-        PxAnimationDuration,
-        PxAnimationFinishBehavior,
-        PxAnimationFrameTransition,
-        Duration,
-    )>,
+    frame: Option<PxFrame>,
     image: &mut PxImageSliceMut,
 ) {
-    draw_animation(filter, (), image, animation, []);
+    draw_frame(filter, (), image, frame, []);
 }

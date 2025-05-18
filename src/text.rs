@@ -217,7 +217,7 @@ pub(crate) type TextComponents<L> = (
     &'static PxAnchor,
     &'static L,
     &'static PxCanvas,
-    Option<&'static PxAnimation>,
+    Option<&'static PxFrame>,
     Option<&'static PxFilter>,
 );
 
@@ -225,7 +225,7 @@ fn extract_texts<L: PxLayer>(
     texts: Extract<Query<(TextComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((text, &pos, &alignment, layer, &canvas, animation, filter), visibility, id) in &texts {
+    for ((text, &pos, &alignment, layer, &canvas, frame, filter), visibility, id) in &texts {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -235,10 +235,10 @@ fn extract_texts<L: PxLayer>(
 
         entity.insert((text.clone(), pos, alignment, layer.clone(), canvas));
 
-        if let Some(animation) = animation {
-            entity.insert(*animation);
+        if let Some(frame) = frame {
+            entity.insert(*frame);
         } else {
-            entity.remove::<PxAnimation>();
+            entity.remove::<PxFrame>();
         }
 
         if let Some(filter) = filter {

@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bevy_derive::{Deref, DerefMut};
 use bevy_math::{ivec2, uvec2};
 use bevy_platform::collections::HashSet;
@@ -7,7 +5,7 @@ use bevy_render::{sync_world::RenderEntity, Extract, RenderApp};
 use line_drawing::Bresenham;
 
 use crate::{
-    animation::{draw_animation, Animation},
+    animation::{draw_frame, Frames},
     filter::DefaultPxFilterLayers,
     image::PxImageSliceMut,
     position::{PxLayer, Spatial},
@@ -41,7 +39,7 @@ impl Spatial for PxLine {
     }
 }
 
-impl Animation for (&PxLine, &PxFilterAsset) {
+impl Frames for (&PxLine, &PxFilterAsset) {
     type Param = (IVec2, bool);
 
     fn frame_count(&self) -> usize {
@@ -97,7 +95,7 @@ pub(crate) type LineComponents<L> = (
     &'static PxFilter,
     &'static PxFilterLayers<L>,
     &'static PxCanvas,
-    Option<&'static PxAnimation>,
+    Option<&'static PxFrame>,
     Has<PxInvertMask>,
 );
 
@@ -105,7 +103,7 @@ fn extract_lines<L: PxLayer>(
     lines: Extract<Query<(LineComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((line, filter, layers, &canvas, animation, invert), visibility, id) in &lines {
+    for ((line, filter, layers, &canvas, frame, invert), visibility, id) in &lines {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -115,10 +113,10 @@ fn extract_lines<L: PxLayer>(
 
         entity.insert((line.clone(), filter.clone(), layers.clone(), canvas));
 
-        if let Some(&animation) = animation {
-            entity.insert(animation);
+        if let Some(&frame) = frame {
+            entity.insert(frame);
         } else {
-            entity.remove::<PxAnimation>();
+            entity.remove::<PxFrame>();
         }
 
         if invert {
@@ -135,17 +133,11 @@ pub(crate) fn draw_line(
     invert: bool,
     image: &mut PxImageSliceMut,
     canvas: PxCanvas,
-    animation: Option<(
-        PxAnimationDirection,
-        PxAnimationDuration,
-        PxAnimationFinishBehavior,
-        PxAnimationFrameTransition,
-        Duration,
-    )>,
+    frame: Option<PxFrame>,
     camera: PxCamera,
 ) {
     // TODO Make an `animated_line` example
-    draw_animation(
+    draw_frame(
         &(line, filter),
         (
             match canvas {
@@ -155,7 +147,7 @@ pub(crate) fn draw_line(
             invert,
         ),
         image,
-        animation,
+        frame,
         [],
     );
 }

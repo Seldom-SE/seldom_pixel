@@ -15,7 +15,7 @@ use bevy_render::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    animation::{AnimatedAssetComponent, Animation},
+    animation::{AnimatedAssetComponent, Frames},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
     position::{DefaultLayer, PxLayer, Spatial},
@@ -107,7 +107,7 @@ impl RenderAsset for PxSpriteAsset {
     }
 }
 
-impl Animation for PxSpriteAsset {
+impl Frames for PxSpriteAsset {
     type Param = ();
 
     fn frame_count(&self) -> usize {
@@ -400,7 +400,7 @@ pub(crate) type SpriteComponents<L> = (
     &'static PxAnchor,
     &'static L,
     &'static PxCanvas,
-    Option<&'static PxAnimation>,
+    Option<&'static PxFrame>,
     Option<&'static PxFilter>,
 );
 
@@ -409,9 +409,7 @@ fn extract_sprites<L: PxLayer>(
     sprites: Extract<Query<(SpriteComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((sprite, &position, &anchor, layer, &canvas, animation, filter), visibility, id) in
-        &sprites
-    {
+    for ((sprite, &position, &anchor, layer, &canvas, frame, filter), visibility, id) in &sprites {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -422,10 +420,10 @@ fn extract_sprites<L: PxLayer>(
 
         entity.insert((sprite.clone(), position, anchor, layer.clone(), canvas));
 
-        if let Some(animation) = animation {
-            entity.insert(*animation);
+        if let Some(frame) = frame {
+            entity.insert(*frame);
         } else {
-            entity.remove::<PxAnimation>();
+            entity.remove::<PxFrame>();
         }
 
         if let Some(filter) = filter {

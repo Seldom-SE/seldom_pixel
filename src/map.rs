@@ -260,7 +260,7 @@ pub(crate) type MapComponents<L> = (
     &'static PxPosition,
     &'static L,
     &'static PxCanvas,
-    Option<&'static PxAnimation>,
+    Option<&'static PxFrame>,
     Option<&'static PxFilter>,
 );
 
@@ -269,7 +269,7 @@ fn extract_maps<L: PxLayer>(
     render_entities: Extract<Query<RenderEntity>>,
     mut cmd: Commands,
 ) {
-    for ((map, &position, layer, &canvas, animation, filter), visibility, id) in &maps {
+    for ((map, &position, layer, &canvas, frame, filter), visibility, id) in &maps {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -286,8 +286,8 @@ fn extract_maps<L: PxLayer>(
 
         entity.insert((map, position, layer.clone(), canvas));
 
-        if let Some(animation) = animation {
-            entity.insert(*animation);
+        if let Some(frame) = frame {
+            entity.insert(*frame);
         } else {
             entity.remove::<PxAnimation>();
         }

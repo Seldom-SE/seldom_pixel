@@ -3,7 +3,7 @@ use bevy_math::{ivec2, uvec2};
 use bevy_render::{sync_world::RenderEntity, Extract, RenderApp};
 
 use crate::{
-    animation::Animation, filter::DefaultPxFilterLayers, image::PxImageSliceMut, position::Spatial,
+    animation::Frames, filter::DefaultPxFilterLayers, image::PxImageSliceMut, position::Spatial,
     prelude::*,
 };
 
@@ -30,7 +30,7 @@ impl Default for PxRect {
     }
 }
 
-impl Animation for (PxRect, &PxFilterAsset) {
+impl Frames for (PxRect, &PxFilterAsset) {
     type Param = bool;
 
     fn frame_count(&self) -> usize {
@@ -74,7 +74,7 @@ pub(crate) type RectComponents<L> = (
     &'static PxPosition,
     &'static PxAnchor,
     &'static PxCanvas,
-    Option<&'static PxAnimation>,
+    Option<&'static PxFrame>,
     Has<PxInvertMask>,
 );
 
@@ -82,9 +82,7 @@ fn extract_rects<L: PxLayer>(
     rects: Extract<Query<(RectComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,
 ) {
-    for ((&rect, filter, layers, &pos, &anchor, &canvas, animation, invert), visibility, id) in
-        &rects
-    {
+    for ((&rect, filter, layers, &pos, &anchor, &canvas, frame, invert), visibility, id) in &rects {
         let mut entity = cmd.entity(id);
 
         if !visibility.get() {
@@ -94,10 +92,10 @@ fn extract_rects<L: PxLayer>(
 
         entity.insert((rect, filter.clone(), layers.clone(), pos, anchor, canvas));
 
-        if let Some(&animation) = animation {
-            entity.insert(animation);
+        if let Some(&frame) = frame {
+            entity.insert(frame);
         } else {
-            entity.remove::<PxAnimation>();
+            entity.remove::<PxFrame>();
         }
 
         if invert {
