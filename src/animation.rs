@@ -48,6 +48,15 @@ pub struct PxFrame {
     pub transition: PxFrameTransition,
 }
 
+impl From<PxFrameSelector> for PxFrame {
+    fn from(value: PxFrameSelector) -> Self {
+        Self {
+            selector: value,
+            ..default()
+        }
+    }
+}
+
 /// Direction the animation plays
 #[derive(Clone, Copy, Debug, Default)]
 pub enum PxAnimationDirection {
@@ -178,7 +187,7 @@ pub(crate) fn animate(frame: PxFrame, frame_count: usize) -> impl Fn(UVec2) -> u
     };
 
     let dithering = match frame.transition {
-        PxFrameTransition::Dither => DITHERING[(index.fract() * 16.) as usize % 16 as usize],
+        PxFrameTransition::Dither => DITHERING[(index.fract() * 16.) as usize % 16],
         PxFrameTransition::None => 0,
     };
     let index = index.floor() as usize;
