@@ -28,12 +28,13 @@ pub use crate::line::PxLine;
 #[cfg(feature = "particle")]
 pub use crate::particle::{PxEmitter, PxEmitterFrequency, PxEmitterSimulation, PxParticleLifetime};
 pub use crate::{
+    PxPlugin,
     animation::{
         PxAnimation, PxAnimationDirection, PxAnimationDuration, PxAnimationFinishBehavior,
         PxAnimationFinished, PxFrame, PxFrameSelector, PxFrameTransition,
     },
     camera::{PxCamera, PxCanvas},
-    cursor::PxCursor,
+    cursor::{PxCursor, PxCursorPosition},
     filter::{PxFilter, PxFilterAsset, PxFilterLayers, PxInvertMask},
     map::{PxMap, PxTile, PxTiles, PxTileset},
     math::{Diagonal, Orthogonal},
@@ -43,13 +44,13 @@ pub use crate::{
     sprite::{PxSprite, PxSpriteAsset},
     text::{PxText, PxTypeface},
     ui::{
-        PxContainer, PxContainerBuilder, PxGrid, PxGridBuilder, PxKeyField, PxKeyFieldBuilder,
-        PxKeyFieldUpdate, PxMinSize, PxMinSizeBuilder, PxRectBuilder, PxRow, PxRowBuilder,
-        PxRowSlot, PxScroll, PxScrollBuilder, PxSlotBuilder, PxSpace, PxSpriteBuilder, PxStack,
-        PxStackBuilder, PxTextBuilder, PxTextField, PxTextFieldBuilder, PxTextFieldUpdate,
-        PxUiBuilder,
+        PxCaret, PxGrid, PxGridContainer, PxGridEntries, PxGridRow, PxGridRows, PxKeyField,
+        PxKeyFieldUpdate, PxMargin, PxMarginContainer, PxMarginContent, PxMinSize,
+        PxMinSizeContainer, PxMinSizeContent, PxRow, PxRowContainer, PxRowEntries, PxRowSlot,
+        PxScroll, PxScrollBarBgContainer, PxScrollBarBgContent, PxScrollBarContainer,
+        PxScrollBarContent, PxScrollContainer, PxScrollContent, PxStackContainer, PxStackEntries,
+        PxTextField, PxTextFieldUpdate, PxUiRoot,
     },
-    PxPlugin,
 };
 
 pub use seldom_pixel_macros::px_layer;

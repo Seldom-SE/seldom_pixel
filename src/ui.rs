@@ -13,17 +13,21 @@
 
 use std::time::Duration;
 
-use bevy_ecs::system::{IntoObserverSystem, SystemId};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::system::SystemId;
 use bevy_input::{
+    ButtonState, InputSystem,
     keyboard::{Key, KeyboardInput, NativeKey},
     mouse::MouseWheel,
-    ButtonState, InputSystem,
 };
 use bevy_input_focus::InputFocus;
 use bevy_math::{ivec2, uvec2};
 
 use crate::{
-    blink::Blink, filter::TRANSPARENT_FILTER, position::Spatial, prelude::*, screen::Screen,
+    blink::Blink,
+    position::{DefaultLayer, Spatial},
+    prelude::*,
+    screen::Screen,
     set::PxSet,
 };
 
@@ -50,628 +54,146 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     );
 }
 
-pub trait PxUiBuilder<M>: 'static {
-    fn hide(self) -> impl PxUiBuilder<()>
-    where
-        Self: Sized,
-    {
-        self.insert(Visibility::Hidden)
-    }
+// TODO Work on this naming
 
-    fn insert(self, bundle: impl Bundle) -> impl PxUiBuilder<()>
-    where
-        Self: Sized,
-    {
-        move |mut entity: EntityCommands| {
-            entity.insert(bundle);
-            self.insert_into(entity);
-        }
-    }
+#[derive(Component)]
+#[require(PxCanvas, DefaultLayer)]
+pub struct PxUiRoot;
 
-    fn observe<E: Event, B: Bundle, M2>(
-        self,
-        observer: impl IntoObserverSystem<E, B, M2>,
-    ) -> impl PxUiBuilder<()>
-    where
-        Self: Sized,
-    {
-        move |mut entity: EntityCommands| {
-            self.insert_into(entity.reborrow());
-            entity.observe(observer);
-        }
-    }
+#[derive(Component, Deref, DerefMut)]
+#[relationship(relationship_target = PxMinSizeContent)]
+pub struct PxMinSizeContainer(pub Entity);
 
-    fn spawn<'a>(self, cmd: &'a mut Commands) -> EntityCommands<'a>
-    where
-        Self: Sized,
-    {
-        Box::new(self).dyn_spawn(cmd)
-    }
+#[derive(Component, Deref, Reflect)]
+#[require(PxMinSize)]
+#[relationship_target(relationship = PxMinSizeContainer)]
+pub struct PxMinSizeContent(Entity);
 
-    fn spawn_root<'a, L: PxLayer>(self, layer: L, cmd: &'a mut Commands) -> EntityCommands<'a>
-    where
-        Self: Sized,
-    {
-        let mut root = self.spawn(cmd);
-        root.insert((layer, PxCanvas::Camera));
-        root
-    }
-
-    fn dyn_spawn<'a>(self: Box<Self>, cmd: &'a mut Commands) -> EntityCommands<'a> {
-        let mut entity = cmd.spawn_empty();
-        self.dyn_insert_into(entity.reborrow());
-        entity
-    }
-
-    fn insert_into(self, entity: EntityCommands)
-    where
-        Self: Sized,
-    {
-        Box::new(self).dyn_insert_into(entity)
-    }
-
-    fn dyn_insert_into(self: Box<Self>, entity: EntityCommands);
-
-    fn erase(self) -> impl PxUiBuilder<()>
-    where
-        Self: Sized;
-}
-
-impl PxUiBuilder<()> for Entity {
-    fn dyn_spawn<'a>(self: Box<Self>, cmd: &'a mut Commands) -> EntityCommands<'a> {
-        cmd.entity(*self)
-    }
-
-    fn dyn_insert_into(self: Box<Self>, _: EntityCommands) {
-        error!("Called `dyn_insert_into` on `Entity`")
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()>
-    where
-        Self: Sized,
-    {
-        self
-    }
-}
-
-impl<T: 'static + FnOnce(EntityCommands)> PxUiBuilder<()> for T {
-    fn dyn_insert_into(self: Box<Self>, entity: EntityCommands) {
-        self(entity);
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
-
-impl<M, U: PxUiBuilder<M>, M2, T: 'static + IntoSystem<(), U, M2> + Send> PxUiBuilder<(M, U, M2)>
-    for T
-{
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.queue(|entity: EntityWorldMut| {
-            let mut system = IntoSystem::into_system(*self);
-            let id = entity.id();
-            let world = entity.into_world_mut();
-            system.initialize(world);
-            let ui = system.run((), world);
-            let mut cmd = world.commands();
-            let Ok(entity) = cmd.get_entity(id) else {
-                return;
-            };
-            ui.insert_into(entity);
-        });
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()>
-    where
-        Self: Sized,
-    {
-        move |entity: EntityCommands| self.insert_into(entity)
-    }
-}
-
-pub trait PxSlot {
-    fn new(content: Entity) -> Self;
-}
-
-pub trait PxSlotBuilder<T: PxSlot, M>: 'static {
-    fn spawn<'a>(self: Box<Self>, cmd: &'a mut Commands) -> (T, EntityCommands<'a>);
-
-    fn erase(self) -> impl PxSlotBuilder<T, ()>
-    where
-        Self: Sized;
-}
-
-impl<M, T: PxUiBuilder<M>, U: PxSlot> PxSlotBuilder<U, M> for T {
-    fn spawn<'a>(self: Box<Self>, cmd: &'a mut Commands) -> (U, EntityCommands<'a>) {
-        let content = (*self).spawn(cmd);
-        (U::new(content.id()), content)
-    }
-
-    fn erase(self) -> impl PxSlotBuilder<U, ()>
-    where
-        Self: Sized,
-    {
-        self.erase()
-    }
-}
-
-#[derive(Component, Reflect)]
-pub struct PxSpace;
-
-impl PxUiBuilder<()> for PxSpace {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.insert(*self);
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()>
-    where
-        Self: Sized,
-    {
-        self
-    }
-}
-
-#[derive(Component, Reflect)]
+#[derive(Component, Deref, DerefMut, Default, Reflect)]
 #[require(Visibility)]
-pub struct PxMinSize {
-    pub content: Entity,
-    pub x: u32,
-    pub y: u32,
-}
+pub struct PxMinSize(pub UVec2);
 
-impl PxMinSize {
-    pub fn build<M>(content: impl PxUiBuilder<M>) -> PxMinSizeBuilder {
-        PxMinSizeBuilder {
-            content: Box::new(content.erase()),
-            x: 0,
-            y: 0,
-        }
-    }
-}
+#[derive(Component, Deref, DerefMut)]
+#[relationship(relationship_target = PxMarginContent)]
+pub struct PxMarginContainer(pub Entity);
 
-pub struct PxMinSizeBuilder {
-    pub content: Box<dyn PxUiBuilder<()>>,
-    pub x: u32,
-    pub y: u32,
-}
+#[derive(Component, Deref, Reflect)]
+#[require(PxMargin)]
+#[relationship_target(relationship = PxMarginContainer)]
+pub struct PxMarginContent(Entity);
 
-impl PxMinSizeBuilder {
-    pub fn x(mut self, x: u32) -> Self {
-        self.x = x;
-        self
-    }
-
-    pub fn y(mut self, y: u32) -> Self {
-        self.y = y;
-        self
-    }
-}
-
-impl PxUiBuilder<()> for PxMinSizeBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        let content = self.content.dyn_spawn(entity.commands_mut()).id();
-
-        entity
-            .try_insert(PxMinSize {
-                content,
-                x: self.x,
-                y: self.y,
-            })
-            .add_child(content);
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
-
-// TODO Rename to `PxMargin`
-#[derive(Component, Reflect)]
+#[derive(Component, Deref, DerefMut, Reflect)]
 #[require(Visibility)]
-pub struct PxContainer {
-    content: Entity,
-    margin: u32,
-}
+pub struct PxMargin(pub u32);
 
-impl PxContainer {
-    pub fn build<M>(content: impl PxUiBuilder<M>) -> PxContainerBuilder {
-        PxContainerBuilder {
-            content: Box::new(content.erase()),
-            margin: 0,
-        }
+impl Default for PxMargin {
+    fn default() -> Self {
+        Self(1)
     }
 }
 
-pub struct PxContainerBuilder {
-    pub content: Box<dyn PxUiBuilder<()>>,
-    pub margin: u32,
-}
+#[derive(Component, Deref, DerefMut, Clone, Reflect)]
+#[require(PxRowSlot)]
+#[relationship(relationship_target = PxRowEntries)]
+pub struct PxRowContainer(pub Entity);
 
-impl PxContainerBuilder {
-    pub fn margin(mut self, margin: u32) -> Self {
-        self.margin = margin;
-        self
-    }
-}
-
-impl PxUiBuilder<()> for PxContainerBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        let content = self.content.dyn_spawn(entity.commands_mut()).id();
-
-        entity
-            .try_insert(PxContainer {
-                content,
-                margin: self.margin,
-            })
-            .add_child(content);
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
-
-#[derive(Clone, Reflect)]
+#[derive(Component, Default)]
 pub struct PxRowSlot {
-    pub content: Entity,
     pub stretch: bool,
-    // TODO Maybe make filling the default?
-    pub fill: bool,
 }
 
-impl PxRowSlot {
-    pub fn build<M>(content: impl PxUiBuilder<M>) -> PxRowSlotBuilder {
-        PxRowSlotBuilder {
-            content: Box::new(content.erase()),
-            stretch: false,
-            fill: false,
-        }
-    }
-}
+#[derive(Component, Deref, Clone, Reflect)]
+#[require(PxRow)]
+#[relationship_target(relationship = PxRowContainer)]
+pub struct PxRowEntries(Vec<Entity>);
 
-impl PxSlot for PxRowSlot {
-    fn new(content: Entity) -> Self {
-        Self {
-            content,
-            stretch: false,
-            fill: false,
-        }
-    }
-}
-
-pub struct PxRowSlotBuilder {
-    pub content: Box<dyn PxUiBuilder<()>>,
-    pub stretch: bool,
-    pub fill: bool,
-}
-
-impl PxRowSlotBuilder {
-    pub fn stretch(mut self) -> Self {
-        self.stretch = true;
-        self
-    }
-
-    pub fn fill(mut self) -> Self {
-        self.fill = true;
-        self
-    }
-}
-
-impl PxSlotBuilder<PxRowSlot, ()> for PxRowSlotBuilder {
-    fn spawn<'a>(self: Box<Self>, cmd: &'a mut Commands) -> (PxRowSlot, EntityCommands<'a>) {
-        let content = self.content.dyn_spawn(cmd);
-        (
-            PxRowSlot {
-                content: content.id(),
-                stretch: self.stretch,
-                fill: self.fill,
-            },
-            content,
-        )
-    }
-
-    fn erase(self) -> impl PxSlotBuilder<PxRowSlot, ()> {
-        self
-    }
-}
-
-#[derive(Component, Clone, Reflect)]
+#[derive(Component, Default, Clone, Reflect)]
 #[require(Visibility)]
 pub struct PxRow {
-    pub entries: Vec<PxRowSlot>,
     pub vertical: bool,
     pub space_between: u32,
 }
 
-impl PxRow {
-    pub fn build() -> PxRowBuilder {
-        PxRowBuilder {
-            entries: Vec::new(),
-            vertical: false,
-            space_between: 0,
-        }
-    }
-}
+#[derive(Component, Deref, DerefMut)]
+#[relationship(relationship_target = PxGridEntries)]
+pub struct PxGridContainer(pub Entity);
 
-impl PxRow {
-    pub fn push_entry<M>(
-        &mut self,
-        entry: impl PxSlotBuilder<PxRowSlot, M>,
-        mut row: EntityCommands,
-    ) {
-        let (entry, entry_entity) = Box::new(entry).spawn(row.commands_mut());
-        let entry_id = entry_entity.id();
+#[derive(Component, Deref, Clone, Reflect)]
+#[require(PxGrid)]
+#[relationship_target(relationship = PxGridContainer)]
+pub struct PxGridEntries(Vec<Entity>);
 
-        self.entries.push(entry);
-        row.add_child(entry_id);
-    }
-
-    pub fn clear_entries(&mut self, mut row: EntityCommands) {
-        self.entries.clear();
-        row.despawn_related::<Children>();
-    }
-}
-
-pub struct PxRowBuilder {
-    pub entries: Vec<Box<dyn PxSlotBuilder<PxRowSlot, ()>>>,
-    pub vertical: bool,
-    pub space_between: u32,
-}
-
-impl PxRowBuilder {
-    pub fn vertical(mut self) -> Self {
-        self.vertical = true;
-        self
-    }
-
-    pub fn entry<M>(mut self, entry: impl PxSlotBuilder<PxRowSlot, M>) -> Self {
-        self.entries.push(Box::new(entry.erase()));
-        self
-    }
-
-    pub fn space_between(mut self, space_between: u32) -> Self {
-        self.space_between = space_between;
-        self
-    }
-}
-
-impl PxUiBuilder<()> for PxRowBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        let entries = self
-            .entries
-            .into_iter()
-            .map(|entry| {
-                let (entry, entry_entity) = entry.spawn(entity.commands_mut());
-                let entry_id = entry_entity.id();
-                entity.add_child(entry_id);
-                entry
-            })
-            .collect();
-
-        entity.try_insert(PxRow {
-            entries,
-            vertical: self.vertical,
-            space_between: self.space_between,
-        });
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
+#[derive(Default, Clone, Reflect)]
+pub struct PxGridRow {
+    pub stretch: bool,
 }
 
 #[derive(Default, Clone, Reflect)]
-pub struct GridRow {
-    pub stretch: bool,
-}
-
-#[derive(Clone, Reflect)]
-pub struct GridRows {
-    pub rows: Vec<GridRow>,
+pub struct PxGridRows {
+    pub rows: Vec<PxGridRow>,
     pub space_between: u32,
 }
 
-#[derive(Component, Clone, Reflect)]
+#[derive(Component, Clone)]
 #[require(Visibility)]
 pub struct PxGrid {
     pub width: u32,
-    pub entries: Vec<Entity>,
-    pub rows: GridRows,
-    pub columns: GridRows,
+    pub rows: PxGridRows,
+    pub columns: PxGridRows,
 }
 
-impl PxGrid {
-    pub fn build(width: u32) -> PxGridBuilder {
-        PxGridBuilder {
-            width,
-            entries: Vec::new(),
-            rows: GridRows {
-                rows: Vec::new(),
-                space_between: 0,
-            },
-            columns: GridRows {
-                rows: vec![default(); width as usize],
-                space_between: 0,
-            },
+impl Default for PxGrid {
+    fn default() -> Self {
+        Self {
+            width: 2,
+            rows: default(),
+            columns: default(),
         }
     }
 }
 
-pub struct PxGridBuilder {
-    pub width: u32,
-    pub entries: Vec<Box<dyn PxUiBuilder<()>>>,
-    pub rows: GridRows,
-    pub columns: GridRows,
-}
+#[derive(Component, Deref, DerefMut)]
+#[relationship(relationship_target = PxStackEntries)]
+pub struct PxStackContainer(pub Entity);
 
-impl PxGridBuilder {
-    pub fn entry<M>(mut self, entry: impl PxUiBuilder<M>) -> Self {
-        self.entries.push(Box::new(entry.erase()));
-        self
-    }
-
-    pub fn rows_space_between(mut self, space_between: u32) -> Self {
-        self.rows.space_between = space_between;
-        self
-    }
-
-    pub fn columns_space_between(mut self, space_between: u32) -> Self {
-        self.columns.space_between = space_between;
-        self
-    }
-
-    pub fn row_stretch(mut self, row: usize) -> Self {
-        if self.rows.rows.len() < row {
-            self.rows.rows.resize(row + 1, default());
-        }
-
-        self.rows.rows[row].stretch = true;
-        self
-    }
-
-    pub fn column_stretch(mut self, column: usize) -> Self {
-        if let Some(column) = self.columns.rows.get_mut(column) {
-            column.stretch = true;
-        }
-
-        self
-    }
-}
-
-impl PxUiBuilder<()> for PxGridBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        let entries = self
-            .entries
-            .into_iter()
-            .map(|entry| {
-                let entry = entry.dyn_spawn(entity.commands_mut()).id();
-                entity.add_child(entry);
-                entry
-            })
-            .collect();
-
-        entity.try_insert(PxGrid {
-            width: self.width,
-            entries,
-            rows: self.rows,
-            columns: self.columns,
-        });
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
-
-#[derive(Component, Clone, Reflect)]
+#[derive(Component, Deref, Clone, Reflect)]
 #[require(Visibility)]
-pub struct PxStack {
-    pub entries: Vec<Entity>,
-}
+#[relationship_target(relationship = PxStackContainer)]
+pub struct PxStackEntries(#[relationship] Vec<Entity>);
 
-impl PxStack {
-    pub fn build() -> PxStackBuilder {
-        PxStackBuilder {
-            entries: Vec::new(),
-        }
-    }
-}
+#[derive(Component, Deref, DerefMut, Clone, Reflect)]
+#[relationship(relationship_target = PxScrollContent)]
+pub struct PxScrollContainer(pub Entity);
 
-pub struct PxStackBuilder {
-    pub entries: Vec<Box<dyn PxUiBuilder<()>>>,
-}
+#[derive(Component, Deref, DerefMut, Clone, Reflect)]
+#[relationship(relationship_target = PxScrollBarContent)]
+pub struct PxScrollBarContainer(pub Entity);
 
-impl PxStackBuilder {
-    pub fn entry<M>(mut self, entry: impl PxUiBuilder<M>) -> Self {
-        self.entries.push(Box::new(entry.erase()));
-        self
-    }
-}
+#[derive(Component, Deref, DerefMut, Clone, Reflect)]
+#[relationship(relationship_target = PxScrollBarBgContent)]
+pub struct PxScrollBarBgContainer(pub Entity);
 
-impl PxUiBuilder<()> for PxStackBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        let entries = self
-            .entries
-            .into_iter()
-            .map(|entry| {
-                let entry = entry.dyn_spawn(entity.commands_mut()).id();
-                entity.add_child(entry);
-                entry
-            })
-            .collect();
+#[derive(Component, Deref, Clone, Reflect)]
+#[require(PxScroll)]
+#[relationship_target(relationship = PxScrollContainer)]
+pub struct PxScrollContent(Entity);
 
-        entity.try_insert(PxStack { entries });
-    }
+#[derive(Component, Deref, Clone, Reflect)]
+#[require(PxScroll)]
+#[relationship_target(relationship = PxScrollBarContainer)]
+pub struct PxScrollBarContent(Entity);
 
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
+#[derive(Component, Deref, Clone, Reflect)]
+#[require(PxScroll)]
+#[relationship_target(relationship = PxScrollBarBgContainer)]
+pub struct PxScrollBarBgContent(Entity);
 
-#[derive(Component, Clone, Copy, Reflect)]
+#[derive(Component, Default, Clone, Copy, Reflect)]
 #[require(PxInvertMask, PxRect)]
 pub struct PxScroll {
-    pub content: Entity,
-    pub bar: Entity,
-    pub bar_bg: Entity,
     pub horizontal: bool,
     pub scroll: u32,
     pub max_scroll: u32,
-}
-
-impl PxScroll {
-    pub fn build<M1, M2, M3>(
-        content: impl PxUiBuilder<M1>,
-        bar: impl PxUiBuilder<M2>,
-        bar_bg: impl PxUiBuilder<M3>,
-    ) -> PxScrollBuilder {
-        PxScrollBuilder {
-            content: Box::new(content.erase()),
-            bar: Box::new(bar.erase()),
-            bar_bg: Box::new(bar_bg.erase()),
-            horizontal: false,
-        }
-    }
-}
-
-pub struct PxScrollBuilder {
-    pub content: Box<dyn PxUiBuilder<()>>,
-    pub bar: Box<dyn PxUiBuilder<()>>,
-    pub bar_bg: Box<dyn PxUiBuilder<()>>,
-    pub horizontal: bool,
-}
-
-impl PxScrollBuilder {
-    pub fn horizontal(mut self) -> Self {
-        self.horizontal = true;
-        self
-    }
-}
-
-impl PxUiBuilder<()> for PxScrollBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        let content = self.content.dyn_spawn(entity.commands_mut()).id();
-        let bar = self.bar.dyn_spawn(entity.commands_mut()).id();
-        let bar_bg = self.bar_bg.dyn_spawn(entity.commands_mut()).id();
-
-        entity.insert((
-            PxScroll {
-                content,
-                bar,
-                bar_bg,
-                horizontal: self.horizontal,
-                scroll: 0,
-                max_scroll: 0,
-            },
-            PxInvertMask,
-            PxFilter(TRANSPARENT_FILTER),
-        ));
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
 }
 
 // TODO Should be modular
@@ -683,120 +205,6 @@ fn scroll(mut scrolls: Query<&mut PxScroll>, mut wheels: EventReader<MouseWheel>
                 .saturating_add_signed(-wheel.y as i32)
                 .min(scroll.max_scroll);
         }
-    }
-}
-
-impl PxRect {
-    pub fn build(filter: Handle<PxFilterAsset>) -> PxRectBuilder {
-        PxRectBuilder { filter }
-    }
-}
-
-pub struct PxRectBuilder {
-    filter: Handle<PxFilterAsset>,
-}
-
-impl PxUiBuilder<()> for PxRectBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.try_insert((PxRect(UVec2::ZERO), PxFilter(self.filter)));
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
-
-impl PxSprite {
-    pub fn build(sprite: Handle<PxSpriteAsset>) -> PxSpriteBuilder {
-        PxSpriteBuilder {
-            sprite,
-            filter: None,
-            animation: None,
-        }
-    }
-}
-
-pub struct PxSpriteBuilder {
-    pub sprite: Handle<PxSpriteAsset>,
-    pub filter: Option<Handle<PxFilterAsset>>,
-    pub animation: Option<PxAnimation>,
-}
-
-impl PxSpriteBuilder {
-    pub fn filter(mut self, filter: Handle<PxFilterAsset>) -> Self {
-        self.filter = Some(filter);
-        self
-    }
-
-    pub fn animation(mut self, animation: PxAnimation) -> Self {
-        self.animation = Some(animation);
-        self
-    }
-}
-
-impl PxUiBuilder<()> for PxSpriteBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.try_insert(PxSprite(self.sprite));
-
-        if let Some(filter) = self.filter {
-            entity.try_insert(PxFilter(filter));
-        }
-
-        if let Some(animation) = self.animation {
-            entity.try_insert(animation);
-        }
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
-
-impl PxText {
-    pub fn build(value: impl Into<String>, typeface: Handle<PxTypeface>) -> PxTextBuilder {
-        PxTextBuilder {
-            value: value.into(),
-            typeface,
-            filter: None,
-            animation: None,
-        }
-    }
-}
-
-pub struct PxTextBuilder {
-    pub value: String,
-    pub typeface: Handle<PxTypeface>,
-    pub filter: Option<Handle<PxFilterAsset>>,
-    pub animation: Option<PxAnimation>,
-}
-
-impl PxTextBuilder {
-    pub fn filter(mut self, filter: Handle<PxFilterAsset>) -> Self {
-        self.filter = Some(filter);
-        self
-    }
-
-    pub fn animation(mut self, animation: PxAnimation) -> Self {
-        self.animation = Some(animation);
-        self
-    }
-}
-
-impl PxUiBuilder<()> for PxTextBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.try_insert(PxText::new(self.value, self.typeface));
-
-        if let Some(filter) = self.filter {
-            entity.try_insert(PxFilter(filter));
-        }
-
-        if let Some(animation) = self.animation {
-            entity.try_insert(animation);
-        }
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
     }
 }
 
@@ -814,55 +222,6 @@ pub struct PxKeyField {
     #[reflect(ignore)]
     pub key_to_str: SystemId<In<KeyCode>, String>,
     pub cached_text: String,
-}
-
-impl PxKeyField {
-    pub fn build(
-        key: KeyCode,
-        caret: char,
-        key_to_str: SystemId<In<KeyCode>, String>,
-        typeface: Handle<PxTypeface>,
-    ) -> PxKeyFieldBuilder {
-        PxKeyFieldBuilder {
-            key,
-            caret,
-            key_to_str,
-            typeface,
-        }
-    }
-}
-
-pub struct PxKeyFieldBuilder {
-    pub key: KeyCode,
-    pub caret: char,
-    pub typeface: Handle<PxTypeface>,
-    pub key_to_str: SystemId<In<KeyCode>, String>,
-}
-
-impl PxUiBuilder<()> for PxKeyFieldBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.queue(|mut entity: EntityWorldMut| {
-            let Ok(text) =
-                entity.world_scope(|world| world.run_system_with(self.key_to_str, self.key))
-            else {
-                error!("couldn't run `key_to_str`");
-                return;
-            };
-
-            entity.insert((
-                PxKeyField {
-                    caret: self.caret,
-                    key_to_str: self.key_to_str,
-                    cached_text: text.clone(),
-                },
-                PxText::new(text, self.typeface),
-            ));
-        });
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
 }
 
 fn update_key_field_focus(
@@ -975,34 +334,6 @@ pub struct PxTextField {
     pub caret: Option<PxCaret>,
 }
 
-impl PxTextField {
-    pub fn build(caret: char, typeface: Handle<PxTypeface>) -> PxTextFieldBuilder {
-        PxTextFieldBuilder { caret, typeface }
-    }
-}
-
-pub struct PxTextFieldBuilder {
-    pub caret: char,
-    pub typeface: Handle<PxTypeface>,
-}
-
-impl PxUiBuilder<()> for PxTextFieldBuilder {
-    fn dyn_insert_into(self: Box<Self>, mut entity: EntityCommands) {
-        entity.try_insert((
-            PxTextField {
-                cached_text: String::new(),
-                caret_char: self.caret,
-                caret: None,
-            },
-            PxText::new(String::new(), self.typeface),
-        ));
-    }
-
-    fn erase(self) -> impl PxUiBuilder<()> {
-        self
-    }
-}
-
 fn update_text_field_focus(
     mut prev_focus: Local<Option<Entity>>,
     mut fields: Query<(&mut PxTextField, &mut PxText)>,
@@ -1110,12 +441,21 @@ fn calc_min_size<L: PxLayer>(
     ui: Entity,
     uis: Query<(
         AnyOf<(
-            &PxMinSize,
-            &PxContainer,
-            &PxRow,
-            &PxGrid,
-            &PxStack,
-            (Option<&PxScroll>, &PxRect, &PxFilterLayers<L>),
+            (&PxMinSize, &PxMinSizeContent),
+            (&PxMargin, &PxMarginContent),
+            (&PxRow, &PxRowEntries),
+            (&PxGrid, &PxGridEntries),
+            &PxStackEntries,
+            (
+                Option<(
+                    &PxScroll,
+                    &PxScrollContent,
+                    &PxScrollBarContent,
+                    &PxScrollBarBgContent,
+                )>,
+                &PxRect,
+                &PxFilterLayers<L>,
+            ),
             &PxSprite,
             &PxText,
         )>,
@@ -1125,47 +465,37 @@ fn calc_min_size<L: PxLayer>(
     typefaces: &Assets<PxTypeface>,
     sprites: &Assets<PxSpriteAsset>,
 ) -> UVec2 {
-    let Ok(((min_size, container, row, grid, stack, rect, sprite, text), _, _)) = uis.get(ui)
-    else {
+    let Ok(((min_size, margin, row, grid, stack, rect, sprite, text), _, _)) = uis.get(ui) else {
         // This includes `PxSpace`. Surprise, the `PxSpace` component doesn't do anything at all.
         // It's just easier to spawn in UI.
         return UVec2::ZERO;
     };
 
-    if let Some(min_size) = min_size {
-        return calc_min_size(min_size.content, uis.as_readonly(), typefaces, sprites)
-            .max(uvec2(min_size.x, min_size.y));
+    if let Some((min_size, content)) = min_size {
+        return calc_min_size(**content, uis.as_readonly(), typefaces, sprites).max(**min_size);
     }
 
-    if let Some(container) = container {
-        return calc_min_size(container.content, uis.as_readonly(), typefaces, sprites)
-            + 2 * UVec2::splat(container.margin);
+    if let Some((margin, content)) = margin {
+        return calc_min_size(**content, uis.as_readonly(), typefaces, sprites)
+            + 2 * UVec2::splat(**margin);
     }
 
     fn dim(vec: UVec2, y: bool) -> u32 {
-        if y {
-            vec.y
-        } else {
-            vec.x
-        }
+        if y { vec.y } else { vec.x }
     }
 
     fn dim_mut(vec: &mut UVec2, y: bool) -> &mut u32 {
-        if y {
-            &mut vec.y
-        } else {
-            &mut vec.x
-        }
+        if y { &mut vec.y } else { &mut vec.x }
     }
 
-    if let Some(row) = row {
+    if let Some((row, entries)) = row {
         let vert = row.vertical;
         let mut size = UVec2::ZERO;
 
-        *dim_mut(&mut size, vert) += row.entries.len().saturating_sub(1) as u32 * row.space_between;
+        *dim_mut(&mut size, vert) += entries.len().saturating_sub(1) as u32 * row.space_between;
 
-        for entry in &row.entries {
-            let min_size = calc_min_size(entry.content, uis.as_readonly(), typefaces, sprites);
+        for &entry in &**entries {
+            let min_size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites);
 
             *dim_mut(&mut size, vert) += dim(min_size, vert);
 
@@ -1178,14 +508,14 @@ fn calc_min_size<L: PxLayer>(
         return size;
     }
 
-    if let Some(grid) = grid {
+    if let Some((grid, entries)) = grid {
         let mut column_widths = vec![0; grid.width as usize];
-        let mut height = (grid.entries.len() as u32)
+        let mut height = (entries.len() as u32)
             .div_ceil(grid.width)
             .saturating_sub(1)
             * grid.rows.space_between;
 
-        for row in grid.entries.chunks(grid.width as usize) {
+        for row in entries.chunks(grid.width as usize) {
             let mut row_height = 0;
 
             for (column, &entry) in row.iter().enumerate() {
@@ -1213,7 +543,7 @@ fn calc_min_size<L: PxLayer>(
     if let Some(stack) = stack {
         let mut size = UVec2::ZERO;
 
-        for &entry in &stack.entries {
+        for &entry in &**stack {
             size = size.max(calc_min_size(entry, uis.as_readonly(), typefaces, sprites));
         }
 
@@ -1221,15 +551,15 @@ fn calc_min_size<L: PxLayer>(
     }
 
     if let Some((scroll, _, _)) = rect {
-        let Some(scroll) = scroll else {
+        let Some((scroll, content, bar, bar_bg)) = scroll else {
             return UVec2::ZERO;
         };
 
         let horz = scroll.horizontal;
 
-        let mut size = calc_min_size(scroll.content, uis.as_readonly(), typefaces, sprites);
-        let bar_size = calc_min_size(scroll.bar, uis.as_readonly(), typefaces, sprites).max(
-            calc_min_size(scroll.bar_bg, uis.as_readonly(), typefaces, sprites),
+        let mut size = calc_min_size(**content, uis.as_readonly(), typefaces, sprites);
+        let bar_size = calc_min_size(**bar, uis.as_readonly(), typefaces, sprites).max(
+            calc_min_size(**bar_bg, uis.as_readonly(), typefaces, sprites),
         );
 
         *dim_mut(&mut size, horz) += dim(bar_size, horz);
@@ -1283,91 +613,94 @@ fn layout_inner<L: PxLayer>(
     ui: Entity,
     mut uis: Query<(
         AnyOf<(
-            &PxMinSize,
-            &PxContainer,
-            &PxRow,
-            &PxGrid,
-            &PxStack,
-            (Option<&mut PxScroll>, &mut PxRect, &mut PxFilterLayers<L>),
+            (&PxMinSize, &PxMinSizeContent),
+            (&PxMargin, &PxMarginContent),
+            (&PxRow, &PxRowEntries),
+            (&PxGrid, &PxGridEntries),
+            &PxStackEntries,
+            (
+                Option<(
+                    &mut PxScroll,
+                    &PxScrollContent,
+                    &PxScrollBarContent,
+                    &PxScrollBarBgContent,
+                )>,
+                &mut PxRect,
+                &mut PxFilterLayers<L>,
+            ),
             &PxSprite,
             &mut PxText,
         )>,
         Option<&mut L>,
         Option<(&mut PxPosition, &mut PxCanvas)>,
     )>,
+    row_slots: Query<&PxRowSlot>,
     typefaces: &Assets<PxTypeface>,
     sprites: &Assets<PxSpriteAsset>,
-) -> Option<L> {
-    let Ok(((min_size, container, row, grid, stack, rect, sprite, text), _, _)) = uis.get(ui)
-    else {
-        return None;
+) -> Result<Option<L>> {
+    let Ok(((min_size, margin, row, grid, stack, rect, sprite, text), _, _)) = uis.get(ui) else {
+        return Ok(None);
     };
 
-    if let Some(min_size) = min_size {
+    if let Some((_, content)) = min_size {
         return layout_inner(
             target_rect,
             target_layer,
             target_canvas,
-            min_size.content,
+            **content,
             uis,
+            row_slots,
             typefaces,
             sprites,
         );
     }
 
-    if let Some(container) = container {
+    if let Some((margin, content)) = margin {
         return layout_inner(
             IRect {
-                min: target_rect.min + container.margin as i32,
-                max: target_rect.max - container.margin as i32,
+                min: target_rect.min + **margin as i32,
+                max: target_rect.max - **margin as i32,
             },
             target_layer,
             target_canvas,
-            container.content,
+            **content,
             uis,
+            row_slots,
             typefaces,
             sprites,
         );
     }
 
     fn dim(vec: IVec2, y: bool) -> i32 {
-        if y {
-            vec.y
-        } else {
-            vec.x
-        }
+        if y { vec.y } else { vec.x }
     }
 
     // Adds to x, subtracts from y
     fn add(augend: i32, addend: i32, y: bool) -> i32 {
-        if y {
-            augend - addend
-        } else {
-            augend + addend
-        }
+        if y { augend - addend } else { augend + addend }
     }
 
     fn rect_size(rect: IRect, y: bool) -> i32 {
-        if y {
-            rect.height()
-        } else {
-            rect.width()
-        }
+        if y { rect.height() } else { rect.width() }
     }
 
-    if let Some(row) = row.cloned() {
+    if let Some((row, entries)) = row {
+        let row = row.clone();
+        let entries = entries.clone();
+
         fn dim_mut(vec: &mut IVec2, y: bool) -> &mut i32 {
-            if y {
-                &mut vec.y
-            } else {
-                &mut vec.x
-            }
+            if y { &mut vec.y } else { &mut vec.x }
         }
 
         let vert = row.vertical;
         let mut pos = ivec2(target_rect.min.x, target_rect.max.y);
-        let mut remaining_stretchers =
-            row.entries.iter().filter(|entry| entry.stretch).count() as i32;
+        let mut remaining_stretchers = entries
+            .iter()
+            .map(|entry| row_slots.get(entry))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter(|slot| slot.stretch)
+            .count() as i32;
         let mut stretch_budget = rect_size(target_rect, vert)
             - dim(
                 calc_min_size(ui, uis.as_readonly(), typefaces, sprites).as_ivec2(),
@@ -1377,10 +710,10 @@ fn layout_inner<L: PxLayer>(
 
         let mut layer = None::<L>;
 
-        for entry in row.entries {
-            let mut size =
-                calc_min_size(entry.content, uis.as_readonly(), typefaces, sprites).as_ivec2();
-            if entry.stretch {
+        for &entry in &**entries {
+            let slot = row_slots.get(entry)?;
+            let mut size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites).as_ivec2();
+            if slot.stretch {
                 // For simplicity, we just split the extra size among the stretched entries evenly
                 // instead of prioritizing the smallest. I might change this in the future.
                 let extra_size = stretch_budget / remaining_stretchers;
@@ -1389,9 +722,9 @@ fn layout_inner<L: PxLayer>(
                 remaining_stretchers -= 1;
             }
 
-            if entry.fill {
-                *dim_mut(&mut size, !vert) = fill_size;
-            }
+            // if entry.fill {
+            *dim_mut(&mut size, !vert) = fill_size;
+            // }
 
             let entry_layer = if let Some(ref layer) = layer {
                 layer.clone().next().unwrap_or(layer.clone())
@@ -1407,11 +740,12 @@ fn layout_inner<L: PxLayer>(
                 },
                 &entry_layer,
                 target_canvas,
-                entry.content,
+                entry,
                 uis.reborrow(),
+                row_slots.as_readonly(),
                 typefaces,
                 sprites,
-            ) {
+            )? {
                 layer = Some(last_layer);
             }
 
@@ -1422,14 +756,17 @@ fn layout_inner<L: PxLayer>(
             );
         }
 
-        return layer;
+        return Ok(layer);
     }
 
-    if let Some(grid) = grid.cloned() {
-        let mut column_widths = vec![0; grid.width as usize];
-        let mut row_heights = vec![0; grid.entries.len().div_ceil(grid.width as usize)];
+    if let Some((grid, entries)) = grid {
+        let grid = grid.clone();
+        let entries = entries.clone();
 
-        for (row_index, row) in grid.entries.chunks(grid.width as usize).enumerate() {
+        let mut column_widths = vec![0; grid.width as usize];
+        let mut row_heights = vec![0; entries.len().div_ceil(grid.width as usize)];
+
+        for (row_index, row) in entries.chunks(grid.width as usize).enumerate() {
             for (column, &entry) in row.iter().enumerate() {
                 let size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites).as_ivec2();
 
@@ -1487,7 +824,7 @@ fn layout_inner<L: PxLayer>(
 
         let mut layer = None::<L>;
 
-        for (row_index, row) in grid.entries.chunks(grid.width as usize).enumerate() {
+        for (row_index, row) in entries.chunks(grid.width as usize).enumerate() {
             let mut x_pos = target_rect.min.x;
             let height = row_heights[row_index];
 
@@ -1509,9 +846,10 @@ fn layout_inner<L: PxLayer>(
                     target_canvas,
                     entry,
                     uis.reborrow(),
+                    row_slots.as_readonly(),
                     typefaces,
                     sprites,
-                ) {
+                )? {
                     layer = Some(last_layer);
                 };
 
@@ -1521,13 +859,13 @@ fn layout_inner<L: PxLayer>(
             y_pos -= height + grid.columns.space_between as i32;
         }
 
-        return layer;
+        return Ok(layer);
     }
 
     if let Some(stack) = stack.cloned() {
         let mut layer = None::<L>;
 
-        for entry in stack.entries {
+        for &entry in &**stack {
             let entry_layer = if let Some(ref layer) = layer {
                 layer.clone().next().unwrap_or(layer.clone())
             } else {
@@ -1540,14 +878,15 @@ fn layout_inner<L: PxLayer>(
                 target_canvas,
                 entry,
                 uis.reborrow(),
+                row_slots.as_readonly(),
                 typefaces,
                 sprites,
-            ) {
+            )? {
                 layer = Some(last_layer);
             };
         }
 
-        return layer;
+        return Ok(layer);
     }
 
     if rect.is_some() {
@@ -1559,52 +898,34 @@ fn layout_inner<L: PxLayer>(
 
         let (scroll, mut rect, mut layers) = rect.unwrap();
 
-        if let Some(scroll) = scroll {
+        if let Some((scroll, content, bar, bg)) = scroll {
             fn rect_start(rect: IRect, y: bool) -> i32 {
-                if y {
-                    rect.max.y
-                } else {
-                    rect.min.x
-                }
+                if y { rect.max.y } else { rect.min.x }
             }
 
             fn rect_start_mut(rect: &mut IRect, y: bool) -> &mut i32 {
-                if y {
-                    &mut rect.max.y
-                } else {
-                    &mut rect.min.x
-                }
+                if y { &mut rect.max.y } else { &mut rect.min.x }
             }
 
             fn rect_end(rect: IRect, y: bool) -> i32 {
-                if y {
-                    rect.min.y
-                } else {
-                    rect.max.x
-                }
+                if y { rect.min.y } else { rect.max.x }
             }
 
             fn rect_end_mut(rect: &mut IRect, y: bool) -> &mut i32 {
-                if y {
-                    &mut rect.min.y
-                } else {
-                    &mut rect.max.x
-                }
+                if y { &mut rect.min.y } else { &mut rect.max.x }
             }
 
             let scroll = *scroll;
+            let content = **content;
+            let bar = **bar;
+            let bg = **bg;
             let horz = scroll.horizontal;
 
             let content_min_size =
-                calc_min_size(scroll.content, uis.as_readonly(), typefaces, sprites).as_ivec2();
+                calc_min_size(content, uis.as_readonly(), typefaces, sprites).as_ivec2();
 
-            let bar_min_size = calc_min_size(scroll.bar, uis.as_readonly(), typefaces, sprites)
-                .max(calc_min_size(
-                    scroll.bar_bg,
-                    uis.as_readonly(),
-                    typefaces,
-                    sprites,
-                ))
+            let bar_min_size = calc_min_size(bar, uis.as_readonly(), typefaces, sprites)
+                .max(calc_min_size(bg, uis.as_readonly(), typefaces, sprites))
                 .as_ivec2();
 
             let mut view_rect = target_rect;
@@ -1638,11 +959,12 @@ fn layout_inner<L: PxLayer>(
                 content_rect,
                 target_layer,
                 target_canvas,
-                scroll.content,
+                content,
                 uis.reborrow(),
+                row_slots.as_readonly(),
                 typefaces,
                 sprites,
-            );
+            )?;
 
             let ((_, _, _, _, _, rect, _, _), _, _) = uis.get_mut(ui).unwrap();
             let (_, _, mut layers) = rect.unwrap();
@@ -1669,11 +991,12 @@ fn layout_inner<L: PxLayer>(
                 bar_rect,
                 &bg_layer,
                 target_canvas,
-                scroll.bar_bg,
+                bg,
                 uis.reborrow(),
+                row_slots.as_readonly(),
                 typefaces,
                 sprites,
-            );
+            )?;
             let bar_layer = if let Some(last_bg_layer) = last_bg_layer {
                 layer = Some(last_bg_layer.clone());
                 last_bg_layer.clone().next().unwrap_or(last_bg_layer)
@@ -1701,7 +1024,7 @@ fn layout_inner<L: PxLayer>(
 
             let ((_, _, _, _, _, rect, _, _), _, _) = uis.get_mut(ui).unwrap();
             let (scroll, _, _) = rect.unwrap();
-            let mut scroll = scroll.unwrap();
+            let (mut scroll, _, _, _) = scroll.unwrap();
 
             scroll.max_scroll = (view_size as f32 * (1. / ratio - 1.)).ceil() as u32;
 
@@ -1709,15 +1032,16 @@ fn layout_inner<L: PxLayer>(
                 bar_rect,
                 &bar_layer,
                 target_canvas,
-                scroll.bar,
+                bar,
                 uis.reborrow(),
+                row_slots.as_readonly(),
                 typefaces,
                 sprites,
-            ) {
+            )? {
                 layer = Some(last_bar_layer);
             }
 
-            return layer;
+            return Ok(layer);
         } else {
             if let Some((mut pos, _)) = pos {
                 **pos = target_rect.center();
@@ -1736,7 +1060,7 @@ fn layout_inner<L: PxLayer>(
 
             **rect = target_rect.size().as_uvec2();
 
-            return Some(target_layer.clone());
+            return Ok(Some(target_layer.clone()));
         }
     }
 
@@ -1752,7 +1076,7 @@ fn layout_inner<L: PxLayer>(
             *layer = target_layer.clone();
         }
 
-        return Some(target_layer.clone());
+        return Ok(Some(target_layer.clone()));
     }
 
     if text.is_some() {
@@ -1763,7 +1087,7 @@ fn layout_inner<L: PxLayer>(
         }
 
         let Some((mut pos, mut canvas)) = pos else {
-            return Some(target_layer.clone());
+            return Ok(Some(target_layer.clone()));
         };
 
         *canvas = target_canvas;
@@ -1776,7 +1100,7 @@ fn layout_inner<L: PxLayer>(
         } = *text;
 
         let Some(typeface) = typefaces.get(typeface) else {
-            return Some(target_layer.clone());
+            return Ok(Some(target_layer.clone()));
         };
 
         line_breaks.clear();
@@ -1828,7 +1152,7 @@ fn layout_inner<L: PxLayer>(
                 -((line_break_count + 1) * typeface.height as i32 + line_break_count),
             ) / 2;
 
-        return Some(target_layer.clone());
+        return Ok(Some(target_layer.clone()));
     }
 
     unreachable!();
@@ -1836,27 +1160,24 @@ fn layout_inner<L: PxLayer>(
 
 fn layout<L: PxLayer>(
     mut uis: ParamSet<(
-        Query<
-            (&L, &PxCanvas, Entity),
-            (
-                Or<(
-                    With<PxMinSize>,
-                    With<PxContainer>,
-                    With<PxRow>,
-                    With<PxGrid>,
-                    With<PxStack>,
-                )>,
-                Without<ChildOf>,
-            ),
-        >,
+        Query<(&L, &PxCanvas, Entity), With<PxUiRoot>>,
         Query<(
             AnyOf<(
-                &PxMinSize,
-                &PxContainer,
-                &PxRow,
-                &PxGrid,
-                &PxStack,
-                (Option<&mut PxScroll>, &mut PxRect, &mut PxFilterLayers<L>),
+                (&PxMinSize, &PxMinSizeContent),
+                (&PxMargin, &PxMarginContent),
+                (&PxRow, &PxRowEntries),
+                (&PxGrid, &PxGridEntries),
+                &PxStackEntries,
+                (
+                    Option<(
+                        &mut PxScroll,
+                        &PxScrollContent,
+                        &PxScrollBarContent,
+                        &PxScrollBarBgContent,
+                    )>,
+                    &mut PxRect,
+                    &mut PxFilterLayers<L>,
+                ),
                 &PxSprite,
                 &mut PxText,
             )>,
@@ -1864,10 +1185,11 @@ fn layout<L: PxLayer>(
             Option<(&mut PxPosition, &mut PxCanvas)>,
         )>,
     )>,
+    row_slots: Query<&PxRowSlot>,
     typefaces: Res<Assets<PxTypeface>>,
     sprites: Res<Assets<PxSpriteAsset>>,
     screen: Res<Screen>,
-) {
+) -> Result {
     for (layer, canvas, root) in uis
         .p0()
         .iter()
@@ -1883,8 +1205,11 @@ fn layout<L: PxLayer>(
             canvas,
             root,
             uis.p1(),
+            row_slots.as_readonly(),
             &typefaces,
             &sprites,
-        );
+        )?;
     }
+
+    OK
 }

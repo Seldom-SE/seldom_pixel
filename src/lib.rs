@@ -5,6 +5,8 @@
 //! typefaces, an in-game cursor, camera, lines, and more to come! Optional integration with
 //! `seldom_state` (for animation state machines) and `seldom_map_nav`.
 
+// TODO Remove `Px` prefix where possible
+
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 #![warn(missing_docs)]
 
@@ -29,7 +31,7 @@ pub mod screen;
 pub mod set;
 pub mod sprite;
 mod text;
-pub mod ui;
+mod ui;
 
 use std::{marker::PhantomData, path::PathBuf};
 

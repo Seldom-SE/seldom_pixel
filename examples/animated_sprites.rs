@@ -110,7 +110,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
         PxAnchor::BottomLeft,
         PxAnimation {
             on_finish: PxAnimationFinishBehavior::Loop,
-            frame_transition: PxAnimationFrameTransition::Dither,
+            ..default()
+        },
+        PxFrame {
+            transition: PxFrameTransition::Dither,
             ..default()
         },
     ));

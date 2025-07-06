@@ -1,7 +1,7 @@
 [package]
 name = "seldom_pixel"
 version = "0.9.0-dev"
-edition = "2021"
+edition = "2024"
 categories = ["game-development"]
 description = "Bevy plugin for limited color palette pixel art games"
 exclude = ["assets/"]

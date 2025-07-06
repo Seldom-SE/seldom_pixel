@@ -23,6 +23,7 @@ pub(crate) fn plug(app: &mut App) {
 #[derive(Clone, Copy)]
 pub enum PxFrameSelector {
     Index(f32),
+    // TODO This breaks at 0
     Normalized(f32),
 }
 

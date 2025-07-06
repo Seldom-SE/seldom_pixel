@@ -20,32 +20,51 @@ fn main() {
         .run();
 }
 
+fn text(
+    value: impl Into<String>,
+    transition: PxFrameTransition,
+    assets: &AssetServer,
+) -> impl Bundle {
+    (
+        PxText::new(
+            value,
+            assets.load("typeface/animated_typeface.px_typeface.png"),
+        ),
+        PxAnimation {
+            // Use millis_per_animation to have each character loop at the same time
+            duration: PxAnimationDuration::millis_per_frame(333),
+            on_finish: PxAnimationFinishBehavior::Loop,
+            ..default()
+        },
+        PxFrame {
+            transition,
+            ..default()
+        },
+    )
+}
+
 fn init(assets: Res<AssetServer>, mut cmd: Commands) {
     cmd.spawn(Camera2d);
 
-    let typeface = assets.load("typeface/animated_typeface.px_typeface.png");
-
-    PxRow::build()
-        .vertical()
-        .entry(
-            PxText::build("LOOPED ANIMATION ⭐🙂⭐", typeface.clone()).animation(PxAnimation {
-                // Use millis_per_animation to have each character loop at the same time
-                duration: PxAnimationDuration::millis_per_frame(333),
-                on_finish: PxAnimationFinishBehavior::Loop,
-                ..default()
-            }),
-        )
-        .entry(PxRowSlot::build(PxSpace).stretch())
-        .entry(
-            PxText::build("DITHERED ANIMATION 🙂⭐🙂", typeface).animation(PxAnimation {
-                // Use millis_per_animation to have each character loop at the same time
-                duration: PxAnimationDuration::millis_per_frame(333),
-                on_finish: PxAnimationFinishBehavior::Loop,
-                frame_transition: PxAnimationFrameTransition::Dither,
-                ..default()
-            }),
-        )
-        .spawn_root(Layer, &mut cmd);
+    cmd.spawn((
+        Layer,
+        PxUiRoot,
+        PxRow {
+            vertical: true,
+            ..default()
+        },
+        related!(PxRowEntries [
+            text("LOOPED ANIMATION ⭐🙂⭐", PxFrameTransition::None, &assets),
+            PxRowSlot {
+                stretch: true,
+            },
+            text(
+                "DITHERED ANIMATION 🙂⭐🙂",
+                PxFrameTransition::Dither,
+                &assets
+            ),
+        ]),
+    ));
 }
 
 #[px_layer]

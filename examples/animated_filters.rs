@@ -115,7 +115,10 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
         PxFilterLayers::single_clip(Layer(7)),
         PxAnimation {
             on_finish: PxAnimationFinishBehavior::Loop,
-            frame_transition: PxAnimationFrameTransition::Dither,
+            ..default()
+        },
+        PxFrame {
+            transition: PxFrameTransition::Dither,
             ..default()
         },
     ));
