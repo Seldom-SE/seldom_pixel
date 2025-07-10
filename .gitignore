@@ -3,3 +3,4 @@ target/
 .vscode/
 imported_assets/
 .DS_Store
+/rustc-ice-*.txt

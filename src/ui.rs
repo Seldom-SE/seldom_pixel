@@ -60,27 +60,9 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
 #[require(PxCanvas, DefaultLayer)]
 pub struct PxUiRoot;
 
-#[derive(Component, Deref, DerefMut)]
-#[relationship(relationship_target = PxMinSizeContent)]
-pub struct PxMinSizeContainer(pub Entity);
-
-#[derive(Component, Deref, Reflect)]
-#[require(PxMinSize)]
-#[relationship_target(relationship = PxMinSizeContainer)]
-pub struct PxMinSizeContent(Entity);
-
 #[derive(Component, Deref, DerefMut, Default, Reflect)]
 #[require(Visibility)]
 pub struct PxMinSize(pub UVec2);
-
-#[derive(Component, Deref, DerefMut)]
-#[relationship(relationship_target = PxMarginContent)]
-pub struct PxMarginContainer(pub Entity);
-
-#[derive(Component, Deref, Reflect)]
-#[require(PxMargin)]
-#[relationship_target(relationship = PxMarginContainer)]
-pub struct PxMarginContent(Entity);
 
 #[derive(Component, Deref, DerefMut, Reflect)]
 #[require(Visibility)]
@@ -92,20 +74,10 @@ impl Default for PxMargin {
     }
 }
 
-#[derive(Component, Deref, DerefMut, Clone, Reflect)]
-#[require(PxRowSlot)]
-#[relationship(relationship_target = PxRowEntries)]
-pub struct PxRowContainer(pub Entity);
-
 #[derive(Component, Default)]
 pub struct PxRowSlot {
     pub stretch: bool,
 }
-
-#[derive(Component, Deref, Clone, Reflect)]
-#[require(PxRow)]
-#[relationship_target(relationship = PxRowContainer)]
-pub struct PxRowEntries(Vec<Entity>);
 
 #[derive(Component, Default, Clone, Reflect)]
 #[require(Visibility)]
@@ -113,15 +85,6 @@ pub struct PxRow {
     pub vertical: bool,
     pub space_between: u32,
 }
-
-#[derive(Component, Deref, DerefMut)]
-#[relationship(relationship_target = PxGridEntries)]
-pub struct PxGridContainer(pub Entity);
-
-#[derive(Component, Deref, Clone, Reflect)]
-#[require(PxGrid)]
-#[relationship_target(relationship = PxGridContainer)]
-pub struct PxGridEntries(Vec<Entity>);
 
 #[derive(Default, Clone, Reflect)]
 pub struct PxGridRow {
@@ -152,41 +115,9 @@ impl Default for PxGrid {
     }
 }
 
-#[derive(Component, Deref, DerefMut)]
-#[relationship(relationship_target = PxStackEntries)]
-pub struct PxStackContainer(pub Entity);
-
-#[derive(Component, Deref, Clone, Reflect)]
+#[derive(Component, Clone, Reflect)]
 #[require(Visibility)]
-#[relationship_target(relationship = PxStackContainer)]
-pub struct PxStackEntries(#[relationship] Vec<Entity>);
-
-#[derive(Component, Deref, DerefMut, Clone, Reflect)]
-#[relationship(relationship_target = PxScrollContent)]
-pub struct PxScrollContainer(pub Entity);
-
-#[derive(Component, Deref, DerefMut, Clone, Reflect)]
-#[relationship(relationship_target = PxScrollBarContent)]
-pub struct PxScrollBarContainer(pub Entity);
-
-#[derive(Component, Deref, DerefMut, Clone, Reflect)]
-#[relationship(relationship_target = PxScrollBarBgContent)]
-pub struct PxScrollBarBgContainer(pub Entity);
-
-#[derive(Component, Deref, Clone, Reflect)]
-#[require(PxScroll)]
-#[relationship_target(relationship = PxScrollContainer)]
-pub struct PxScrollContent(Entity);
-
-#[derive(Component, Deref, Clone, Reflect)]
-#[require(PxScroll)]
-#[relationship_target(relationship = PxScrollBarContainer)]
-pub struct PxScrollBarContent(Entity);
-
-#[derive(Component, Deref, Clone, Reflect)]
-#[require(PxScroll)]
-#[relationship_target(relationship = PxScrollBarBgContainer)]
-pub struct PxScrollBarBgContent(Entity);
+pub struct PxStack;
 
 #[derive(Component, Default, Clone, Copy, Reflect)]
 #[require(PxInvertMask, PxRect)]
@@ -236,20 +167,20 @@ fn update_key_field_focus(
         return;
     }
 
-    if let Some(prev_focus) = *prev_focus {
-        if let Ok((field, mut text, mut visibility, id)) = fields.get_mut(prev_focus) {
-            text.value = field.cached_text.clone();
-            *visibility = Visibility::Inherited;
-            cmd.entity(id).remove::<Blink>();
-        }
+    if let Some(prev_focus) = *prev_focus
+        && let Ok((field, mut text, mut visibility, id)) = fields.get_mut(prev_focus)
+    {
+        text.value = field.cached_text.clone();
+        *visibility = Visibility::Inherited;
+        cmd.entity(id).remove::<Blink>();
     }
 
-    if let Some(focus) = focus {
-        if let Ok((field, mut text, _, id)) = fields.get_mut(focus) {
-            text.value = field.caret.to_string();
-            cmd.entity(id)
-                .try_insert(Blink::new(Duration::from_millis(500)));
-        }
+    if let Some(focus) = focus
+        && let Ok((field, mut text, _, id)) = fields.get_mut(focus)
+    {
+        text.value = field.caret.to_string();
+        cmd.entity(id)
+            .try_insert(Blink::new(Duration::from_millis(500)));
     }
 
     *prev_focus = focus;
@@ -345,19 +276,19 @@ fn update_text_field_focus(
         return;
     }
 
-    if let Some(prev_focus) = *prev_focus {
-        if let Ok((mut field, mut text)) = fields.get_mut(prev_focus) {
-            text.value = field.cached_text.clone();
-            field.caret = None;
-        }
+    if let Some(prev_focus) = *prev_focus
+        && let Ok((mut field, mut text)) = fields.get_mut(prev_focus)
+    {
+        text.value = field.cached_text.clone();
+        field.caret = None;
     }
 
-    if let Some(focus) = focus {
-        if let Ok((mut field, mut text)) = fields.get_mut(focus) {
-            field.cached_text = text.value.clone();
-            text.value += &field.caret_char.to_string();
-            field.caret = Some(default());
-        }
+    if let Some(focus) = focus
+        && let Ok((mut field, mut text)) = fields.get_mut(focus)
+    {
+        field.cached_text = text.value.clone();
+        text.value += &field.caret_char.to_string();
+        field.caret = Some(default());
     }
 
     *prev_focus = focus;
@@ -441,21 +372,12 @@ fn calc_min_size<L: PxLayer>(
     ui: Entity,
     uis: Query<(
         AnyOf<(
-            (&PxMinSize, &PxMinSizeContent),
-            (&PxMargin, &PxMarginContent),
-            (&PxRow, &PxRowEntries),
-            (&PxGrid, &PxGridEntries),
-            &PxStackEntries,
-            (
-                Option<(
-                    &PxScroll,
-                    &PxScrollContent,
-                    &PxScrollBarContent,
-                    &PxScrollBarBgContent,
-                )>,
-                &PxRect,
-                &PxFilterLayers<L>,
-            ),
+            (&PxMinSize, Option<&Children>),
+            (&PxMargin, Option<&Children>),
+            (&PxRow, Option<&Children>),
+            (&PxGrid, Option<&Children>),
+            (&PxStack, Option<&Children>),
+            (Option<(&PxScroll, &Children)>, &PxRect, &PxFilterLayers<L>),
             &PxSprite,
             &PxText,
         )>,
@@ -471,13 +393,32 @@ fn calc_min_size<L: PxLayer>(
         return UVec2::ZERO;
     };
 
-    if let Some((min_size, content)) = min_size {
-        return calc_min_size(**content, uis.as_readonly(), typefaces, sprites).max(**min_size);
+    if let Some((min_size, children)) = min_size {
+        return match children.map(|children| &**children) {
+            None | Some([]) => **min_size,
+            Some(&[content]) => {
+                calc_min_size(content, uis.as_readonly(), typefaces, sprites).max(**min_size)
+            }
+            Some([_, _, ..]) => {
+                warn!("`PxMinSize` has multiple children");
+                **min_size
+            }
+        };
     }
 
-    if let Some((margin, content)) = margin {
-        return calc_min_size(**content, uis.as_readonly(), typefaces, sprites)
-            + 2 * UVec2::splat(**margin);
+    if let Some((margin, children)) = margin {
+        let margin = 2 * UVec2::splat(**margin);
+
+        return match children.map(|children| &**children) {
+            None | Some([]) => margin,
+            Some(&[content]) => {
+                calc_min_size(content, uis.as_readonly(), typefaces, sprites) + margin
+            }
+            Some([_, _, ..]) => {
+                warn!("`PxMargin` has multiple children");
+                margin
+            }
+        };
     }
 
     fn dim(vec: UVec2, y: bool) -> u32 {
@@ -488,13 +429,19 @@ fn calc_min_size<L: PxLayer>(
         if y { &mut vec.y } else { &mut vec.x }
     }
 
-    if let Some((row, entries)) = row {
+    if let Some((row, children)) = row {
         let vert = row.vertical;
         let mut size = UVec2::ZERO;
 
-        *dim_mut(&mut size, vert) += entries.len().saturating_sub(1) as u32 * row.space_between;
+        let children = if let Some(children) = children {
+            &**children
+        } else {
+            &[]
+        };
 
-        for &entry in &**entries {
+        *dim_mut(&mut size, vert) += children.len().saturating_sub(1) as u32 * row.space_between;
+
+        for &entry in children {
             let min_size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites);
 
             *dim_mut(&mut size, vert) += dim(min_size, vert);
@@ -508,14 +455,19 @@ fn calc_min_size<L: PxLayer>(
         return size;
     }
 
-    if let Some((grid, entries)) = grid {
+    if let Some((grid, children)) = grid {
         let mut column_widths = vec![0; grid.width as usize];
-        let mut height = (entries.len() as u32)
+        let children = if let Some(children) = children {
+            &**children
+        } else {
+            &[]
+        };
+        let mut height = (children.len() as u32)
             .div_ceil(grid.width)
             .saturating_sub(1)
             * grid.rows.space_between;
 
-        for row in entries.chunks(grid.width as usize) {
+        for row in children.chunks(grid.width as usize) {
             let mut row_height = 0;
 
             for (column, &entry) in row.iter().enumerate() {
@@ -540,10 +492,10 @@ fn calc_min_size<L: PxLayer>(
         );
     }
 
-    if let Some(stack) = stack {
+    if let Some((_, children)) = stack {
         let mut size = UVec2::ZERO;
 
-        for &entry in &**stack {
+        for &entry in children.iter().flat_map(|children| &***children) {
             size = size.max(calc_min_size(entry, uis.as_readonly(), typefaces, sprites));
         }
 
@@ -551,16 +503,36 @@ fn calc_min_size<L: PxLayer>(
     }
 
     if let Some((scroll, _, _)) = rect {
-        let Some((scroll, content, bar, bar_bg)) = scroll else {
+        let Some((scroll, children)) = scroll else {
             return UVec2::ZERO;
         };
 
-        let horz = scroll.horizontal;
+        let mut children = children.iter();
 
-        let mut size = calc_min_size(**content, uis.as_readonly(), typefaces, sprites);
-        let bar_size = calc_min_size(**bar, uis.as_readonly(), typefaces, sprites).max(
-            calc_min_size(**bar_bg, uis.as_readonly(), typefaces, sprites),
-        );
+        let (mut size, bar_size) = if let Some(content) = children.next() {
+            (
+                calc_min_size(content, uis.as_readonly(), typefaces, sprites),
+                if let Some(bar) = children.next() {
+                    calc_min_size(bar, uis.as_readonly(), typefaces, sprites).max(
+                        if let Some(bar_bg) = children.next() {
+                            calc_min_size(bar_bg, uis.as_readonly(), typefaces, sprites)
+                        } else {
+                            UVec2::ZERO
+                        },
+                    )
+                } else {
+                    UVec2::ZERO
+                },
+            )
+        } else {
+            default()
+        };
+
+        if children.next().is_some() {
+            warn!("`PxScroll` has more than 3 children");
+        }
+
+        let horz = scroll.horizontal;
 
         *dim_mut(&mut size, horz) += dim(bar_size, horz);
         let bar_main = dim(bar_size, !horz);
@@ -613,18 +585,13 @@ fn layout_inner<L: PxLayer>(
     ui: Entity,
     mut uis: Query<(
         AnyOf<(
-            (&PxMinSize, &PxMinSizeContent),
-            (&PxMargin, &PxMarginContent),
-            (&PxRow, &PxRowEntries),
-            (&PxGrid, &PxGridEntries),
-            &PxStackEntries,
+            (&PxMinSize, Option<&Children>),
+            (&PxMargin, Option<&Children>),
+            (&PxRow, Option<&Children>),
+            (&PxGrid, Option<&Children>),
+            (&PxStack, Option<&Children>),
             (
-                Option<(
-                    &mut PxScroll,
-                    &PxScrollContent,
-                    &PxScrollBarContent,
-                    &PxScrollBarBgContent,
-                )>,
+                Option<(&mut PxScroll, &Children)>,
                 &mut PxRect,
                 &mut PxFilterLayers<L>,
             ),
@@ -642,33 +609,47 @@ fn layout_inner<L: PxLayer>(
         return Ok(None);
     };
 
-    if let Some((_, content)) = min_size {
-        return layout_inner(
-            target_rect,
-            target_layer,
-            target_canvas,
-            **content,
-            uis,
-            row_slots,
-            typefaces,
-            sprites,
-        );
+    if let Some((_, children)) = min_size {
+        return match children.map(|children| &**children) {
+            None | Some([]) => Ok(None),
+            Some(&[content]) => layout_inner(
+                target_rect,
+                target_layer,
+                target_canvas,
+                content,
+                uis,
+                row_slots,
+                typefaces,
+                sprites,
+            ),
+            Some([_, _, ..]) => {
+                warn!("`PxMinSize` has multiple children");
+                Ok(None)
+            }
+        };
     }
 
-    if let Some((margin, content)) = margin {
-        return layout_inner(
-            IRect {
-                min: target_rect.min + **margin as i32,
-                max: target_rect.max - **margin as i32,
-            },
-            target_layer,
-            target_canvas,
-            **content,
-            uis,
-            row_slots,
-            typefaces,
-            sprites,
-        );
+    if let Some((margin, children)) = margin {
+        return match children.map(|children| &**children) {
+            None | Some([]) => Ok(None),
+            Some(&[content]) => layout_inner(
+                IRect {
+                    min: target_rect.min + **margin as i32,
+                    max: target_rect.max - **margin as i32,
+                },
+                target_layer,
+                target_canvas,
+                content,
+                uis,
+                row_slots,
+                typefaces,
+                sprites,
+            ),
+            Some([_, _, ..]) => {
+                warn!("`PxMargin` has multiple children");
+                Ok(None)
+            }
+        };
     }
 
     fn dim(vec: IVec2, y: bool) -> i32 {
@@ -684,9 +665,13 @@ fn layout_inner<L: PxLayer>(
         if y { rect.height() } else { rect.width() }
     }
 
-    if let Some((row, entries)) = row {
+    if let Some((row, children)) = row {
         let row = row.clone();
-        let entries = entries.clone();
+        let children = children
+            .iter()
+            .flat_map(|children| &**children)
+            .copied()
+            .collect::<Vec<_>>();
 
         fn dim_mut(vec: &mut IVec2, y: bool) -> &mut i32 {
             if y { &mut vec.y } else { &mut vec.x }
@@ -694,9 +679,9 @@ fn layout_inner<L: PxLayer>(
 
         let vert = row.vertical;
         let mut pos = ivec2(target_rect.min.x, target_rect.max.y);
-        let mut remaining_stretchers = entries
+        let mut remaining_stretchers = children
             .iter()
-            .map(|entry| row_slots.get(entry))
+            .map(|&entry| row_slots.get(entry))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .filter(|slot| slot.stretch)
@@ -710,9 +695,9 @@ fn layout_inner<L: PxLayer>(
 
         let mut layer = None::<L>;
 
-        for &entry in &**entries {
-            let slot = row_slots.get(entry)?;
-            let mut size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites).as_ivec2();
+        for &child in &children {
+            let slot = row_slots.get(child)?;
+            let mut size = calc_min_size(child, uis.as_readonly(), typefaces, sprites).as_ivec2();
             if slot.stretch {
                 // For simplicity, we just split the extra size among the stretched entries evenly
                 // instead of prioritizing the smallest. I might change this in the future.
@@ -740,7 +725,7 @@ fn layout_inner<L: PxLayer>(
                 },
                 &entry_layer,
                 target_canvas,
-                entry,
+                child,
                 uis.reborrow(),
                 row_slots.as_readonly(),
                 typefaces,
@@ -759,14 +744,18 @@ fn layout_inner<L: PxLayer>(
         return Ok(layer);
     }
 
-    if let Some((grid, entries)) = grid {
+    if let Some((grid, children)) = grid {
         let grid = grid.clone();
-        let entries = entries.clone();
+        let children = children
+            .iter()
+            .flat_map(|children| &**children)
+            .copied()
+            .collect::<Vec<_>>();
 
         let mut column_widths = vec![0; grid.width as usize];
-        let mut row_heights = vec![0; entries.len().div_ceil(grid.width as usize)];
+        let mut row_heights = vec![0; children.len().div_ceil(grid.width as usize)];
 
-        for (row_index, row) in entries.chunks(grid.width as usize).enumerate() {
+        for (row_index, row) in children.chunks(grid.width as usize).enumerate() {
             for (column, &entry) in row.iter().enumerate() {
                 let size = calc_min_size(entry, uis.as_readonly(), typefaces, sprites).as_ivec2();
 
@@ -824,7 +813,7 @@ fn layout_inner<L: PxLayer>(
 
         let mut layer = None::<L>;
 
-        for (row_index, row) in entries.chunks(grid.width as usize).enumerate() {
+        for (row_index, row) in children.chunks(grid.width as usize).enumerate() {
             let mut x_pos = target_rect.min.x;
             let height = row_heights[row_index];
 
@@ -862,10 +851,16 @@ fn layout_inner<L: PxLayer>(
         return Ok(layer);
     }
 
-    if let Some(stack) = stack.cloned() {
+    if let Some((_, children)) = stack {
+        let children = children
+            .iter()
+            .flat_map(|children| &**children)
+            .copied()
+            .collect::<Vec<_>>();
+
         let mut layer = None::<L>;
 
-        for &entry in &**stack {
+        for &entry in &children {
             let entry_layer = if let Some(ref layer) = layer {
                 layer.clone().next().unwrap_or(layer.clone())
             } else {
@@ -898,7 +893,7 @@ fn layout_inner<L: PxLayer>(
 
         let (scroll, mut rect, mut layers) = rect.unwrap();
 
-        if let Some((scroll, content, bar, bg)) = scroll {
+        if let Some((scroll, children)) = scroll {
             fn rect_start(rect: IRect, y: bool) -> i32 {
                 if y { rect.max.y } else { rect.min.x }
             }
@@ -916,17 +911,30 @@ fn layout_inner<L: PxLayer>(
             }
 
             let scroll = *scroll;
-            let content = **content;
-            let bar = **bar;
-            let bg = **bg;
+            let content = children[0];
+            let bar = children.get(1).copied();
+            let bg = children.get(2).copied();
+            if children.get(3).is_some() {
+                warn!("`PxScroll` has more than 3 children");
+                return Ok(None);
+            }
             let horz = scroll.horizontal;
 
             let content_min_size =
                 calc_min_size(content, uis.as_readonly(), typefaces, sprites).as_ivec2();
 
-            let bar_min_size = calc_min_size(bar, uis.as_readonly(), typefaces, sprites)
-                .max(calc_min_size(bg, uis.as_readonly(), typefaces, sprites))
-                .as_ivec2();
+            let bar_min_size = if let Some(bar) = bar {
+                calc_min_size(bar, uis.as_readonly(), typefaces, sprites).max(
+                    if let Some(bg) = bg {
+                        calc_min_size(bg, uis.as_readonly(), typefaces, sprites)
+                    } else {
+                        UVec2::ZERO
+                    },
+                )
+            } else {
+                UVec2::ZERO
+            }
+            .as_ivec2();
 
             let mut view_rect = target_rect;
             *rect_end_mut(&mut view_rect, horz) =
@@ -987,16 +995,21 @@ fn layout_inner<L: PxLayer>(
             let mut bar_rect = target_rect;
             *rect_start_mut(&mut bar_rect, horz) = rect_end(view_rect, horz);
 
-            let last_bg_layer = layout_inner(
-                bar_rect,
-                &bg_layer,
-                target_canvas,
-                bg,
-                uis.reborrow(),
-                row_slots.as_readonly(),
-                typefaces,
-                sprites,
-            )?;
+            let last_bg_layer = bg
+                .map(|bg| {
+                    layout_inner(
+                        bar_rect,
+                        &bg_layer,
+                        target_canvas,
+                        bg,
+                        uis.reborrow(),
+                        row_slots.as_readonly(),
+                        typefaces,
+                        sprites,
+                    )
+                })
+                .transpose()?
+                .flatten();
             let bar_layer = if let Some(last_bg_layer) = last_bg_layer {
                 layer = Some(last_bg_layer.clone());
                 last_bg_layer.clone().next().unwrap_or(last_bg_layer)
@@ -1024,20 +1037,26 @@ fn layout_inner<L: PxLayer>(
 
             let ((_, _, _, _, _, rect, _, _), _, _) = uis.get_mut(ui).unwrap();
             let (scroll, _, _) = rect.unwrap();
-            let (mut scroll, _, _, _) = scroll.unwrap();
+            let (mut scroll, _) = scroll.unwrap();
 
             scroll.max_scroll = (view_size as f32 * (1. / ratio - 1.)).ceil() as u32;
 
-            if let Some(last_bar_layer) = layout_inner(
-                bar_rect,
-                &bar_layer,
-                target_canvas,
-                bar,
-                uis.reborrow(),
-                row_slots.as_readonly(),
-                typefaces,
-                sprites,
-            )? {
+            if let Some(last_bar_layer) = bar
+                .map(|bar| {
+                    layout_inner(
+                        bar_rect,
+                        &bar_layer,
+                        target_canvas,
+                        bar,
+                        uis.reborrow(),
+                        row_slots.as_readonly(),
+                        typefaces,
+                        sprites,
+                    )
+                })
+                .transpose()?
+                .flatten()
+            {
                 layer = Some(last_bar_layer);
             }
 
@@ -1163,18 +1182,13 @@ fn layout<L: PxLayer>(
         Query<(&L, &PxCanvas, Entity), With<PxUiRoot>>,
         Query<(
             AnyOf<(
-                (&PxMinSize, &PxMinSizeContent),
-                (&PxMargin, &PxMarginContent),
-                (&PxRow, &PxRowEntries),
-                (&PxGrid, &PxGridEntries),
-                &PxStackEntries,
+                (&PxMinSize, Option<&Children>),
+                (&PxMargin, Option<&Children>),
+                (&PxRow, Option<&Children>),
+                (&PxGrid, Option<&Children>),
+                (&PxStack, Option<&Children>),
                 (
-                    Option<(
-                        &mut PxScroll,
-                        &PxScrollContent,
-                        &PxScrollBarContent,
-                        &PxScrollBarBgContent,
-                    )>,
+                    Option<(&mut PxScroll, &Children)>,
                     &mut PxRect,
                     &mut PxFilterLayers<L>,
                 ),
