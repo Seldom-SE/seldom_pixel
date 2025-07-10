@@ -74,7 +74,7 @@ impl Default for PxMargin {
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone)]
 pub struct PxRowSlot {
     pub stretch: bool,
 }
@@ -681,9 +681,7 @@ fn layout_inner<L: PxLayer>(
         let mut pos = ivec2(target_rect.min.x, target_rect.max.y);
         let mut remaining_stretchers = children
             .iter()
-            .map(|&entry| row_slots.get(entry))
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
+            .map(|&entry| row_slots.get(entry).cloned().unwrap_or_default())
             .filter(|slot| slot.stretch)
             .count() as i32;
         let mut stretch_budget = rect_size(target_rect, vert)
@@ -696,7 +694,7 @@ fn layout_inner<L: PxLayer>(
         let mut layer = None::<L>;
 
         for &child in &children {
-            let slot = row_slots.get(child)?;
+            let slot = row_slots.get(child).cloned().unwrap_or_default();
             let mut size = calc_min_size(child, uis.as_readonly(), typefaces, sprites).as_ivec2();
             if slot.stretch {
                 // For simplicity, we just split the extra size among the stretched entries evenly
