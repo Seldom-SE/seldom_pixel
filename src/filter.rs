@@ -2,20 +2,20 @@
 
 use std::{error::Error, ops::RangeInclusive};
 
-use bevy_asset::{io::Reader, weak_handle, AssetLoader, LoadContext};
+use bevy_asset::{AssetLoader, LoadContext, io::Reader, weak_handle};
 use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::{component::HookContext, world::DeferredWorld};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_math::uvec2;
 use bevy_render::{
+    Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
     sync_component::SyncComponentPlugin,
     sync_world::RenderEntity,
-    Extract, RenderApp,
 };
 
 use crate::{
-    animation::{draw_frame, AnimatedAssetComponent, Frames},
+    animation::{AnimatedAssetComponent, Frames, draw_frame},
     image::{PxImage, PxImageSliceMut},
     palette::asset_palette,
     position::PxLayer,
@@ -72,6 +72,10 @@ impl AssetLoader for PxFilterLoader {
         let frame_area = frame_size.x * frame_size.y;
         let filter_width = image.texture_descriptor.size.width;
         let frame_filter_width = filter_width / palette.size.x;
+
+        if frame_filter_width == 0 {
+            return Err("filter size is not a multiple of palette size".into());
+        }
 
         let mut frame_visible = true;
 
