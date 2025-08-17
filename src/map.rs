@@ -1,12 +1,13 @@
 use std::{error::Error, mem::replace};
 
-use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_asset::{AssetLoader, LoadContext, io::Reader};
+use bevy_ecs::entity::EntityHashMap;
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_render::{
+    Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
     sync_component::SyncComponentPlugin,
     sync_world::RenderEntity,
-    Extract, RenderApp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -159,9 +160,10 @@ impl PxTileset {
 }
 
 /// The tiles in a tilemap
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct PxTiles {
     tiles: Vec<Option<Entity>>,
+    tile_poses: EntityHashMap<usize>,
     width: usize,
 }
 
@@ -170,6 +172,7 @@ impl PxTiles {
     pub fn new(size: UVec2) -> Self {
         Self {
             tiles: vec![None; (size.x * size.y) as usize],
+            tile_poses: EntityHashMap::new(),
             width: size.x as usize,
         }
     }
@@ -189,19 +192,22 @@ impl PxTiles {
         self.tiles.get(self.index(at)?).copied()?
     }
 
-    /// Gets a tile mutably. Returns `Some(&mut None)` if there is no tile at the given position.
-    /// Returns `None` if the position is out of bounds.
-    pub fn get_mut(&mut self, at: UVec2) -> Option<&mut Option<Entity>> {
-        let index = self.index(at);
-        self.tiles.get_mut(index?)
-    }
-
     /// Sets a tile and returns the previous tile at the position. If there was no tile, returns
     /// `None`. If the position is out of bounds, returns `None` and there is no effect.
     pub fn set(&mut self, tile: Option<Entity>, at: UVec2) -> Option<Entity> {
-        let target = self.get_mut(at)?;
+        let index = self.index(at)?;
+        let target = self.tiles.get_mut(index)?;
         let old = *target;
+
+        if let Some(old) = old {
+            self.tile_poses.remove(&old);
+        }
+
         *target = tile;
+        if let Some(tile) = tile {
+            self.tile_poses.insert(tile, index);
+        }
+
         old
     }
 
@@ -209,6 +215,21 @@ impl PxTiles {
     pub fn size(&self) -> UVec2 {
         let width = self.width as u32;
         UVec2::new(width, self.tiles.len() as u32 / width)
+    }
+
+    /// Gets the position of a tile
+    pub fn pos(&self, id: Entity) -> Option<UVec2> {
+        let &index = self.tile_poses.get(&id)?;
+        Some(uvec2(
+            (index % self.width) as u32,
+            (index / self.width) as u32,
+        ))
+    }
+}
+
+impl Default for PxTiles {
+    fn default() -> Self {
+        Self::new(UVec2::ONE)
     }
 }
 
