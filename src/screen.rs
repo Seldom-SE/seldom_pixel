@@ -10,31 +10,31 @@ use bevy_derive::{Deref, DerefMut};
 use bevy_image::TextureFormatPixelInfo;
 use bevy_math::{ivec2, uvec2};
 use bevy_render::{
+    Render, RenderApp, RenderSet,
     extract_resource::{ExtractResource, ExtractResourcePlugin},
     render_asset::RenderAssets,
     render_graph::{
         NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
     },
     render_resource::{
-        binding_types::{texture_2d, uniform_buffer},
         BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
         ColorTargetState, ColorWrites, DynamicUniformBuffer, Extent3d, FragmentState,
         PipelineCache, RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
         ShaderStages, ShaderType, TexelCopyBufferLayout, TextureDimension, TextureFormat,
         TextureSampleType, TextureViewDescriptor, TextureViewDimension, VertexState,
+        binding_types::{texture_2d, uniform_buffer},
     },
     renderer::{RenderContext, RenderDevice, RenderQueue},
     view::ViewTarget,
-    Render, RenderApp, RenderSet,
 };
 use bevy_window::{PrimaryWindow, WindowResized};
 
 #[cfg(feature = "line")]
-use crate::line::{draw_line, LineComponents};
+use crate::line::{LineComponents, draw_line};
 use crate::{
     animation::draw_spatial,
     cursor::{CursorState, PxCursorPosition},
-    filter::{draw_filter, FilterComponents},
+    filter::{FilterComponents, draw_filter},
     image::{PxImage, PxImageSliceMut},
     map::{MapComponents, PxTile, TileComponents},
     palette::{Palette, PaletteHandle},
@@ -713,7 +713,10 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                         };
 
                         let Some(tile) = tileset.tileset.get(texture as usize) else {
-                            error!("tile texture index out of bounds: the len is {}, but the index is {texture}", tileset.tileset.len());
+                            error!(
+                                "tile texture index out of bounds: the len is {}, but the index is {texture}",
+                                tileset.tileset.len()
+                            );
                             continue;
                         };
 
@@ -1036,25 +1039,21 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             left_click,
             right_click,
         } = world.resource()
+            && let Some(cursor_pos) = **world.resource::<PxCursorPosition>()
+            && let Some(PxFilterAsset(filter)) = filters.get(match cursor {
+                CursorState::Idle => idle,
+                CursorState::Left => left_click,
+                CursorState::Right => right_click,
+            })
+            && let mut image = PxImageSliceMut::from_image_mut(&mut image).unwrap()
+            && let Some(pixel) = image.get_pixel_mut(IVec2::new(
+                cursor_pos.x as i32,
+                image.height() as i32 - 1 - cursor_pos.y as i32,
+            ))
         {
-            if let Some(cursor_pos) = **world.resource::<PxCursorPosition>() {
-                if let Some(PxFilterAsset(filter)) = filters.get(match cursor {
-                    CursorState::Idle => idle,
-                    CursorState::Left => left_click,
-                    CursorState::Right => right_click,
-                }) {
-                    let mut image = PxImageSliceMut::from_image_mut(&mut image).unwrap();
-
-                    if let Some(pixel) = image.get_pixel_mut(IVec2::new(
-                        cursor_pos.x as i32,
-                        image.height() as i32 - 1 - cursor_pos.y as i32,
-                    )) {
-                        *pixel = filter
-                            .get_pixel(IVec2::new(*pixel as i32, 0))
-                            .expect("filter is incorrect size");
-                    }
-                }
-            }
+            *pixel = filter
+                .get_pixel(IVec2::new(*pixel as i32, 0))
+                .expect("filter is incorrect size");
         }
 
         let Some(uniform_binding) = world.resource::<PxUniformBuffer>().binding() else {

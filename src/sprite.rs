@@ -2,15 +2,15 @@
 
 use std::error::Error;
 
-use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_asset::{AssetLoader, LoadContext, io::Reader};
 use bevy_derive::{Deref, DerefMut};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_math::{ivec2, uvec2};
 use bevy_render::{
+    Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
     sync_component::SyncComponentPlugin,
     sync_world::RenderEntity,
-    Extract, RenderApp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -132,10 +132,9 @@ impl Frames for PxSpriteAsset {
                 )) * self.frame_size
                     + slice_i)
                     / width) as i32,
-            )) {
-                if value != 0 {
-                    *pixel = filter(value);
-                }
+            )) && value != 0
+            {
+                *pixel = filter(value);
             }
         });
     }

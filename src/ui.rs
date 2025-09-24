@@ -1,9 +1,9 @@
 //! `seldom_pixel`'s UI system. The building blocks of UI are here, but they are all just pieces.
 //! For example, there is a [`PxTextField`] component, but if you spawn it on its own, the text
 //! field won't have a background, and you won't even be able to type in it. Instead, you should
-//! make your own helper functions that compose UI builders together. For a text field, you could
+//! make your own helper functions that compose UI components together. For a text field, you could
 //! use a [`PxStack`] with a white [`PxRect`] background and a [`PxTextField`], and add an observer
-//! on [`PxRect`] that sets [`Focus`] to the text field.
+//! on [`PxRect`] that sets [`InputFocus`] to the text field.
 //!
 //! For more information, browse this module and see the `ui` example.
 

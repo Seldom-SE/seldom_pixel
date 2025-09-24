@@ -11,10 +11,10 @@ pub(crate) fn plug(app: &mut App) {
     app.add_systems(
         PostUpdate,
         (
-            finish_animations::<PxSprite>,
-            finish_animations::<PxFilter>,
-            finish_animations::<PxText>,
-            finish_animations::<PxMap>,
+            update_animations::<PxSprite>,
+            update_animations::<PxFilter>,
+            update_animations::<PxText>,
+            update_animations::<PxMap>,
         )
             .in_set(PxSet::FinishAnimations),
     );
@@ -162,7 +162,7 @@ pub(crate) trait AnimatedAssetComponent: Component {
     fn max_frame_count(asset: &Self::Asset) -> usize;
 }
 
-static DITHERING: &[u16] = &[
+const DITHERING: [u16; 16] = [
     0b0000_0000_0000_0000,
     0b1000_0000_0000_0000,
     0b1000_0000_0010_0000,
@@ -206,6 +206,11 @@ pub(crate) fn draw_frame<'a, A: Frames>(
     frame: Option<PxFrame>,
     filters: impl IntoIterator<Item = &'a PxFilterAsset>,
 ) {
+    let frame_count = animation.frame_count();
+    if frame_count == 0 {
+        return;
+    }
+
     let mut filter: Box<dyn Fn(u8) -> u8> = Box::new(|pixel| pixel);
     for filter_part in filters {
         let filter_part = filter_part.as_fn();
@@ -213,7 +218,7 @@ pub(crate) fn draw_frame<'a, A: Frames>(
     }
 
     if let Some(frame) = frame {
-        let frame = animate(frame, animation.frame_count());
+        let frame = animate(frame, frame_count);
 
         animation.draw(param, image, frame, filter);
     } else {
@@ -250,29 +255,54 @@ pub(crate) fn draw_spatial<'a, A: Frames + Spatial>(
     draw_frame(spatial, param, &mut image, frame, filters);
 }
 
-fn finish_animations<A: AnimatedAssetComponent>(
-    mut commands: Commands,
-    animations: Query<(Entity, &A, &PxAnimation, Option<&PxAnimationFinished>)>,
+fn update_animations<A: AnimatedAssetComponent>(
+    mut cmd: Commands,
     assets: Res<Assets<A::Asset>>,
     time: Res<Time<Real>>,
+    mut animations: Query<(
+        Entity,
+        &mut PxFrame,
+        &PxAnimation,
+        Has<PxAnimationFinished>,
+        &A,
+    )>,
 ) {
-    for (entity, asset_component, animation, finished) in &animations {
-        if let Some(asset) = assets.get(asset_component.handle()) {
+    for (id, mut frame, animation, finished, a) in &mut animations {
+        if let Some(asset) = assets.get(a.handle()) {
+            let elapsed = time.last_update().unwrap_or_else(|| time.startup()) - animation.start;
+            let max_frame_count = A::max_frame_count(asset);
             let lifetime = match animation.duration {
                 PxAnimationDuration::PerAnimation(duration) => duration,
-                PxAnimationDuration::PerFrame(duration) => {
-                    duration * A::max_frame_count(asset) as u32
-                }
+                PxAnimationDuration::PerFrame(duration) => duration * max_frame_count as u32,
             };
 
-            if time.last_update().unwrap_or_else(|| time.startup()) - animation.start >= lifetime {
+            let ratio = elapsed.div_duration_f32(lifetime);
+            let ratio = match animation.on_finish {
+                PxAnimationFinishBehavior::Despawn | PxAnimationFinishBehavior::Mark => {
+                    ratio.min(1.)
+                }
+                #[cfg(feature = "state")]
+                PxAnimationFinishBehavior::Done => ratio.min(1.),
+                PxAnimationFinishBehavior::Loop => ratio.fract(),
+            };
+            let ratio = match animation.direction {
+                PxAnimationDirection::Foreward => ratio,
+                PxAnimationDirection::Backward => 1. + -ratio,
+            };
+
+            match frame.selector {
+                PxFrameSelector::Index(ref mut index) => *index = max_frame_count as f32 * ratio,
+                PxFrameSelector::Normalized(ref mut normalized) => *normalized = ratio,
+            }
+
+            if elapsed >= lifetime {
                 match animation.on_finish {
                     PxAnimationFinishBehavior::Despawn => {
-                        commands.entity(entity).despawn();
+                        cmd.entity(id).despawn();
                     }
                     PxAnimationFinishBehavior::Mark => {
-                        if finished.is_none() {
-                            commands.entity(entity).insert(PxAnimationFinished);
+                        if !finished {
+                            cmd.entity(id).insert(PxAnimationFinished);
                         }
                     }
                     #[cfg(feature = "state")]
