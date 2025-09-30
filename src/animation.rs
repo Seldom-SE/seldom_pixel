@@ -23,7 +23,6 @@ pub(crate) fn plug(app: &mut App) {
 #[derive(Clone, Copy)]
 pub enum PxFrameSelector {
     Index(f32),
-    // TODO This breaks at 0
     Normalized(f32),
 }
 
@@ -183,7 +182,7 @@ const DITHERING: [u16; 16] = [
 
 pub(crate) fn animate(frame: PxFrame, frame_count: usize) -> impl Fn(UVec2) -> usize {
     let index = match frame.selector {
-        PxFrameSelector::Normalized(frame) => frame * frame_count as f32,
+        PxFrameSelector::Normalized(frame) => frame * (frame_count - 1) as f32,
         PxFrameSelector::Index(frame) => frame,
     };
 
