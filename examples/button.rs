@@ -1,4 +1,4 @@
-// In this game, you can press buttons
+// In this game, you can press a button
 
 use std::fmt::Debug;
 
@@ -26,36 +26,33 @@ fn set_sprite<E: Clone + Reflect + Debug>(
     path: &'static str,
 ) -> impl Fn(Trigger<Pointer<E>>, Query<&mut PxSprite>, Res<AssetServer>) {
     move |trigger, mut sprites, assets| {
-        **sprites.get_mut(trigger.entity()).unwrap() = assets.load(path);
+        **sprites.get_mut(trigger.target()).unwrap() = assets.load(path);
     }
 }
 
 fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut cmd: Commands) {
     cmd.spawn(Camera2d);
 
-    let idle = assets.load("filter/invert.px_filter.png");
+    let cursor_idle = assets.load("filter/invert.px_filter.png");
 
     // Switch to an in-game cursor to show the player that they can click on things
     *cursor = PxCursor::Filter {
-        idle: idle.clone(),
+        idle: cursor_idle.clone(),
         left_click: assets.load("filter/invert_dim.px_filter.png"),
-        right_click: idle,
+        right_click: cursor_idle,
     };
 
     let idle_path = "sprite/button_idle.px_sprite.png";
     let hover_path = "sprite/button_hover.px_sprite.png";
 
-    PxContainer::build(
-        PxSprite::build(assets.load(idle_path))
-            .observe(set_sprite::<Over>(hover_path))
-            .observe(set_sprite::<Out>(idle_path))
-            .observe(set_sprite::<Down>("sprite/button_click.px_sprite.png"))
-            .observe(set_sprite::<Up>(hover_path))
-            .observe(|_: Trigger<Pointer<Click>>| {
-                info!("Click!");
-            }),
-    )
-    .spawn(&mut cmd);
+    cmd.spawn((PxPosition(ivec2(8, 8)), PxSprite(assets.load(idle_path))))
+        .observe(set_sprite::<Over>(hover_path))
+        .observe(set_sprite::<Out>(idle_path))
+        .observe(set_sprite::<Pressed>("sprite/button_click.px_sprite.png"))
+        .observe(set_sprite::<Released>(hover_path))
+        .observe(|_: Trigger<Pointer<Click>>| {
+            info!("Click!");
+        });
 }
 
 #[px_layer]

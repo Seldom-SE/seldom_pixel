@@ -1,7 +1,7 @@
 // In this program, animated tilemaps are spawned
 
 use bevy::prelude::*;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use seldom_pixel::prelude::*;
 
 fn main() {
@@ -53,15 +53,18 @@ fn init(assets: Res<AssetServer>, mut commands: Commands) {
     ));
 
     commands.spawn((
-        PxMap { tiles, tileset },
         PxPosition(IVec2::new(8, 0)),
+        PxFrame {
+            transition: PxFrameTransition::Dither,
+            ..default()
+        },
         PxAnimation {
             // Use millis_per_animation to have each tile loop at the same time
             duration: PxAnimationDuration::millis_per_frame(250),
             on_finish: PxAnimationFinishBehavior::Loop,
-            frame_transition: PxAnimationFrameTransition::Dither,
             ..default()
         },
+        PxMap { tiles, tileset },
     ));
 }
 

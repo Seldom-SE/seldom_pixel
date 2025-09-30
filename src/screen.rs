@@ -1051,9 +1051,11 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
                 image.height() as i32 - 1 - cursor_pos.y as i32,
             ))
         {
-            *pixel = filter
-                .get_pixel(IVec2::new(*pixel as i32, 0))
-                .expect("filter is incorrect size");
+            if let Some(new_pixel) = filter.get_pixel(IVec2::new(*pixel as i32, 0)) {
+                *pixel = new_pixel;
+            } else {
+                error!("`PxCursor` filter is the wrong size");
+            }
         }
 
         let Some(uniform_binding) = world.resource::<PxUniformBuffer>().binding() else {

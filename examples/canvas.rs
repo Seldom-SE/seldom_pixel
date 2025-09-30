@@ -2,7 +2,7 @@
 // by pressing space
 
 use bevy::prelude::*;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use seldom_pixel::prelude::*;
 
 fn main() {
@@ -22,6 +22,8 @@ fn main() {
         .add_systems(Update, (move_mage, move_camera, switch_canvas))
         .run();
 }
+
+const OK: Result = Ok(());
 
 fn init(assets: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(Camera2d);
@@ -51,8 +53,8 @@ fn move_camera(
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut camera: ResMut<PxCamera>,
-) {
-    let mut camera_pos = camera_poses.single_mut();
+) -> Result {
+    let mut camera_pos = camera_poses.single_mut()?;
     **camera_pos += IVec2::new(
         keys.pressed(KeyCode::ArrowRight) as i32 - keys.pressed(KeyCode::ArrowLeft) as i32,
         keys.pressed(KeyCode::ArrowUp) as i32 - keys.pressed(KeyCode::ArrowDown) as i32,
@@ -63,6 +65,8 @@ fn move_camera(
         * CAMERA_SPEED;
 
     **camera = camera_pos.round().as_ivec2();
+
+    OK
 }
 
 #[derive(Component)]
@@ -70,18 +74,20 @@ struct Mage;
 
 // Jitter the mage around randomly. This function is framerate-sensitive, which is not good
 // for a game, but it's fine for this example.
-fn move_mage(mut mages: Query<&mut PxPosition, With<Mage>>) {
+fn move_mage(mut mages: Query<&mut PxPosition, With<Mage>>) -> Result {
     if let Some(delta) =
         [IVec2::X, -IVec2::X, IVec2::Y, -IVec2::Y].get(thread_rng().gen_range(0..50))
     {
-        **mages.single_mut() += *delta;
+        **mages.single_mut()? += *delta;
     }
+
+    OK
 }
 
 // Switch the canvas when you press space
-fn switch_canvas(mut mages: Query<&mut PxCanvas>, keys: Res<ButtonInput<KeyCode>>) {
+fn switch_canvas(mut mages: Query<&mut PxCanvas>, keys: Res<ButtonInput<KeyCode>>) -> Result {
     if keys.just_pressed(KeyCode::Space) {
-        let mut canvas = mages.single_mut();
+        let mut canvas = mages.single_mut()?;
 
         *canvas = match *canvas {
             // Camera means it is drawn relative to the camera, like UI
@@ -90,6 +96,8 @@ fn switch_canvas(mut mages: Query<&mut PxCanvas>, keys: Res<ButtonInput<KeyCode>
             PxCanvas::Camera => PxCanvas::World,
         };
     }
+
+    OK
 }
 
 #[px_layer]

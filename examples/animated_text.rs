@@ -53,17 +53,15 @@ fn init(assets: Res<AssetServer>, mut cmd: Commands) {
             vertical: true,
             ..default()
         },
-        related!(PxRowEntries [
+        children![
             text("LOOPED ANIMATION ⭐🙂⭐", PxFrameTransition::None, &assets),
-            PxRowSlot {
-                stretch: true,
-            },
+            PxRowSlot { stretch: true },
             text(
                 "DITHERED ANIMATION 🙂⭐🙂",
                 PxFrameTransition::Dither,
                 &assets
             ),
-        ]),
+        ],
     ));
 }
 
