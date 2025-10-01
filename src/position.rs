@@ -7,7 +7,7 @@ use bevy_ecs::{
     component::{HookContext, Mutable},
     world::DeferredWorld,
 };
-use bevy_render::{extract_component::ExtractComponent, RenderApp};
+use bevy_render::{RenderApp, extract_component::ExtractComponent};
 use next::Next;
 
 use crate::{prelude::*, set::PxSet};
@@ -55,9 +55,8 @@ pub trait PxLayer:
 {
 }
 
-impl<
-        L: ExtractComponent + Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug,
-    > PxLayer for L
+impl<L: ExtractComponent + Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug>
+    PxLayer for L
 {
 }
 
@@ -143,6 +142,7 @@ impl PxAnchor {
     }
 }
 
+// TODO Remove
 /// Float-based position. Add to entities that have [`PxPosition`], but also need
 /// a sub-pixel position. Use [`PxPosition`] unless a sub-pixel position is necessary.
 #[derive(Component, Debug, Default, Deref, DerefMut)]
