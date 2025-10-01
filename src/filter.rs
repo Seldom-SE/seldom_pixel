@@ -2,9 +2,9 @@
 
 use std::{error::Error, ops::RangeInclusive};
 
-use bevy_asset::{AssetLoader, LoadContext, io::Reader, weak_handle};
+use bevy_asset::{AssetLoader, LoadContext, io::Reader, uuid_handle};
 use bevy_derive::{Deref, DerefMut};
-use bevy_ecs::{component::HookContext, world::DeferredWorld};
+use bevy_ecs::{lifecycle::HookContext, world::DeferredWorld};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_math::uvec2;
 use bevy_render::{
@@ -23,7 +23,7 @@ use crate::{
 };
 
 pub const TRANSPARENT_FILTER: Handle<PxFilterAsset> =
-    weak_handle!("798C57A4-A83C-5DD6-8FA6-1426E31A84CA");
+    uuid_handle!("798C57A4-A83C-5DD6-8FA6-1426E31A84CA");
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     // R-A workaround
@@ -139,6 +139,7 @@ impl RenderAsset for PxFilterAsset {
         source_asset: Self,
         _: AssetId<Self>,
         &mut (): &mut (),
+        _: Option<&Self>,
     ) -> Result<Self, PrepareAssetError<Self>> {
         Ok(source_asset)
     }

@@ -1,7 +1,7 @@
 // In this game, you can spawn a mage by pressing space and switch the palette by pressing tab
 
 use bevy::prelude::*;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use seldom_pixel::{
     palette::{Palette, PaletteHandle},
     prelude::*,
@@ -12,7 +12,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    resolution: Vec2::splat(512.).into(),
+                    resolution: UVec2::splat(512).into(),
                     ..default()
                 }),
                 ..default()

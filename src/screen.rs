@@ -4,17 +4,17 @@
 
 use std::{collections::BTreeMap, iter::empty, marker::PhantomData};
 
-use bevy_asset::weak_handle;
+use bevy_asset::uuid_handle;
 use bevy_core_pipeline::core_2d::graph::{Core2d, Node2d};
 use bevy_derive::{Deref, DerefMut};
 use bevy_image::TextureFormatPixelInfo;
 use bevy_math::{ivec2, uvec2};
 use bevy_render::{
-    Render, RenderApp, RenderSet,
+    Render, RenderApp, RenderSystems,
     extract_resource::{ExtractResource, ExtractResourcePlugin},
     render_asset::RenderAssets,
     render_graph::{
-        NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
+        NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel, ViewNode, ViewNodeRunner,
     },
     render_resource::{
         BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
@@ -45,7 +45,7 @@ use crate::{
     text::TextComponents,
 };
 
-const SCREEN_SHADER_HANDLE: Handle<Shader> = weak_handle!("48CE4F2C-8B78-5954-08A8-461F62E10E84");
+const SCREEN_SHADER_HANDLE: Handle<Shader> = uuid_handle!("48CE4F2C-8B78-5954-08A8-461F62E10E84");
 
 pub(crate) struct Plug<L: PxLayer> {
     size: ScreenSize,
@@ -87,7 +87,7 @@ impl<L: PxLayer> Plugin for Plug<L> {
                 ),
             )
             .init_resource::<PxUniformBuffer>()
-            .add_systems(Render, prepare_uniform.in_set(RenderSet::Prepare));
+            .add_systems(Render, prepare_uniform.in_set(RenderSystems::Prepare));
     }
 
     fn finish(&self, app: &mut App) {
@@ -198,7 +198,7 @@ fn init_screen(
     *initialized = false;
 }
 
-fn resize_screen(mut window_resized: EventReader<WindowResized>, mut screen: ResMut<Screen>) {
+fn resize_screen(mut window_resized: MessageReader<WindowResized>, mut screen: ResMut<Screen>) {
     if let Some(window_resized) = window_resized.read().last() {
         screen.computed_size = screen
             .size
@@ -267,13 +267,13 @@ impl FromWorld for PxPipeline {
                     vertex: VertexState {
                         shader: SCREEN_SHADER_HANDLE,
                         shader_defs: Vec::new(),
-                        entry_point: "vertex".into(),
+                        entry_point: Some("vertex".into()),
                         buffers: Vec::new(),
                     },
                     fragment: Some(FragmentState {
                         shader: SCREEN_SHADER_HANDLE,
                         shader_defs: Vec::new(),
-                        entry_point: "fragment".into(),
+                        entry_point: Some("fragment".into()),
                         targets: vec![Some(ColorTargetState {
                             format: TextureFormat::bevy_default(),
                             blend: None,
@@ -1066,14 +1066,16 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             .render_device()
             .create_texture(&image.texture_descriptor);
 
+        let Ok(pixel_size) = image.texture_descriptor.format.pixel_size() else {
+            return Ok(());
+        };
+
         world.resource::<RenderQueue>().write_texture(
             texture.as_image_copy(),
             image.data.as_ref().unwrap(),
             TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(
-                    image.width() * image.texture_descriptor.format.pixel_size() as u32,
-                ),
+                bytes_per_row: Some(image.width() * pixel_size as u32),
                 rows_per_image: None,
             },
             image.texture_descriptor.size,
@@ -1106,6 +1108,7 @@ impl<L: PxLayer> ViewNode for PxRenderNode<L> {
             label: Some("px_pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: post_process.destination,
+                depth_slice: None,
                 resolve_target: None,
                 ops: default(),
             })],

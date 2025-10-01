@@ -10,7 +10,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    resolution: Vec2::splat(512.).into(),
+                    resolution: UVec2::splat(512).into(),
                     ..default()
                 }),
                 ..default()
@@ -24,9 +24,9 @@ fn main() {
 
 fn set_sprite<E: Clone + Reflect + Debug>(
     path: &'static str,
-) -> impl Fn(Trigger<Pointer<E>>, Query<&mut PxSprite>, Res<AssetServer>) {
+) -> impl Fn(On<Pointer<E>>, Query<&mut PxSprite>, Res<AssetServer>) {
     move |trigger, mut sprites, assets| {
-        **sprites.get_mut(trigger.target()).unwrap() = assets.load(path);
+        **sprites.get_mut(trigger.entity).unwrap() = assets.load(path);
     }
 }
 
@@ -48,9 +48,9 @@ fn init(mut cursor: ResMut<PxCursor>, assets: Res<AssetServer>, mut cmd: Command
     cmd.spawn((PxPosition(ivec2(8, 8)), PxSprite(assets.load(idle_path))))
         .observe(set_sprite::<Over>(hover_path))
         .observe(set_sprite::<Out>(idle_path))
-        .observe(set_sprite::<Pressed>("sprite/button_click.px_sprite.png"))
-        .observe(set_sprite::<Released>(hover_path))
-        .observe(|_: Trigger<Pointer<Click>>| {
+        .observe(set_sprite::<Press>("sprite/button_click.px_sprite.png"))
+        .observe(set_sprite::<Release>(hover_path))
+        .observe(|_: On<Pointer<Click>>| {
             info!("Click!");
         });
 }

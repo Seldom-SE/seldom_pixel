@@ -11,7 +11,7 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
 // TODO Pick other entities in a generic way
 // TODO Other pointers support
 fn pick<L: PxLayer>(
-    mut hits: EventWriter<PointerHits>,
+    mut hits: MessageWriter<PointerHits>,
     pointers: Query<&PointerId>,
     rects: Query<(
         &PxRect,

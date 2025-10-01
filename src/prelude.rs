@@ -2,6 +2,7 @@
 
 pub(crate) use bevy_app::prelude::*;
 pub(crate) use bevy_asset::prelude::*;
+pub(crate) use bevy_camera::prelude::*;
 pub(crate) use bevy_color::prelude::*;
 pub(crate) use bevy_ecs::prelude::*;
 pub(crate) use bevy_image::prelude::*;
@@ -10,6 +11,7 @@ pub(crate) use bevy_log::prelude::*;
 pub(crate) use bevy_math::prelude::*;
 pub(crate) use bevy_reflect::prelude::*;
 pub(crate) use bevy_render::prelude::*;
+pub(crate) use bevy_shader::prelude::*;
 pub(crate) use bevy_time::prelude::*;
 pub(crate) use bevy_transform::prelude::*;
 #[cfg(feature = "particle")]

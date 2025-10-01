@@ -16,7 +16,7 @@ use std::time::Duration;
 use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::system::SystemId;
 use bevy_input::{
-    ButtonState, InputSystem,
+    ButtonState, InputSystems,
     keyboard::{Key, KeyboardInput, NativeKey},
     mouse::MouseWheel,
 };
@@ -38,7 +38,7 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
             (update_key_fields, update_text_fields).run_if(resource_exists::<InputFocus>),
             scroll,
         )
-            .after(InputSystem),
+            .after(InputSystems),
     )
     .add_systems(
         PostUpdate,
@@ -128,7 +128,7 @@ pub struct PxScroll {
 }
 
 // TODO Should be modular
-fn scroll(mut scrolls: Query<&mut PxScroll>, mut wheels: EventReader<MouseWheel>) {
+fn scroll(mut scrolls: Query<&mut PxScroll>, mut wheels: MessageReader<MouseWheel>) {
     for wheel in wheels.read() {
         for mut scroll in &mut scrolls {
             scroll.scroll = scroll
@@ -186,8 +186,9 @@ fn update_key_field_focus(
     *prev_focus = focus;
 }
 
-#[derive(Event)]
+#[derive(EntityEvent)]
 pub struct PxKeyFieldUpdate {
+    pub entity: Entity,
     pub key: KeyCode,
 }
 
@@ -195,7 +196,7 @@ pub struct PxKeyFieldUpdate {
 fn update_key_fields(
     mut fields: Query<Entity, With<PxKeyField>>,
     mut focus: ResMut<InputFocus>,
-    mut keys: EventReader<KeyboardInput>,
+    mut keys: MessageReader<KeyboardInput>,
     mut cmd: Commands,
 ) {
     let mut keys = keys.read();
@@ -237,7 +238,10 @@ fn update_key_fields(
         };
     });
 
-    cmd.entity(field_id).trigger(PxKeyFieldUpdate { key });
+    cmd.trigger(PxKeyFieldUpdate {
+        entity: field_id,
+        key,
+    });
 
     focus.clear();
 }
@@ -315,8 +319,9 @@ fn caret_blink(mut fields: Query<(&mut PxTextField, &mut PxText)>, time: Res<Tim
     }
 }
 
-#[derive(Event)]
+#[derive(EntityEvent)]
 pub struct PxTextFieldUpdate {
+    pub entity: Entity,
     pub text: String,
 }
 
@@ -324,7 +329,7 @@ pub struct PxTextFieldUpdate {
 fn update_text_fields(
     mut fields: Query<(&mut PxTextField, &mut PxText)>,
     focus: Res<InputFocus>,
-    mut keys: EventReader<KeyboardInput>,
+    mut keys: MessageReader<KeyboardInput>,
     mut cmd: Commands,
 ) {
     let keys = keys
@@ -362,7 +367,8 @@ fn update_text_fields(
     text.value = field.cached_text.clone() + &field.caret_char.to_string();
     field.caret = Some(default());
 
-    cmd.entity(focus_id).trigger(PxTextFieldUpdate {
+    cmd.trigger(PxTextFieldUpdate {
+        entity: focus_id,
         text: field.cached_text.clone(),
     });
 }

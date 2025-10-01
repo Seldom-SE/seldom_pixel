@@ -1,13 +1,13 @@
 use std::error::Error;
 
-use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_asset::{AssetLoader, LoadContext, io::Reader};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_platform::collections::HashMap;
 use bevy_render::{
+    Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
     sync_component::SyncComponentPlugin,
     sync_world::RenderEntity,
-    Extract, RenderApp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -170,6 +170,7 @@ impl RenderAsset for PxTypeface {
         source_asset: Self,
         _: AssetId<Self>,
         &mut (): &mut (),
+        _: Option<&Self>,
     ) -> Result<Self, PrepareAssetError<Self>> {
         Ok(source_asset)
     }

@@ -102,6 +102,7 @@ impl RenderAsset for PxSpriteAsset {
         source_asset: Self,
         _: AssetId<Self>,
         &mut (): &mut (),
+        _: Option<&Self>,
     ) -> Result<Self, PrepareAssetError<Self>> {
         Ok(source_asset)
     }

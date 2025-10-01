@@ -2,12 +2,12 @@
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_render::extract_resource::{ExtractResource, ExtractResourcePlugin};
-use bevy_window::PrimaryWindow;
+use bevy_window::{CursorOptions, PrimaryWindow};
 
 use crate::{
     filter::PxFilterAsset,
     prelude::*,
-    screen::{screen_scale, Screen},
+    screen::{Screen, screen_scale},
     set::PxSet,
 };
 
@@ -51,8 +51,8 @@ pub enum PxCursor {
 pub struct PxCursorPosition(pub Option<UVec2>);
 
 fn update_cursor_position(
-    mut move_events: EventReader<CursorMoved>,
-    mut leave_events: EventReader<CursorLeft>,
+    mut move_events: MessageReader<CursorMoved>,
+    mut leave_events: MessageReader<CursorLeft>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     screen: Res<Screen>,
     mut position: ResMut<PxCursorPosition>,
@@ -94,7 +94,7 @@ fn update_cursor_position(
 }
 
 fn change_cursor(
-    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+    mut windows: Query<&mut CursorOptions, With<PrimaryWindow>>,
     cursor: Res<PxCursor>,
     cursor_pos: Res<PxCursorPosition>,
 ) {
@@ -102,11 +102,11 @@ fn change_cursor(
         return;
     }
 
-    let Ok(mut window) = windows.single_mut() else {
+    let Ok(mut options) = windows.single_mut() else {
         return;
     };
 
-    window.cursor_options.visible = cursor_pos.is_none()
+    options.visible = cursor_pos.is_none()
         || match *cursor {
             PxCursor::Os => true,
             PxCursor::Filter { .. } => false,

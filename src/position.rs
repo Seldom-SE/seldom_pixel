@@ -3,10 +3,7 @@
 use std::fmt::Debug;
 
 use bevy_derive::{Deref, DerefMut};
-use bevy_ecs::{
-    component::{HookContext, Mutable},
-    world::DeferredWorld,
-};
+use bevy_ecs::{component::Mutable, lifecycle::HookContext, world::DeferredWorld};
 use bevy_render::{RenderApp, extract_component::ExtractComponent};
 use next::Next;
 

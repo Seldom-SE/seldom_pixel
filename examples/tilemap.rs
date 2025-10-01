@@ -1,7 +1,7 @@
 // In this program, a tilemap is spawned
 
 use bevy::prelude::*;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use seldom_pixel::prelude::*;
 
 fn main() {
@@ -9,7 +9,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    resolution: Vec2::splat(512.).into(),
+                    resolution: UVec2::splat(512).into(),
                     ..default()
                 }),
                 ..default()
