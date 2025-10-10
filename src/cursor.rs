@@ -1,7 +1,9 @@
 //! Cursor
 
 use bevy_derive::{Deref, DerefMut};
+#[cfg(feature = "headed")]
 use bevy_render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+#[cfg(feature = "headed")]
 use bevy_window::{CursorOptions, PrimaryWindow};
 
 use crate::{
@@ -12,14 +14,16 @@ use crate::{
 };
 
 pub(crate) fn plug(app: &mut App) {
+    #[cfg(feature = "headed")]
     app.add_plugins((
         ExtractResourcePlugin::<PxCursor>::default(),
         ExtractResourcePlugin::<PxCursorPosition>::default(),
         ExtractResourcePlugin::<CursorState>::default(),
-    ))
-    .init_resource::<PxCursor>()
-    .init_resource::<PxCursorPosition>()
-    .add_systems(
+    ));
+    app.init_resource::<PxCursor>()
+        .init_resource::<PxCursorPosition>();
+    #[cfg(feature = "headed")]
+    app.add_systems(
         PreUpdate,
         update_cursor_position.in_set(PxSet::UpdateCursorPosition),
     )
@@ -27,7 +31,8 @@ pub(crate) fn plug(app: &mut App) {
 }
 
 /// Resource that defines whether to use an in-game cursor
-#[derive(ExtractResource, Resource, Clone, Default, Debug)]
+#[cfg_attr(feature = "headed", derive(ExtractResource))]
+#[derive(Resource, Clone, Default, Debug)]
 pub enum PxCursor {
     /// Use the operating system's cursor
     #[default]
@@ -47,9 +52,11 @@ pub enum PxCursor {
 /// Resource marking the cursor's position. Measured in pixels from the bottom-left of the screen.
 /// Contains [`None`] if the cursor is off-screen. The cursor's world position
 /// is the contained value plus [`PxCamera`]'s contained value.
-#[derive(ExtractResource, Resource, Deref, DerefMut, Clone, Default, Debug)]
+#[cfg_attr(feature = "headed", derive(ExtractResource))]
+#[derive(Resource, Deref, DerefMut, Clone, Default, Debug)]
 pub struct PxCursorPosition(pub Option<UVec2>);
 
+#[cfg(feature = "headed")]
 fn update_cursor_position(
     mut move_events: MessageReader<CursorMoved>,
     mut leave_events: MessageReader<CursorLeft>,
@@ -93,6 +100,7 @@ fn update_cursor_position(
     .then(|| new_position.as_uvec2());
 }
 
+#[cfg(feature = "headed")]
 fn change_cursor(
     mut windows: Query<&mut CursorOptions, With<PrimaryWindow>>,
     cursor: Res<PxCursor>,
@@ -120,6 +128,7 @@ pub(crate) enum CursorState {
     Right,
 }
 
+#[cfg(feature = "headed")]
 impl ExtractResource for CursorState {
     type Source = ButtonInput<MouseButton>;
 

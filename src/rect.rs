@@ -1,27 +1,23 @@
 use bevy_derive::{Deref, DerefMut};
 use bevy_math::{ivec2, uvec2};
-use bevy_render::{sync_world::RenderEntity, Extract, RenderApp};
+#[cfg(feature = "headed")]
+use bevy_render::{Extract, RenderApp, sync_world::RenderEntity};
 
 use crate::{
     animation::Frames, filter::DefaultPxFilterLayers, image::PxImageSliceMut, position::Spatial,
     prelude::*,
 };
 
-pub(crate) fn plug<L: PxLayer>(app: &mut App) {
-    app.sub_app_mut(RenderApp)
+pub(crate) fn plug<L: PxLayer>(_app: &mut App) {
+    #[cfg(feature = "headed")]
+    _app.sub_app_mut(RenderApp)
         .add_systems(ExtractSchedule, extract_rects::<L>);
 }
 
 /// A rectangle in which a filter is applied
 #[derive(Component, Deref, DerefMut, Clone, Copy, Reflect)]
-#[require(
-    PxFilter,
-    DefaultPxFilterLayers,
-    PxPosition,
-    PxAnchor,
-    PxCanvas,
-    Visibility
-)]
+#[require(PxFilter, DefaultPxFilterLayers, PxPosition, PxAnchor, PxCanvas)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxRect(pub UVec2);
 
 impl Default for PxRect {
@@ -78,6 +74,7 @@ pub(crate) type RectComponents<L> = (
     Has<PxInvertMask>,
 );
 
+#[cfg(feature = "headed")]
 fn extract_rects<L: PxLayer>(
     rects: Extract<Query<(RectComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,

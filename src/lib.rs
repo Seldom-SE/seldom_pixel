@@ -8,6 +8,7 @@
 // TODO Remove `Px` prefix where possible
 
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
+#![cfg_attr(not(feature = "headed"), allow(unused_imports))]
 #![warn(missing_docs)]
 
 pub mod animation;
@@ -23,6 +24,7 @@ pub mod math;
 pub mod palette;
 #[cfg(feature = "particle")]
 mod particle;
+#[cfg(feature = "headed")]
 mod picking;
 pub mod position;
 pub mod prelude;
@@ -69,6 +71,7 @@ impl<L: PxLayer> Plugin for PxPlugin<L> {
                 camera::plug,
                 cursor::plug,
                 palette::plug(self.palette_path.clone()),
+                #[cfg(feature = "headed")]
                 picking::plug::<L>,
                 position::plug::<L>,
                 screen::Plug::<L>::new(self.screen_size),

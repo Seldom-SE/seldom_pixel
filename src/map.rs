@@ -3,6 +3,7 @@ use std::{error::Error, mem::replace};
 use bevy_asset::{AssetLoader, LoadContext, io::Reader};
 use bevy_ecs::entity::EntityHashMap;
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
+#[cfg(feature = "headed")]
 use bevy_render::{
     Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
@@ -21,15 +22,17 @@ use crate::{
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
+    #[cfg(feature = "headed")]
     app.add_plugins((
         RenderAssetPlugin::<PxTileset>::default(),
         SyncComponentPlugin::<PxMap>::default(),
         SyncComponentPlugin::<PxTile>::default(),
-    ))
-    .init_asset::<PxTileset>()
-    .init_asset_loader::<PxTilesetLoader>()
-    .sub_app_mut(RenderApp)
-    .add_systems(ExtractSchedule, (extract_maps::<L>, extract_tiles));
+    ));
+    app.init_asset::<PxTileset>()
+        .init_asset_loader::<PxTilesetLoader>();
+    #[cfg(feature = "headed")]
+    app.sub_app_mut(RenderApp)
+        .add_systems(ExtractSchedule, (extract_maps::<L>, extract_tiles));
 }
 
 #[derive(Serialize, Deserialize)]
@@ -139,6 +142,7 @@ pub struct PxTileset {
     max_frame_count: usize,
 }
 
+#[cfg(feature = "headed")]
 impl RenderAsset for PxTileset {
     type SourceAsset = Self;
     type Param = ();
@@ -243,7 +247,8 @@ impl<'a> Spatial for (&'a PxTiles, &'a PxTileset) {
 
 /// Creates a tilemap
 #[derive(Component, Default, Clone, Debug)]
-#[require(PxPosition, DefaultLayer, PxCanvas, Visibility)]
+#[require(PxPosition, DefaultLayer, PxCanvas)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxMap {
     /// The map's tiles
     pub tiles: PxTiles,
@@ -265,7 +270,7 @@ impl AnimatedAssetComponent for PxMap {
 
 /// A tile. Must be added to tiles added to [`PxMap`].
 #[derive(Component, Clone, Default, Debug)]
-#[require(Visibility)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxTile {
     /// The index to the tile texture in the tileset
     pub texture: u32,
@@ -286,6 +291,7 @@ pub(crate) type MapComponents<L> = (
     Option<&'static PxFilter>,
 );
 
+#[cfg(feature = "headed")]
 fn extract_maps<L: PxLayer>(
     maps: Extract<Query<(MapComponents<L>, &InheritedVisibility, RenderEntity)>>,
     render_entities: Extract<Query<RenderEntity>>,
@@ -324,6 +330,7 @@ fn extract_maps<L: PxLayer>(
 
 pub(crate) type TileComponents = (&'static PxTile, Option<&'static PxFilter>);
 
+#[cfg(feature = "headed")]
 fn extract_tiles(
     tiles: Extract<Query<(TileComponents, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,

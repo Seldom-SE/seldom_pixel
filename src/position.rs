@@ -4,6 +4,7 @@ use std::fmt::Debug;
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::{component::Mutable, lifecycle::HookContext, world::DeferredWorld};
+#[cfg(feature = "headed")]
 use bevy_render::{RenderApp, extract_component::ExtractComponent};
 use next::Next;
 
@@ -18,8 +19,9 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
                 update_position_to_sub.in_set(PxSet::UpdatePosToSubPos),
             )
                 .chain(),
-        )
-        .sub_app_mut(RenderApp)
+        );
+    #[cfg(feature = "headed")]
+    app.sub_app_mut(RenderApp)
         .insert_resource(InsertDefaultLayer::new::<L>());
 }
 
@@ -34,7 +36,8 @@ impl<T: Spatial> Spatial for &'_ T {
 }
 
 /// The position of an entity
-#[derive(ExtractComponent, Component, Deref, DerefMut, Clone, Copy, Default, Reflect, Debug)]
+#[cfg_attr(feature = "headed", derive(ExtractComponent))]
+#[derive(Component, Deref, DerefMut, Clone, Copy, Default, Reflect, Debug)]
 pub struct PxPosition(pub IVec2);
 
 impl From<IVec2> for PxPosition {
@@ -47,13 +50,19 @@ impl From<IVec2> for PxPosition {
 /// or derive/implement the required traits manually. The layers will be rendered in the order
 /// defined by the [`PartialOrd`] implementation. So, lower values will be in the back
 /// and vice versa.
+#[cfg(feature = "headed")]
 pub trait PxLayer:
     ExtractComponent + Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug
 {
 }
 
-impl<L: ExtractComponent + Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug>
-    PxLayer for L
+#[cfg(not(feature = "headed"))]
+pub trait PxLayer: Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug {}
+
+impl<#[cfg(feature = "headed")] L: ExtractComponent, #[cfg(not(feature = "headed"))] L> PxLayer
+    for L
+where
+    L: Component<Mutability = Mutable> + Next + Ord + Clone + Default + Debug,
 {
 }
 
@@ -84,7 +93,8 @@ fn insert_default_layer(mut world: DeferredWorld, ctx: HookContext) {
 }
 
 /// How a sprite is positioned relative to its [`PxPosition`]. It defaults to [`PxAnchor::Center`].
-#[derive(ExtractComponent, Component, Clone, Copy, Default, Debug)]
+#[cfg_attr(feature = "headed", derive(ExtractComponent))]
+#[derive(Component, Clone, Copy, Default, Debug)]
 pub enum PxAnchor {
     /// Center
     #[default]

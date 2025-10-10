@@ -6,13 +6,14 @@ use bevy_derive::{Deref, DerefMut};
 
 use crate::prelude::*;
 
-pub(crate) fn plug(app: &mut App) {
-    app.add_systems(PostUpdate, blink);
+pub(crate) fn plug(_app: &mut App) {
+    #[cfg(feature = "headed")]
+    _app.add_systems(PostUpdate, blink);
 }
 
 /// Toggles `Visibility` whenever the timer finishes
 #[derive(Component, Deref, DerefMut)]
-#[require(Visibility)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct Blink(Timer);
 
 impl Blink {
@@ -22,6 +23,7 @@ impl Blink {
     }
 }
 
+#[cfg(feature = "headed")]
 fn blink(mut blinks: Query<(&mut Blink, &mut Visibility)>, time: Res<Time>) {
     for (mut blink, mut visibility) in &mut blinks {
         blink.tick(time.delta());

@@ -6,7 +6,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use bevy_asset::{io::Reader, AssetLoader, LoadContext};
+use bevy_asset::{AssetLoader, LoadContext, io::Reader};
 use bevy_derive::{Deref, DerefMut};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_platform::collections::HashMap;

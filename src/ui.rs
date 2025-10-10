@@ -15,11 +15,13 @@ use std::time::Duration;
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::system::SystemId;
+#[cfg(feature = "headed")]
 use bevy_input::{
     ButtonState, InputSystems,
     keyboard::{Key, KeyboardInput, NativeKey},
     mouse::MouseWheel,
 };
+#[cfg(feature = "headed")]
 use bevy_input_focus::InputFocus;
 use bevy_math::{ivec2, uvec2};
 
@@ -32,6 +34,7 @@ use crate::{
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
+    #[cfg(feature = "headed")]
     app.add_systems(
         PreUpdate,
         (
@@ -43,14 +46,14 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
     .add_systems(
         PostUpdate,
         (
-            update_key_field_focus.run_if(resource_exists::<InputFocus>),
-            (
-                update_text_field_focus.run_if(resource_exists::<InputFocus>),
-                caret_blink,
-                layout::<L>.before(PxSet::Picking),
-            )
-                .chain(),
-        ),
+            update_key_field_focus,
+            update_text_field_focus.before(caret_blink),
+        )
+            .run_if(resource_exists::<InputFocus>),
+    );
+    app.add_systems(
+        PostUpdate,
+        (caret_blink, layout::<L>.before(PxSet::Picking)).chain(),
     );
 }
 
@@ -61,11 +64,11 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
 pub struct PxUiRoot;
 
 #[derive(Component, Deref, DerefMut, Default, Reflect)]
-#[require(Visibility)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxMinSize(pub UVec2);
 
 #[derive(Component, Deref, DerefMut, Reflect)]
-#[require(Visibility)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxMargin(pub u32);
 
 impl Default for PxMargin {
@@ -80,7 +83,7 @@ pub struct PxRowSlot {
 }
 
 #[derive(Component, Default, Clone, Reflect)]
-#[require(Visibility)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxRow {
     pub vertical: bool,
     pub space_between: u32,
@@ -98,7 +101,7 @@ pub struct PxGridRows {
 }
 
 #[derive(Component, Clone)]
-#[require(Visibility)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxGrid {
     pub width: u32,
     pub rows: PxGridRows,
@@ -116,7 +119,7 @@ impl Default for PxGrid {
 }
 
 #[derive(Component, Clone, Reflect)]
-#[require(Visibility)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxStack;
 
 #[derive(Component, Default, Clone, Copy, Reflect)]
@@ -128,6 +131,7 @@ pub struct PxScroll {
 }
 
 // TODO Should be modular
+#[cfg(feature = "headed")]
 fn scroll(mut scrolls: Query<&mut PxScroll>, mut wheels: MessageReader<MouseWheel>) {
     for wheel in wheels.read() {
         for mut scroll in &mut scrolls {
@@ -155,6 +159,7 @@ pub struct PxKeyField {
     pub cached_text: String,
 }
 
+#[cfg(feature = "headed")]
 fn update_key_field_focus(
     mut prev_focus: Local<Option<Entity>>,
     mut fields: Query<(&PxKeyField, &mut PxText, &mut Visibility, Entity)>,
@@ -193,6 +198,7 @@ pub struct PxKeyFieldUpdate {
 }
 
 // TODO Should be modular
+#[cfg(feature = "headed")]
 fn update_key_fields(
     mut fields: Query<Entity, With<PxKeyField>>,
     mut focus: ResMut<InputFocus>,
@@ -269,6 +275,7 @@ pub struct PxTextField {
     pub caret: Option<PxCaret>,
 }
 
+#[cfg(feature = "headed")]
 fn update_text_field_focus(
     mut prev_focus: Local<Option<Entity>>,
     mut fields: Query<(&mut PxTextField, &mut PxText)>,
@@ -326,6 +333,7 @@ pub struct PxTextFieldUpdate {
 }
 
 // TODO Should be modular
+#[cfg(feature = "headed")]
 fn update_text_fields(
     mut fields: Query<(&mut PxTextField, &mut PxText)>,
     focus: Res<InputFocus>,

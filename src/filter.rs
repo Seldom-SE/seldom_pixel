@@ -7,6 +7,7 @@ use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::{lifecycle::HookContext, world::DeferredWorld};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_math::uvec2;
+#[cfg(feature = "headed")]
 use bevy_render::{
     Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
@@ -26,13 +27,15 @@ pub const TRANSPARENT_FILTER: Handle<PxFilterAsset> =
     uuid_handle!("798C57A4-A83C-5DD6-8FA6-1426E31A84CA");
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
+    #[cfg(feature = "headed")]
+    app.add_plugins((
+        RenderAssetPlugin::<PxFilterAsset>::default(),
+        SyncComponentPlugin::<PxFilterLayers<L>>::default(),
+    ));
+
     // R-A workaround
     Assets::insert(
         &mut app
-            .add_plugins((
-                RenderAssetPlugin::<PxFilterAsset>::default(),
-                SyncComponentPlugin::<PxFilterLayers<L>>::default(),
-            ))
             .init_asset::<PxFilterAsset>()
             .init_asset_loader::<PxFilterLoader>()
             .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
@@ -42,6 +45,7 @@ pub(crate) fn plug<L: PxLayer>(app: &mut App) {
         PxFilterAsset(PxImage::empty(uvec2(16, 16))),
     );
 
+    #[cfg(feature = "headed")]
     app.sub_app_mut(RenderApp)
         .insert_resource(InsertDefaultPxFilterLayers::new::<L>())
         .add_systems(ExtractSchedule, extract_filters::<L>);
@@ -131,6 +135,7 @@ impl AssetLoader for PxFilterLoader {
 #[derive(Asset, Clone, Reflect, Debug)]
 pub struct PxFilterAsset(pub(crate) PxImage);
 
+#[cfg(feature = "headed")]
 impl RenderAsset for PxFilterAsset {
     type SourceAsset = Self;
     type Param = ();
@@ -197,7 +202,8 @@ impl AnimatedAssetComponent for PxFilter {
 
 /// Determines which layers a filter appies to
 #[derive(Component, Clone)]
-#[require(PxFilter, Visibility)]
+#[require(PxFilter)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub enum PxFilterLayers<L: PxLayer> {
     /// Filter applies to a single layer
     Single {
@@ -289,6 +295,7 @@ pub(crate) type FilterComponents<L> = (
     Option<&'static PxFrame>,
 );
 
+#[cfg(feature = "headed")]
 fn extract_filters<L: PxLayer>(
     filters: Extract<
         Query<(FilterComponents<L>, &InheritedVisibility, RenderEntity), Without<PxCanvas>>,

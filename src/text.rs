@@ -3,6 +3,7 @@ use std::error::Error;
 use bevy_asset::{AssetLoader, LoadContext, io::Reader};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_platform::collections::HashMap;
+#[cfg(feature = "headed")]
 use bevy_render::{
     Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
@@ -17,14 +18,18 @@ use crate::{
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
+    #[cfg(feature = "headed")]
     app.add_plugins((
         RenderAssetPlugin::<PxTypeface>::default(),
         SyncComponentPlugin::<PxText>::default(),
-    ))
-    .init_asset::<PxTypeface>()
-    .init_asset_loader::<PxTypefaceLoader>()
-    .sub_app_mut(RenderApp)
-    .add_systems(ExtractSchedule, extract_texts::<L>);
+    ));
+
+    app.init_asset::<PxTypeface>()
+        .init_asset_loader::<PxTypefaceLoader>();
+
+    #[cfg(feature = "headed")]
+    app.sub_app_mut(RenderApp)
+        .add_systems(ExtractSchedule, extract_texts::<L>);
 }
 
 #[derive(Serialize, Deserialize)]
@@ -162,6 +167,7 @@ impl PxTypeface {
     }
 }
 
+#[cfg(feature = "headed")]
 impl RenderAsset for PxTypeface {
     type SourceAsset = Self;
     type Param = ();
@@ -178,7 +184,8 @@ impl RenderAsset for PxTypeface {
 
 /// Spawns text to be rendered on-screen
 #[derive(Component, Default, Clone, Debug, Reflect)]
-#[require(PxPosition, PxAnchor, DefaultLayer, PxCanvas, Visibility)]
+#[require(PxPosition, PxAnchor, DefaultLayer, PxCanvas)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxText {
     /// The contents of the text
     pub value: String,
@@ -222,6 +229,7 @@ pub(crate) type TextComponents<L> = (
     Option<&'static PxFilter>,
 );
 
+#[cfg(feature = "headed")]
 fn extract_texts<L: PxLayer>(
     texts: Extract<Query<(TextComponents<L>, &InheritedVisibility, RenderEntity)>>,
     mut cmd: Commands,

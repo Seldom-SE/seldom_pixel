@@ -2,6 +2,7 @@
 
 pub(crate) use bevy_app::prelude::*;
 pub(crate) use bevy_asset::prelude::*;
+#[cfg(feature = "headed")]
 pub(crate) use bevy_camera::prelude::*;
 pub(crate) use bevy_color::prelude::*;
 pub(crate) use bevy_ecs::prelude::*;
@@ -11,12 +12,14 @@ pub(crate) use bevy_log::prelude::*;
 pub(crate) use bevy_math::prelude::*;
 pub(crate) use bevy_reflect::prelude::*;
 pub(crate) use bevy_render::prelude::*;
+#[cfg(feature = "headed")]
 pub(crate) use bevy_shader::prelude::*;
 pub(crate) use bevy_time::prelude::*;
 pub(crate) use bevy_transform::prelude::*;
 #[cfg(feature = "particle")]
 pub(crate) use bevy_turborand::prelude::*;
 pub(crate) use bevy_utils::prelude::*;
+#[cfg(feature = "headed")]
 pub(crate) use bevy_window::prelude::*;
 #[cfg(feature = "nav")]
 pub(crate) use seldom_map_nav::prelude::*;

@@ -5,10 +5,12 @@
 use std::{collections::BTreeMap, iter::empty, marker::PhantomData};
 
 use bevy_asset::uuid_handle;
+#[cfg(feature = "headed")]
 use bevy_core_pipeline::core_2d::graph::{Core2d, Node2d};
 use bevy_derive::{Deref, DerefMut};
 use bevy_image::TextureFormatPixelInfo;
 use bevy_math::{ivec2, uvec2};
+#[cfg(feature = "headed")]
 use bevy_render::{
     Render, RenderApp, RenderSystems,
     extract_resource::{ExtractResource, ExtractResourcePlugin},
@@ -27,6 +29,7 @@ use bevy_render::{
     renderer::{RenderContext, RenderDevice, RenderQueue},
     view::ViewTarget,
 };
+#[cfg(feature = "headed")]
 use bevy_window::{PrimaryWindow, WindowResized};
 
 #[cfg(feature = "line")]
@@ -45,6 +48,7 @@ use crate::{
     text::TextComponents,
 };
 
+#[cfg(feature = "headed")]
 const SCREEN_SHADER_HANDLE: Handle<Shader> = uuid_handle!("48CE4F2C-8B78-5954-08A8-461F62E10E84");
 
 pub(crate) struct Plug<L: PxLayer> {
@@ -63,19 +67,25 @@ impl<L: PxLayer> Plug<L> {
 
 impl<L: PxLayer> Plugin for Plug<L> {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "headed")]
+        app.add_plugins(ExtractResourcePlugin::<Screen>::default());
+
+        app.add_systems(Startup, insert_screen(self.size))
+            .add_systems(Update, init_screen)
+            .add_systems(PostUpdate, update_screen_palette);
+
         // R-A workaround
+        #[cfg(feature = "headed")]
         Assets::insert(
             &mut app
-                .add_plugins(ExtractResourcePlugin::<Screen>::default())
-                .add_systems(Startup, insert_screen(self.size))
-                .add_systems(Update, init_screen)
-                .add_systems(PostUpdate, (resize_screen, update_screen_palette))
+                .add_systems(PostUpdate, resize_screen)
                 .world_mut()
                 .resource_mut::<Assets<Shader>>(),
             SCREEN_SHADER_HANDLE.id(),
             Shader::from_wgsl(include_str!("screen.wgsl"), "screen.wgsl"),
         );
 
+        #[cfg(feature = "headed")]
         app.sub_app_mut(RenderApp)
             .add_render_graph_node::<ViewNodeRunner<PxRenderNode<L>>>(Core2d, PxRender)
             .add_render_graph_edges(
@@ -90,8 +100,9 @@ impl<L: PxLayer> Plugin for Plug<L> {
             .add_systems(Render, prepare_uniform.in_set(RenderSystems::Prepare));
     }
 
-    fn finish(&self, app: &mut App) {
-        app.sub_app_mut(RenderApp).init_resource::<PxPipeline>();
+    fn finish(&self, _app: &mut App) {
+        #[cfg(feature = "headed")]
+        _app.sub_app_mut(RenderApp).init_resource::<PxPipeline>();
     }
 }
 
@@ -130,7 +141,8 @@ impl ScreenSize {
 }
 
 /// Metadata for the image that `seldom_pixel` draws to
-#[derive(ExtractResource, Resource, Clone, Debug)]
+#[cfg_attr(feature = "headed", derive(ExtractResource))]
+#[derive(Resource, Clone, Debug)]
 pub struct Screen {
     pub(crate) size: ScreenSize,
     pub(crate) computed_size: UVec2,
@@ -155,16 +167,29 @@ pub(crate) fn screen_scale(screen_size: UVec2, window_size: Vec2) -> Vec2 {
     })
 }
 
-fn insert_screen(
-    size: ScreenSize,
-) -> impl Fn(Query<&Window, With<PrimaryWindow>>, Commands) -> Result<()> {
-    move |windows, mut commands| {
-        let window = windows.single()?;
+#[cfg(feature = "headed")]
+type Windows<'w, 's> = Query<'w, 's, &'static Window, With<PrimaryWindow>>;
+#[cfg(not(feature = "headed"))]
+type Windows<'w, 's> = Query<'w, 's, ()>;
+
+fn insert_screen(size: ScreenSize) -> impl Fn(Windows, Commands) -> Result {
+    move |_windows, mut commands| {
+        #[cfg(feature = "headed")]
+        let (computed_size, window_aspect_ratio) = {
+            let window = _windows.single()?;
+            (
+                size.compute(Vec2::new(window.width(), window.height())),
+                window.width() / window.height(),
+            )
+        };
+
+        #[cfg(not(feature = "headed"))]
+        let (computed_size, window_aspect_ratio) = (size.compute(Vec2::new(500., 500.)), 1.);
 
         commands.insert_resource(Screen {
             size,
-            computed_size: size.compute(Vec2::new(window.width(), window.height())),
-            window_aspect_ratio: window.width() / window.height(),
+            computed_size,
+            window_aspect_ratio,
             palette: [Vec3::ZERO; 256],
             // palette_tree: ImmutableKdTree::from(&[][..]),
         });
@@ -198,6 +223,7 @@ fn init_screen(
     *initialized = false;
 }
 
+#[cfg(feature = "headed")]
 fn resize_screen(mut window_resized: MessageReader<WindowResized>, mut screen: ResMut<Screen>) {
     if let Some(window_resized) = window_resized.read().last() {
         screen.computed_size = screen
@@ -207,15 +233,18 @@ fn resize_screen(mut window_resized: MessageReader<WindowResized>, mut screen: R
     }
 }
 
+#[cfg(feature = "headed")]
 #[derive(ShaderType)]
 struct PxUniform {
     palette: [Vec3; 256],
     fit_factor: Vec2,
 }
 
+#[cfg(feature = "headed")]
 #[derive(Resource, Deref, DerefMut, Default)]
 struct PxUniformBuffer(DynamicUniformBuffer<PxUniform>);
 
+#[cfg(feature = "headed")]
 fn prepare_uniform(
     mut buffer: ResMut<PxUniformBuffer>,
     screen: Res<Screen>,
@@ -238,12 +267,14 @@ fn prepare_uniform(
     });
 }
 
+#[cfg(feature = "headed")]
 #[derive(Resource)]
 struct PxPipeline {
     layout: BindGroupLayout,
     id: CachedRenderPipelineId,
 }
 
+#[cfg(feature = "headed")]
 impl FromWorld for PxPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
@@ -292,6 +323,7 @@ impl FromWorld for PxPipeline {
     }
 }
 
+#[cfg(feature = "headed")]
 #[derive(RenderLabel, Hash, Eq, PartialEq, Clone, Debug)]
 struct PxRender;
 
@@ -323,6 +355,7 @@ impl<L: PxLayer> FromWorld for PxRenderNode<L> {
     }
 }
 
+#[cfg(feature = "headed")]
 impl<L: PxLayer> ViewNode for PxRenderNode<L> {
     type ViewQuery = &'static ViewTarget;
 

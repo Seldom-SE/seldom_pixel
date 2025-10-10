@@ -6,6 +6,7 @@ use bevy_asset::{AssetLoader, LoadContext, io::Reader};
 use bevy_derive::{Deref, DerefMut};
 use bevy_image::{CompressedImageFormats, ImageLoader, ImageLoaderSettings};
 use bevy_math::{ivec2, uvec2};
+#[cfg(feature = "headed")]
 use bevy_render::{
     Extract, RenderApp,
     render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin},
@@ -23,14 +24,17 @@ use crate::{
 };
 
 pub(crate) fn plug<L: PxLayer>(app: &mut App) {
+    #[cfg(feature = "headed")]
     app.add_plugins((
         RenderAssetPlugin::<PxSpriteAsset>::default(),
         SyncComponentPlugin::<PxSprite>::default(),
-    ))
-    .init_asset::<PxSpriteAsset>()
-    .init_asset_loader::<PxSpriteLoader>()
-    .sub_app_mut(RenderApp)
-    .add_systems(
+    ));
+
+    app.init_asset::<PxSpriteAsset>()
+        .init_asset_loader::<PxSpriteLoader>();
+
+    #[cfg(feature = "headed")]
+    app.sub_app_mut(RenderApp).add_systems(
         ExtractSchedule,
         (
             extract_sprites::<L>,
@@ -94,6 +98,7 @@ pub struct PxSpriteAsset {
     pub(crate) frame_size: usize,
 }
 
+#[cfg(feature = "headed")]
 impl RenderAsset for PxSpriteAsset {
     type SourceAsset = Self;
     type Param = ();
@@ -152,7 +157,8 @@ impl Spatial for PxSpriteAsset {
 
 /// A sprite
 #[derive(Component, Deref, DerefMut, Default, Clone, Debug)]
-#[require(PxPosition, PxAnchor, DefaultLayer, PxCanvas, Visibility)]
+#[require(PxPosition, PxAnchor, DefaultLayer, PxCanvas)]
+#[cfg_attr(feature = "headed", require(Visibility))]
 pub struct PxSprite(pub Handle<PxSpriteAsset>);
 
 impl From<Handle<PxSpriteAsset>> for PxSprite {
@@ -404,6 +410,7 @@ pub(crate) type SpriteComponents<L> = (
     Option<&'static PxFilter>,
 );
 
+#[cfg(feature = "headed")]
 fn extract_sprites<L: PxLayer>(
     // TODO Maybe calculate `ViewVisibility`
     sprites: Extract<Query<(SpriteComponents<L>, &InheritedVisibility, RenderEntity)>>,
